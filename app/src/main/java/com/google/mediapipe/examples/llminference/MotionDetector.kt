@@ -11,6 +11,7 @@ import android.location.LocationManager
 import android.os.Bundle
 import android.util.Log
 import kotlin.math.abs
+import kotlin.math.sqrt
 
 class MotionDetector(private val context: Context) : SensorEventListener {
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -18,11 +19,30 @@ class MotionDetector(private val context: Context) : SensorEventListener {
     private val motionStorage = MotionStorage(context)
 
     private var lastAcceleration = 0.0
-    private var stepCount = 0
+    private var baselineStepCount = -1  // Store baseline when detection starts
+    private var currentStepCount = 0
     private var lastAltitude = 0.0
     private var currentSpeed = 0.0
+    private var lastDetectionTime = 0L
+    private val DETECTION_INTERVAL_MS = 2000L  // Only detect every 2 seconds
 
     private var motionCallback: ((List<String>) -> Unit)? = null
+
+    companion object {
+        private const val TAG = "MotionDetector"
+        // Adjusted thresholds for session-based step counting
+        private const val STATIONARY_STEPS_THRESHOLD = 5
+        private const val LIMITED_MOTION_STEPS_THRESHOLD = 15
+        private const val WALKING_STEPS_THRESHOLD = 30
+        private const val JOGGING_STEPS_THRESHOLD = 80
+        
+        private const val STATIONARY_ACCEL_THRESHOLD = 0.5
+        private const val WALKING_SPEED_THRESHOLD = 0.5  // m/s (~1.8 km/h)
+        private const val JOGGING_SPEED_MIN = 2.0  // m/s
+        private const val JOGGING_SPEED_MAX = 5.0  // m/s
+        private const val CYCLING_SPEED_MIN = 4.0  // m/s
+        private const val VEHICLE_SPEED_MIN = 5.0  // m/s (~18 km/h)
+    }
 
     // Function to get motion history
     fun getMotionHistory(): String? {
@@ -37,6 +57,8 @@ class MotionDetector(private val context: Context) : SensorEventListener {
     // Initialize sensors
     fun startDetection(callback: (List<String>) -> Unit) {
         motionCallback = callback
+        baselineStepCount = -1  // Reset baseline
+        lastDetectionTime = System.currentTimeMillis()
 
         // Set up accelerometer
         sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)?.let { accelerometer ->
@@ -45,7 +67,7 @@ class MotionDetector(private val context: Context) : SensorEventListener {
                 accelerometer,
                 SensorManager.SENSOR_DELAY_NORMAL
             )
-        }
+        } ?: Log.w(TAG, "Linear acceleration sensor not available")
 
         // Set up step counter
         sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)?.let { stepSensor ->
@@ -54,7 +76,7 @@ class MotionDetector(private val context: Context) : SensorEventListener {
                 stepSensor,
                 SensorManager.SENSOR_DELAY_NORMAL
             )
-        }
+        } ?: Log.w(TAG, "Step counter sensor not available")
 
         // Set up pressure sensor for altitude
         sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)?.let { pressureSensor ->
@@ -63,14 +85,14 @@ class MotionDetector(private val context: Context) : SensorEventListener {
                 pressureSensor,
                 SensorManager.SENSOR_DELAY_NORMAL
             )
-        }
+        } ?: Log.w(TAG, "Pressure sensor not available")
 
         // Set up location updates for speed
         try {
             locationManager.requestLocationUpdates(
                 LocationManager.GPS_PROVIDER,
-                1000, // Update interval in milliseconds
-                1f,   // Minimum distance in meters
+                2000L, // Update every 2 seconds
+                1f,
                 locationListener
             )
         } catch (e: SecurityException) {
@@ -86,50 +108,73 @@ class MotionDetector(private val context: Context) : SensorEventListener {
             Log.e(TAG, "Location permission not granted", e)
         }
         motionCallback = null
+        baselineStepCount = -1
     }
 
     // Main motion detection algorithm
     private fun detectMotion(
-        stepCount: Int,
+        sessionSteps: Int,
         acceleration: Double,
         altitudeChange: Double,
         speed: Double
     ): List<String> {
         val motions = mutableListOf<String>()
 
-        // Check for stationary state
-        if (stepCount <= 2 && acceleration <= 0.1 &&
-            abs(altitudeChange) <= 0.1 && speed <= 0.1) {
+        Log.d(TAG, "Detection - Steps: $sessionSteps, Accel: $acceleration, Speed: $speed, Alt: $altitudeChange")
+
+        // Check for stationary state (highest priority)
+        if (sessionSteps <= STATIONARY_STEPS_THRESHOLD && 
+            acceleration <= STATIONARY_ACCEL_THRESHOLD &&
+            abs(altitudeChange) <= 0.5 && 
+            speed <= 0.2) {
             motions.add("stationary")
+            return motions  // Return early if clearly stationary
         }
+
         // Check for limited motion
-        else if (stepCount <= 10 && abs(altitudeChange) <= 1.0 && speed < 0.5) {
+        if (sessionSteps <= LIMITED_MOTION_STEPS_THRESHOLD && 
+            abs(altitudeChange) <= 1.0 && 
+            speed < WALKING_SPEED_THRESHOLD) {
             motions.add("limited motion")
         }
 
-        // Check for jogging/running
-        if (stepCount >= 140 && speed >= 2.0 && speed <= 5.0) {
-            motions.add("jogging/running")
-        }
-
         // Check for walking
-        if (stepCount >= 50 && speed < 1.8) {
+        if (sessionSteps >= WALKING_STEPS_THRESHOLD && 
+            speed >= WALKING_SPEED_THRESHOLD && 
+            speed < JOGGING_SPEED_MIN) {
             motions.add("walking")
         }
 
-        // Check for cycling
-        if (stepCount >= 50 && speed >= 4.0) {
+        // Check for jogging/running
+        if (sessionSteps >= JOGGING_STEPS_THRESHOLD && 
+            speed >= JOGGING_SPEED_MIN && 
+            speed <= JOGGING_SPEED_MAX) {
+            motions.add("jogging/running")
+        }
+
+        // Check for cycling (high speed with moderate steps)
+        if (sessionSteps >= WALKING_STEPS_THRESHOLD && 
+            speed >= CYCLING_SPEED_MIN && 
+            speed < VEHICLE_SPEED_MIN) {
             motions.add("cycling")
         }
 
-        // Check for vehicular motion
-        if ((stepCount <= 5 && speed > 2.0) || speed > 5.0) {
+        // Check for vehicular motion (high speed with low steps)
+        if (sessionSteps <= LIMITED_MOTION_STEPS_THRESHOLD && 
+            speed >= VEHICLE_SPEED_MIN) {
             motions.add("vehicle/subway/ferry/train")
         }
 
         // Check for elevator/escalator
-        if (stepCount <= 10 && altitudeChange > 2.5 && speed < 2.0) {
+        if (sessionSteps <= LIMITED_MOTION_STEPS_THRESHOLD && 
+            abs(altitudeChange) > 2.5 && 
+            speed < JOGGING_SPEED_MIN) {
             motions.add("escalator/elevator")
+        }
+
+        // If no motions detected but there's some activity, default to limited motion
+        if (motions.isEmpty() && (sessionSteps > 0 || acceleration > 0.1)) {
+            motions.add("limited motion")
         }
 
         return motions
@@ -139,25 +184,49 @@ class MotionDetector(private val context: Context) : SensorEventListener {
     override fun onSensorChanged(event: SensorEvent) {
         when (event.sensor.type) {
             Sensor.TYPE_LINEAR_ACCELERATION -> {
-                // Get magnitude of acceleration excluding gravity
-                lastAcceleration = event.values[0].toDouble()
+                // Calculate magnitude of acceleration vector
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+                lastAcceleration = sqrt((x * x + y * y + z * z).toDouble())
             }
             Sensor.TYPE_STEP_COUNTER -> {
-                stepCount = event.values[0].toInt()
+                val totalSteps = event.values[0].toInt()
+                
+                // Initialize baseline on first reading
+                if (baselineStepCount == -1) {
+                    baselineStepCount = totalSteps
+                    currentStepCount = 0
+                    Log.d(TAG, "Baseline step count set to: $baselineStepCount")
+                } else {
+                    // Calculate steps since detection started
+                    currentStepCount = totalSteps - baselineStepCount
+                }
             }
             Sensor.TYPE_PRESSURE -> {
+                // Only run detection at intervals to avoid spam
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - lastDetectionTime < DETECTION_INTERVAL_MS) {
+                    return
+                }
+                lastDetectionTime = currentTime
+
                 // Convert pressure to altitude using barometric formula
                 val pressure = event.values[0]
                 val altitude = SensorManager.getAltitude(
                     SensorManager.PRESSURE_STANDARD_ATMOSPHERE,
                     pressure
                 ).toDouble()
-                val altitudeChange = altitude - lastAltitude
+                val altitudeChange = if (lastAltitude != 0.0) {
+                    altitude - lastAltitude
+                } else {
+                    0.0
+                }
                 lastAltitude = altitude
 
-                // Detect motion with current sensor values
+                // Detect motion with session-based step count
                 val motions = detectMotion(
-                    stepCount = stepCount,
+                    sessionSteps = currentStepCount,
                     acceleration = lastAcceleration,
                     altitudeChange = altitudeChange,
                     speed = currentSpeed
@@ -179,14 +248,11 @@ class MotionDetector(private val context: Context) : SensorEventListener {
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
             currentSpeed = location.speed.toDouble() // Speed in meters/second
+            Log.d(TAG, "Speed updated: $currentSpeed m/s")
         }
 
         override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
         override fun onProviderEnabled(provider: String) {}
         override fun onProviderDisabled(provider: String) {}
-    }
-
-    companion object {
-        private const val TAG = "MotionDetector"
     }
 }
