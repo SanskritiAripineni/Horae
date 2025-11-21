@@ -1,0 +1,24 @@
+# Core ML/AI frameworks
+tensorflow>=2.13.0
+langchain>=0.1.0
+google-generativeai>=0.3.0
+
+# Vector database support
+chromadb>=0.4.0
+faiss-cpu>=1.7.4
+
+# Calendar integration
+google-auth>=2.23.0
+google-auth-oauthlib>=1.1.0
+google-auth-httplib2>=0.1.1
+google-api-python-client>=2.100.0
+
+# Data processing
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.11.0
+
+# Utilities
+python-dotenv>=1.0.0
+pyyaml>=6.0
+requests>=2.31.0

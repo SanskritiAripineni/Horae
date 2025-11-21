@@ -1,3 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.log
+local_settings.py
+db.sqlite3
+instance/
+.webassets-cache
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Android
 *.iml
 .gradle
 /local.properties
@@ -12,21 +48,44 @@
 /captures
 .externalNativeBuild
 .cxx
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+bin/
+gen/
+out/
+release/
+
+# Gradle files
+.gradle/
+build/
+
+# Local configuration file (sdk path, etc)
 local.properties
+
+# Android Studio
+*.iml
+.idea/
+.gradle
+/local.properties
+/.idea/workspace.xml
+/.idea/libraries
+.DS_Store
+/build
+/captures
+.externalNativeBuild
 
 # Android specific build outputs
 /app/build/
 */build/
 *.apk
 *.aab
-*.log
 
 # Keystore and signing files
 *.jks
 *.keystore
-
-# Gradle caches
-.gradle/
 
 # IntelliJ/IDEA workspace files (already partly covered)
 /.idea/*
@@ -35,3 +94,16 @@ local.properties
 # Misc
 captures/
 *.DS_Store
+
+# Data and model files
+data/raw_logs/*.log
+data/ihope_weights/*.h5
+data/ihope_weights/*.pb
+*.pkl
+*.npy
+
+# API keys and secrets
+secrets.json
+credentials.json
+*.key
+.env
