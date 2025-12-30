@@ -90,13 +90,11 @@ class ContextFusionAnalyzer(private val context: Context) : Closeable {
                 appendLine("Give a 50-word summary of likely place and activity.")
             }
 
-            // Use on-device LLM; if you changed LlmManager to nullable, fall back to Ollama here.
-            val llmInference = LlmManager.safeGetInstance(context)
-            val engine = llmInference ?: return@withContext "On-device LLM unavailable (model/runtime mismatch)."
+            // Use LlmProvider for API-first with on-device fallback
             val response = try {
-                engine.generateResponse(prompt)
+                LlmProvider.generateResponse(context, prompt)
             } catch (e: Exception) {
-                Log.e("LocationAnalyzer", "LLM generate failed", e)
+                Log.e("ContextFusionAnalyzer", "LLM generate failed", e)
                 "Failed to generate LLM response: ${e.message}"
             }
             response

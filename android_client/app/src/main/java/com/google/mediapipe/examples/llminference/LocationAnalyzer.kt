@@ -76,31 +76,31 @@ class LocationAnalyzer(private val context: Context) : Closeable {
 
     // Suspend function to ensure LLM loads on background thread
     suspend fun analyzeLocation(ssids: List<String>): String = withContext(Dispatchers.IO) {
+        // Take top 15 SSIDs to avoid overly long prompts
+        val topSsids = ssids.take(15)
+        val ssidList = topSsids.mapIndexed { i, ssid -> "${i + 1}. $ssid" }.joinToString("\n")
+        
         val prompt = """
-            Based on the following WiFi network names, analyze where this location might be(response in summary within 50 words:
-            ${ssids.joinToString("\n")}
-            Provide a brief analysis of the likely location.
+            Analyze the following WiFi networks to determine the location.
+            
+            WiFi Networks Detected (${topSsids.size} of ${ssids.size} total):
+            $ssidList
+            
+            Respond in this format:
+            NETWORKS (${topSsids.size}/${ssids.size}): [List the most informative network names, comma-separated]
+            LOCATION: [Your analysis of the likely location in 30 words]
         """.trimIndent()
 
         Log.d(TAG, "Sending prompt to LLM:")
         Log.d(TAG, prompt)
 
-        // Load LLM on background thread
-        val engine = LlmManager.safeGetInstance(context) ?: return@withContext "On-device LLM unavailable (model/runtime mismatch)."
-
+        // Use LlmProvider for API-first with on-device fallback
         val response = try {
-            engine.generateResponse(prompt)
+            LlmProvider.generateResponse(context, prompt)
         } catch (e: Exception) {
             Log.e("LocationAnalyzer", "LLM generate failed", e)
             "Failed to generate LLM response: ${e.message}"
         }
-
-//        val response = try {
-//            llmInference.generateResponse(prompt)
-//        } catch (e: Exception) {
-//            Log.e(TAG, "Error generating LLM response", e)
-//            throw IllegalStateException("Failed to generate LLM response: ${e.message}")
-//        }
 
         Log.d(TAG, "Location, Received response from LLM:")
         Log.d(TAG, response)
