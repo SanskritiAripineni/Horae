@@ -37,6 +37,7 @@ fun DevDashboardScreen(
     val locationInfo by DebugRepository.locationInfo.collectAsStateWithLifecycle()
     val lastJournal by DebugRepository.lastJournal.collectAsStateWithLifecycle()
     val isDemoMode by DebugRepository.isDemoMode.collectAsStateWithLifecycle()
+    val isPermanentMotionEnabled by DebugRepository.isPermanentMotionEnabled.collectAsStateWithLifecycle()
     
     var showFullMap by remember { mutableStateOf(false) }
     
@@ -77,15 +78,35 @@ fun DevDashboardScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text("Demo Mode (2 Mins Interval)", fontWeight = FontWeight.Bold)
+                        Text("Demo Mode (2 Min Journal)", fontWeight = FontWeight.Bold)
                         Text(
-                            "Journal Interval: ${if (isDemoMode) "2 mins" else "15 mins"}",
+                            "Shortens journal generation interval for testing",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
                     Switch(
                         checked = isDemoMode,
                         onCheckedChange = { DebugRepository.setDemoMode(it) }
+                    )
+                }
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Keep Motion Active", fontWeight = FontWeight.Bold)
+                        Text(
+                            "Continuously updates motion stats on dashboard (every 2s)",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Switch(
+                        checked = isPermanentMotionEnabled,
+                        onCheckedChange = { DebugRepository.setPermanentMotionEnabled(it) }
                     )
                 }
             }
@@ -99,7 +120,7 @@ fun DevDashboardScreen(
                     DebugRow("Steps (Session)", "${motionStats.stepCount}")
                     DebugRow("Speed (GPS)", "${"%.2f".format(motionStats.speed)} m/s")
                     DebugRow("Altitude", "${"%.1f".format(motionStats.altitude)} m")
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     Text("Inferred Class: ${motionStats.detectedClass}", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
             }

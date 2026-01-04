@@ -41,6 +41,9 @@ object DebugRepository {
     private val _isServiceRunning = MutableStateFlow(false)
     val isServiceRunning: StateFlow<Boolean> = _isServiceRunning.asStateFlow()
 
+    private val _isPermanentMotionEnabled = MutableStateFlow(false)
+    val isPermanentMotionEnabled: StateFlow<Boolean> = _isPermanentMotionEnabled.asStateFlow()
+
     // --- Updaters ---
 
     fun updateMotion(accel: Double, steps: Int, speed: Double, alt: Double, clazz: String?) {
@@ -79,5 +82,9 @@ object DebugRepository {
 
     fun setServiceRunning(isRunning: Boolean) {
         _isServiceRunning.value = isRunning
+    }
+
+    fun setPermanentMotionEnabled(enabled: Boolean) {
+        _isPermanentMotionEnabled.value = enabled
     }
 }

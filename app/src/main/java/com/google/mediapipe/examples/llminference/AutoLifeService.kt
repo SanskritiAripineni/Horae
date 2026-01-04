@@ -20,6 +20,7 @@ class AutoLifeService : Service() {
     private var analyzer: SequentialMotionLocationAnalyzer? = null
     private var isRunning = false
     private lateinit var logDao: LogDao
+    private var permanentMotionDetector: MotionDetector? = null
 
     companion object {
         private const val CHANNEL_ID = "AutoLifeChannel"
@@ -44,6 +45,7 @@ class AutoLifeService : Service() {
             isRunning = true
             startForegroundService()
             startLoop()
+            startPermanentMotionObserver()
         }
         com.google.mediapipe.examples.llminference.data.DebugRepository.setServiceRunning(true)
         return START_STICKY
@@ -139,7 +141,28 @@ class AutoLifeService : Service() {
         isRunning = false
         com.google.mediapipe.examples.llminference.data.DebugRepository.setServiceRunning(false)
         analyzer?.close()
+        permanentMotionDetector?.stopDetection()
         serviceScope.cancel()
+    }
+
+    private fun startPermanentMotionObserver() {
+        serviceScope.launch {
+            com.google.mediapipe.examples.llminference.data.DebugRepository.isPermanentMotionEnabled.collect { enabled ->
+                withContext(Dispatchers.Main) {
+                    if (enabled) {
+                        if (permanentMotionDetector == null) {
+                            permanentMotionDetector = MotionDetector(this@AutoLifeService)
+                            permanentMotionDetector?.startDetection { /* handled internally for debug UI */ }
+                            // logDao.insertLog(SensorLog(timestamp = System.currentTimeMillis(), type = "SYSTEM", content = "Permanent Motion Started"))
+                        }
+                    } else {
+                        permanentMotionDetector?.stopDetection()
+                        permanentMotionDetector = null
+                        // logDao.insertLog(SensorLog(timestamp = System.currentTimeMillis(), type = "SYSTEM", content = "Permanent Motion Stopped"))
+                    }
+                }
+            }
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? {

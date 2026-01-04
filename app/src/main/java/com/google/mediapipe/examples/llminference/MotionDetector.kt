@@ -24,7 +24,7 @@ class MotionDetector(private val context: Context) : SensorEventListener {
     private var lastAltitude = 0.0
     private var currentSpeed = 0.0
     private var lastDetectionTime = 0L
-    private val DETECTION_INTERVAL_MS = 2000L  // Only detect every 2 seconds
+    private val DETECTION_INTERVAL_MS = 2000L  // Update every 2 seconds
 
     private var motionCallback: ((List<String>) -> Unit)? = null
 
@@ -36,7 +36,8 @@ class MotionDetector(private val context: Context) : SensorEventListener {
         private const val WALKING_STEPS_THRESHOLD = 30
         private const val JOGGING_STEPS_THRESHOLD = 80
         
-        private const val STATIONARY_ACCEL_THRESHOLD = 0.5
+        private const val STATIONARY_ACCEL_THRESHOLD = 0.8
+        private const val STATIONARY_SPEED_THRESHOLD = 0.5 // m/s
         private const val WALKING_SPEED_THRESHOLD = 0.5  // m/s (~1.8 km/h)
         private const val JOGGING_SPEED_MIN = 2.0  // m/s
         private const val JOGGING_SPEED_MAX = 5.0  // m/s
@@ -123,10 +124,12 @@ class MotionDetector(private val context: Context) : SensorEventListener {
         Log.d(TAG, "Detection - Steps: $sessionSteps, Accel: $acceleration, Speed: $speed, Alt: $altitudeChange")
 
         // Check for stationary state (highest priority)
+        // Check for stationary state (highest priority)
+        // Increased thresholds to avoid flickering "limited motion" when just sitting/standing
         if (sessionSteps <= STATIONARY_STEPS_THRESHOLD && 
             acceleration <= STATIONARY_ACCEL_THRESHOLD &&
             abs(altitudeChange) <= 0.5 && 
-            speed <= 0.2) {
+            speed <= STATIONARY_SPEED_THRESHOLD) {
             motions.add("stationary")
             return motions  // Return early if clearly stationary
         }
@@ -166,14 +169,16 @@ class MotionDetector(private val context: Context) : SensorEventListener {
         }
 
         // Check for elevator/escalator
+        // Increased threshold to 4.0m to avoid false positives from barometric pressure changes
         if (sessionSteps <= LIMITED_MOTION_STEPS_THRESHOLD && 
-            abs(altitudeChange) > 2.5 && 
+            abs(altitudeChange) > 4.0 && 
             speed < JOGGING_SPEED_MIN) {
             motions.add("escalator/elevator")
         }
 
         // If no motions detected but there's some activity, default to limited motion
-        if (motions.isEmpty() && (sessionSteps > 0 || acceleration > 0.1)) {
+        // Increased accel threshold to 0.3 to ignore minor sensor noise
+        if (motions.isEmpty() && (sessionSteps > 0 || acceleration > 0.3)) {
             motions.add("limited motion")
         }
 
@@ -256,8 +261,17 @@ class MotionDetector(private val context: Context) : SensorEventListener {
 
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
-            currentSpeed = location.speed.toDouble() // Speed in meters/second
-            Log.d(TAG, "Speed updated: $currentSpeed m/s")
+            val rawSpeed = location.speed.toDouble()
+            // Simple low-pass filter to smooth out GPS noise
+            // alpha = 0.7 means we keep 70% of history and take 30% of new value
+            var smoothedSpeed = (currentSpeed * 0.7) + (rawSpeed * 0.3)
+            
+            // Dead zone: treat speeds below 0.4 m/s as 0 (GPS drift mitigation)
+            if (smoothedSpeed < 0.4) {
+                smoothedSpeed = 0.0
+            }
+            currentSpeed = smoothedSpeed
+            Log.d(TAG, "Speed updated: $currentSpeed m/s (raw: $rawSpeed)")
         }
 
         override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
