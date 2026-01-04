@@ -66,19 +66,13 @@ class LocationAnalyzer(private val context: Context) : Closeable {
         }
 
         val prompt = """
-            You are an AI assistant for the 'AutoLife' automatic journaling app.
+            You are a helpful assistant that can analyze the uploaded map. 
+            Identify key features with the following categories: 
+            - transportation infrastructure
+            - natural features
+            - built environment
             
-            Task: Infer the user's specific location context (e.g., 'Residential Home', 'City Park', 'Office Building', 'Coffee Shop').
-            
-            Input Data:
-            1. Nearby WiFi SSIDs: $ssidList
-            2. Satellite/Map View of the current location (attached image).
-            
-            Instructions:
-            - Analyze the map image for visual cues (building density, green spaces, road types).
-            - Analyze the SSIDs for semantic clues (e.g., 'Starbucks_Free', 'Corporate_Guest').
-            - Fuse these to predict the most likely venue type or specific place.
-            - Output ONLY a concise 1-sentence description.
+            Provide a brief summary of the map's central region.
         """.trimIndent()
 
         Log.d(TAG, "Sending prompt to Gemini with Map Image: ${mapImage != null}")

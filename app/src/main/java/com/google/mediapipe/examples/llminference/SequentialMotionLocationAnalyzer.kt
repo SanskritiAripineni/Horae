@@ -27,7 +27,9 @@ class SequentialMotionLocationAnalyzer(
     private var isAnalyzing = false
     private var currentPhase = AnalysisPhase.NONE
     private var motionDetector: MotionDetector? = null
+
     private var locationAnalyzer: LocationAnalyzer? = null
+    private var lastLocationContext: String? = null
 
     enum class AnalysisPhase {
         NONE,
@@ -105,6 +107,7 @@ class SequentialMotionLocationAnalyzer(
             }
         }
     }
+
 
     private fun finishMotionPhase(callback: (String, AnalysisPhase) -> Unit) {
         val context = contextRef.get() ?: run {
@@ -207,6 +210,7 @@ class SequentialMotionLocationAnalyzer(
                 )
 
                 callback("Location analysis complete: $result", AnalysisPhase.LOCATION)
+                lastLocationContext = result
                 true
             }
         } catch (e: Exception) {
@@ -298,7 +302,12 @@ class SequentialMotionLocationAnalyzer(
 
     private suspend fun performContextFusion(context: Context): String {
         val contextFusionAnalyzer = ContextFusionAnalyzer(context)
-        val result = contextFusionAnalyzer.performFusion()
+        
+        val motionStorage = MotionStorage(context)
+        val motionHistory = motionStorage.getMotionHistory() ?: "Unknown Motion"
+        val locationContext = lastLocationContext ?: "Unknown Location"
+        
+        val result = contextFusionAnalyzer.performFusion(motionHistory, locationContext)
         
         // Save to DB as a "Journal" entry if it's a high-level fusion
         logDao.insertJournal(
