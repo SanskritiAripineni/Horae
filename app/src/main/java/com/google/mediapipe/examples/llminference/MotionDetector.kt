@@ -19,12 +19,15 @@ class MotionDetector(private val context: Context) : SensorEventListener {
     private val motionStorage = MotionStorage(context)
 
     private var lastAcceleration = 0.0
-    private var baselineStepCount = -1  // Store baseline when detection starts
-    private var currentStepCount = 0
+    private var lastStepCount = -1  // Last reading from step counter
     private var lastAltitude = 0.0
     private var currentSpeed = 0.0
     private var lastDetectionTime = 0L
     private val DETECTION_INTERVAL_MS = 2000L  // Update every 2 seconds
+    
+    // Sliding window for recent steps (timestamp to step count)
+    private val stepHistory = mutableListOf<Pair<Long, Int>>()
+    private val STEP_WINDOW_MS = 30_000L  // 30 second window for step counting
 
     private var motionCallback: ((List<String>) -> Unit)? = null
 
@@ -58,7 +61,8 @@ class MotionDetector(private val context: Context) : SensorEventListener {
     // Initialize sensors
     fun startDetection(callback: (List<String>) -> Unit) {
         motionCallback = callback
-        baselineStepCount = -1  // Reset baseline
+        lastStepCount = -1  // Reset step tracking
+        stepHistory.clear()  // Clear step history
         lastDetectionTime = System.currentTimeMillis()
 
         // Set up accelerometer
@@ -109,7 +113,8 @@ class MotionDetector(private val context: Context) : SensorEventListener {
             Log.e(TAG, "Location permission not granted", e)
         }
         motionCallback = null
-        baselineStepCount = -1
+        lastStepCount = -1
+        stepHistory.clear()
     }
 
     // Main motion detection algorithm
@@ -170,10 +175,14 @@ class MotionDetector(private val context: Context) : SensorEventListener {
             return motions
         }
 
-        // Check for elevator/escalator (significant altitude change with low steps)
-        if (sessionSteps <= LIMITED_MOTION_STEPS_THRESHOLD && 
-            abs(altitudeChange) > 4.0 && 
-            speed < JOGGING_SPEED_MIN) {
+        // Check for elevator/escalator (significant altitude change with very few steps)
+        // Must have VERY low steps (<=3) since you're standing still on an elevator
+        // Increased altitude threshold to 6m to avoid barometric sensor noise false positives
+        // Also require low acceleration (not actively moving)
+        if (sessionSteps <= 3 && 
+            abs(altitudeChange) > 6.0 && 
+            speed < WALKING_SPEED_THRESHOLD &&
+            acceleration < 0.5) {
             motions.add("escalator/elevator")
             return motions
         }
@@ -217,16 +226,21 @@ class MotionDetector(private val context: Context) : SensorEventListener {
             }
             Sensor.TYPE_STEP_COUNTER -> {
                 val totalSteps = event.values[0].toInt()
+                val currentTime = System.currentTimeMillis()
                 
-                // Initialize baseline on first reading
-                if (baselineStepCount == -1) {
-                    baselineStepCount = totalSteps
-                    currentStepCount = 0
-                    Log.d(TAG, "Baseline step count set to: $baselineStepCount")
-                } else {
-                    // Calculate steps since detection started
-                    currentStepCount = totalSteps - baselineStepCount
+                // Calculate steps taken since last reading
+                if (lastStepCount != -1) {
+                    val newSteps = totalSteps - lastStepCount
+                    if (newSteps > 0) {
+                        stepHistory.add(Pair(currentTime, newSteps))
+                    }
                 }
+                lastStepCount = totalSteps
+                
+                // Remove old entries outside the window
+                stepHistory.removeAll { currentTime - it.first > STEP_WINDOW_MS }
+                
+                Log.d(TAG, "Step history size: ${stepHistory.size}, Recent steps: ${stepHistory.sumOf { it.second }}")
             }
             Sensor.TYPE_PRESSURE -> {
                 // Only run detection at intervals to avoid spam
@@ -249,9 +263,12 @@ class MotionDetector(private val context: Context) : SensorEventListener {
                 }
                 lastAltitude = altitude
 
-                // Detect motion with session-based step count
+                // Calculate recent steps from sliding window
+                val recentSteps = stepHistory.sumOf { it.second }
+                
+                // Detect motion with recent step count (not cumulative)
                 val motions = detectMotion(
-                    sessionSteps = currentStepCount,
+                    sessionSteps = recentSteps,
                     acceleration = lastAcceleration,
                     altitudeChange = altitudeChange,
                     speed = currentSpeed
@@ -260,7 +277,7 @@ class MotionDetector(private val context: Context) : SensorEventListener {
                 // Debug Update
                 com.google.mediapipe.examples.llminference.data.DebugRepository.updateMotion(
                     accel = lastAcceleration,
-                    steps = currentStepCount,
+                    steps = recentSteps,
                     speed = currentSpeed,
                     alt = altitude,
                     clazz = motions.firstOrNull() ?: "Unknown"
