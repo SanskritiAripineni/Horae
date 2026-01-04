@@ -37,6 +37,7 @@ class JournalGenerator(private val context: Context) {
 
         Input:
         A list of context logs in the format: [timestamp] [context description]
+        $formattedLogs
 
         Instructions:
         1. Synthesize the logs into a coherent narrative.

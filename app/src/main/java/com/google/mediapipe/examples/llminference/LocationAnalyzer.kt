@@ -78,7 +78,7 @@ class LocationAnalyzer(private val context: Context) : Closeable {
         Log.d(TAG, "Sending prompt to Gemini with Map Image: ${mapImage != null}")
 
         // Debug Update
-        com.google.mediapipe.examples.llminference.data.DebugRepository.updateLocationMap(mapImage)
+        com.google.mediapipe.examples.llminference.data.DebugRepository.updateLocationMap(mapImage, loc?.latitude ?: 0.0, loc?.longitude ?: 0.0)
         com.google.mediapipe.examples.llminference.data.DebugRepository.updateLocationSSIDs(ssids)
         
         val response = if (mapImage != null) {

@@ -45,6 +45,7 @@ class AutoLifeService : Service() {
             startForegroundService()
             startLoop()
         }
+        com.google.mediapipe.examples.llminference.data.DebugRepository.setServiceRunning(true)
         return START_STICKY
     }
 
@@ -136,6 +137,7 @@ class AutoLifeService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         isRunning = false
+        com.google.mediapipe.examples.llminference.data.DebugRepository.setServiceRunning(false)
         analyzer?.close()
         serviceScope.cancel()
     }

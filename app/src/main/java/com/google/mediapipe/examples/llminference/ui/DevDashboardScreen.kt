@@ -8,17 +8,25 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.mediapipe.examples.llminference.data.DebugRepository
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,6 +37,15 @@ fun DevDashboardScreen(
     val locationInfo by DebugRepository.locationInfo.collectAsStateWithLifecycle()
     val lastJournal by DebugRepository.lastJournal.collectAsStateWithLifecycle()
     val isDemoMode by DebugRepository.isDemoMode.collectAsStateWithLifecycle()
+    
+    var showFullMap by remember { mutableStateOf(false) }
+    
+    if (showFullMap && locationInfo.mapImage != null) {
+        FullMapDialog(
+            bitmap = locationInfo.mapImage!!,
+            onDismiss = { showFullMap = false }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -99,7 +116,8 @@ fun DevDashboardScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(200.dp)
-                                .background(Color.Gray, RoundedCornerShape(8.dp)),
+                                .background(Color.Gray, RoundedCornerShape(8.dp))
+                                .clickable { showFullMap = true },
                             contentScale = ContentScale.Crop
                         )
                     } else {
@@ -138,6 +156,70 @@ fun DevDashboardScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun FullMapDialog(
+    bitmap: Bitmap,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
+            // Transformable State for simple pinch-to-zoom
+            var scale by remember { mutableStateOf(1f) }
+            var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+            val state = rememberTransformableState { zoomChange, offsetChange, _ ->
+                scale *= zoomChange
+                offset += offsetChange
+            }
+
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "Full Map View",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        scaleX = scale.coerceIn(1f, 5f),
+                        scaleY = scale.coerceIn(1f, 5f),
+                        translationX = offset.x,
+                        translationY = offset.y
+                    )
+                    .transformable(state = state),
+                contentScale = ContentScale.Fit
+            )
+
+            // Close Button
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .padding(16.dp)
+                    .align(Alignment.TopStart)
+                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Close",
+                    tint = Color.White
+                )
+            }
+            
+            Text(
+                "Pinch to zoom / Drag to move",
+                color = Color.White.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 24.dp)
+            )
         }
     }
 }

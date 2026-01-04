@@ -17,12 +17,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.mediapipe.examples.llminference.AutoLifeApp
 import com.google.mediapipe.examples.llminference.AutoLifeService
 import com.google.mediapipe.examples.llminference.data.JournalEntry
@@ -56,6 +58,9 @@ fun DashboardScreen(
     var currentScreen by remember { mutableStateOf(0) }
     var selectedTab by remember { mutableStateOf(0) }
     var showServiceInfo by remember { mutableStateOf(false) }
+
+    // REAL Service State from Repository
+    val isServiceRunning by com.google.mediapipe.examples.llminference.data.DebugRepository.isServiceRunning.collectAsStateWithLifecycle()
     
     if (showServiceInfo) {
         AlertDialog(
@@ -82,7 +87,7 @@ fun DashboardScreen(
                         title = { Text("AutoLife Research") },
                         actions = {
                             ServiceControl(
-                                isServiceRunning = isServiceRunning(context),
+                                isServiceRunning = isServiceRunning,
                                 onToggle = { shouldStart ->
                                     val intent = Intent(context, AutoLifeService::class.java)
                                     if (shouldStart) {
@@ -138,16 +143,11 @@ fun DashboardScreen(
 
 @Composable
 fun ServiceControl(isServiceRunning: Boolean, onToggle: (Boolean) -> Unit) {
-    // This is a naive check (stateless UI), actual service state sync is harder without binding.
-    // For research prototype, we just provide buttons.
-    var runningState by remember { mutableStateOf(false) } // Local toggle state for UI feedback
-
     Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("Service: ", style = MaterialTheme.typography.labelLarge)
         Switch(
-            checked = runningState,
+            checked = isServiceRunning,
             onCheckedChange = { 
-                runningState = it
                 onToggle(it) 
             }
         )

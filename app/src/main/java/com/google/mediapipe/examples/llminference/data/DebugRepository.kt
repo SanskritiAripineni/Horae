@@ -21,6 +21,8 @@ object DebugRepository {
     // Location Data
     data class LocationDebugInfo(
         val mapImage: Bitmap? = null,
+        val latitude: Double = 0.0,
+        val longitude: Double = 0.0,
         val ssids: List<String> = emptyList(),
         val lastInference: String = "No inference yet"
     )
@@ -36,6 +38,9 @@ object DebugRepository {
     private val _isDemoMode = MutableStateFlow(false)
     val isDemoMode: StateFlow<Boolean> = _isDemoMode.asStateFlow()
 
+    private val _isServiceRunning = MutableStateFlow(false)
+    val isServiceRunning: StateFlow<Boolean> = _isServiceRunning.asStateFlow()
+
     // --- Updaters ---
 
     fun updateMotion(accel: Double, steps: Int, speed: Double, alt: Double, clazz: String?) {
@@ -48,8 +53,12 @@ object DebugRepository {
         )
     }
 
-    fun updateLocationMap(bitmap: Bitmap?) {
-        _locationInfo.value = _locationInfo.value.copy(mapImage = bitmap)
+    fun updateLocationMap(bitmap: Bitmap?, lat: Double, lon: Double) {
+        _locationInfo.value = _locationInfo.value.copy(
+            mapImage = bitmap,
+            latitude = lat,
+            longitude = lon
+        )
     }
 
     fun updateLocationSSIDs(ssids: List<String>) {
@@ -66,5 +75,9 @@ object DebugRepository {
 
     fun setDemoMode(enabled: Boolean) {
         _isDemoMode.value = enabled
+    }
+
+    fun setServiceRunning(isRunning: Boolean) {
+        _isServiceRunning.value = isRunning
     }
 }
