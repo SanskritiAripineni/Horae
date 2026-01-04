@@ -25,7 +25,12 @@ class AutoLifeService : Service() {
         private const val CHANNEL_ID = "AutoLifeChannel"
         private const val NOTIFICATION_ID = 1
         private const val LOG_INTERVAL = 60_000L // 1 minute
+        private const val JOURNAL_INTERVAL = 15 * 60_000L // 15 minutes
+        private const val DEMO_JOURNAL_INTERVAL = 2 * 60_000L // 2 minutes
     }
+    
+    // Track last journal time
+    private var lastJournalTime = System.currentTimeMillis()
 
     override fun onCreate() {
         super.onCreate()
@@ -71,6 +76,22 @@ class AutoLifeService : Service() {
                 // logDao.insertLog(SensorLog(timestamp = timestamp, type = "SYSTEM", content = "Starting periodic analysis"))
                 
                 startAnalysisCycle()
+
+                startAnalysisCycle()
+                
+                // Dynamic Interval for Demo Mode
+                val isDemo = com.google.mediapipe.examples.llminference.data.DebugRepository.isDemoMode.value
+                val currentInterval = if (isDemo) DEMO_JOURNAL_INTERVAL else JOURNAL_INTERVAL
+
+                // Check for journaling
+                if (System.currentTimeMillis() - lastJournalTime >= currentInterval) {
+                    val journalGenerator = JournalGenerator(this@AutoLifeService)
+                    journalGenerator.tryGenerateJournal(System.currentTimeMillis(), currentInterval)
+                    // If in demo mode, clear logs after generation so next 2 mins is fresh? 
+                    // Or just let it overlap? Paper says aggregation.
+                    // For demo mode, we just want to see it happen.
+                    lastJournalTime = System.currentTimeMillis()
+                }
 
                 delay(LOG_INTERVAL)
             }

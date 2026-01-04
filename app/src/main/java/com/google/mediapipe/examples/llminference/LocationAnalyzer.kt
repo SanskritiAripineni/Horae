@@ -51,24 +51,52 @@ class LocationAnalyzer(private val context: Context) : Closeable {
 
     // Suspend function to ensure LLM loads on background thread
     suspend fun analyzeLocation(ssids: List<String>): String = withContext(Dispatchers.IO) {
-        if (ssids.isEmpty() || (ssids.size == 1 && ssids[0].contains("No visible"))) {
-             return@withContext "No WiFi networks available to analyze location."
+        // 1. Get current location for Map
+        val loc = getBestLocation(context)
+        val mapImage = if (loc != null) {
+            MapImageProvider().getMapImage(loc.latitude, loc.longitude)
+        } else {
+            null
+        }
+
+        val ssidList = if (ssids.isEmpty() || (ssids.size == 1 && ssids[0].contains("No visible"))) {
+             "(None detected)"
+        } else {
+            ssids.joinToString(", ")
         }
 
         val prompt = """
             You are an AI assistant for the 'AutoLife' automatic journaling app.
-            Based on the following WiFi network names (SSIDs) nearby, infer the user's current location type or specific venue (e.g., 'Home', 'Office', 'Starbucks at 5th Ave', 'Airport Terminal').
             
-            SSIDs:
-            ${ssids.joinToString("\n")}
+            Task: Infer the user's specific location context (e.g., 'Residential Home', 'City Park', 'Office Building', 'Coffee Shop').
             
-            Provide a concise, human-readable summary of the inferred location in 1-2 sentences.
+            Input Data:
+            1. Nearby WiFi SSIDs: $ssidList
+            2. Satellite/Map View of the current location (attached image).
+            
+            Instructions:
+            - Analyze the map image for visual cues (building density, green spaces, road types).
+            - Analyze the SSIDs for semantic clues (e.g., 'Starbucks_Free', 'Corporate_Guest').
+            - Fuse these to predict the most likely venue type or specific place.
+            - Output ONLY a concise 1-sentence description.
         """.trimIndent()
 
-        Log.d(TAG, "Sending prompt to Gemini...")
-        val response = GeminiClient.generateResponse(prompt)
+        Log.d(TAG, "Sending prompt to Gemini with Map Image: ${mapImage != null}")
+
+        // Debug Update
+        com.google.mediapipe.examples.llminference.data.DebugRepository.updateLocationMap(mapImage)
+        com.google.mediapipe.examples.llminference.data.DebugRepository.updateLocationSSIDs(ssids)
+        
+        val response = if (mapImage != null) {
+            GeminiClient.generateResponse(prompt, mapImage)
+        } else {
+            // Fallback to text-only if map fails
+            GeminiClient.generateResponse(prompt + "\n(Note: Map image processing failed, rely on SSIDs only.)")
+        }
 
         Log.d(TAG, "Received response from Gemini: $response")
+        
+        com.google.mediapipe.examples.llminference.data.DebugRepository.updateLocationInference(response)
 
         // Save the response to file (legacy support)
         fileStorage.saveLLMResponse(response)

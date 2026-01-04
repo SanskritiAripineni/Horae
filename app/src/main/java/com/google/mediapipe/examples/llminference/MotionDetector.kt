@@ -232,6 +232,15 @@ class MotionDetector(private val context: Context) : SensorEventListener {
                     speed = currentSpeed
                 )
 
+                // Debug Update
+                com.google.mediapipe.examples.llminference.data.DebugRepository.updateMotion(
+                    accel = lastAcceleration,
+                    steps = currentStepCount,
+                    speed = currentSpeed,
+                    alt = altitude,
+                    clazz = motions.firstOrNull() ?: "Unknown"
+                )
+
                 // Save motion detection to storage
                 motionStorage.saveMotionDetection(motions)
 

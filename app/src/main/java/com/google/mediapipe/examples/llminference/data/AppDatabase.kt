@@ -47,6 +47,9 @@ interface LogDao {
     // Observe journals
     @Query("SELECT * FROM journal_entries ORDER BY createdTimestamp DESC")
     fun observeJournals(): Flow<List<JournalEntry>>
+
+    @Query("DELETE FROM sensor_logs")
+    suspend fun deleteAllLogs()
 }
 
 @Database(entities = [SensorLog::class, JournalEntry::class], version = 1, exportSchema = false)

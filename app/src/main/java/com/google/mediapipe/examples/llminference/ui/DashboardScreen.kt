@@ -6,6 +6,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,6 +37,12 @@ class DashboardViewModel(application: android.app.Application) : androidx.lifecy
     
     val recentLogs: Flow<List<SensorLog>> = dao.observeRecentLogs()
     // val journals: Flow<List<JournalEntry>> = dao.observeJournals() // Not implemented in UI yet but flow exists
+    
+    fun clearLogs() {
+        viewModelScope.launch {
+            dao.deleteAllLogs()
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,44 +52,84 @@ fun DashboardScreen(
 ) {
     val context = LocalContext.current
     val logs by viewModel.recentLogs.collectAsState(initial = emptyList())
+    // 0: Main Dashboard, 1: Developer Dashboard
+    var currentScreen by remember { mutableStateOf(0) }
     var selectedTab by remember { mutableStateOf(0) }
+    var showServiceInfo by remember { mutableStateOf(false) }
     
-    Scaffold(
-        topBar = {
-            Column {
-                TopAppBar(
-                    title = { Text("AutoLife Research") },
-                    actions = {
-                        ServiceControl(
-                            isServiceRunning = isServiceRunning(context),
-                            onToggle = { shouldStart ->
-                                val intent = Intent(context, AutoLifeService::class.java)
-                                if (shouldStart) {
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                        context.startForegroundService(intent)
+    if (showServiceInfo) {
+        AlertDialog(
+            onDismissRequest = { showServiceInfo = false },
+            title = { Text("AutoLife Service Info") },
+            text = { 
+                Text("The AutoLife background service runs a 15-second sensor analysis cycle every minute to save battery.\n\nIt collects:\n- Motion Data (Accelerometer, Steps)\n- Location Data (SSIDs, Map Images)\n\nIt then fuses this data to generate context logs.") 
+            },
+            confirmButton = {
+                TextButton(onClick = { showServiceInfo = false }) { Text("OK") }
+            }
+        )
+    }
+
+    if (currentScreen == 1) {
+        DevDashboardScreen(
+            onBackClick = { currentScreen = 0 }
+        )
+    } else {
+        Scaffold(
+            topBar = {
+                Column {
+                    TopAppBar(
+                        title = { Text("AutoLife Research") },
+                        actions = {
+                            ServiceControl(
+                                isServiceRunning = isServiceRunning(context),
+                                onToggle = { shouldStart ->
+                                    val intent = Intent(context, AutoLifeService::class.java)
+                                    if (shouldStart) {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                            context.startForegroundService(intent)
+                                        } else {
+                                            context.startService(intent)
+                                        }
                                     } else {
-                                        context.startService(intent)
+                                        context.stopService(intent)
                                     }
-                                } else {
-                                    context.stopService(intent)
                                 }
+                            )
+                            IconButton(onClick = { showServiceInfo = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Service Info"
+                                )
                             }
-                        )
+                            IconButton(onClick = { viewModel.clearLogs() }) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Clear Logs"
+                                )
+                            }
+                            IconButton(onClick = { currentScreen = 1 }) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Developer Dashboard"
+                                )
+                            }
+                        }
+                    )
+                    TabRow(selectedTabIndex = selectedTab) {
+                        Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Live Logs") })
+                        Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Journals") })
                     }
-                )
-                TabRow(selectedTabIndex = selectedTab) {
-                    Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Live Logs") })
-                    Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Journals") })
                 }
             }
-        }
-    ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
-            if (selectedTab == 0) {
-                LogsList(logs)
-            } else {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Journal Generation Coming Soon")
+        ) { padding ->
+            Box(modifier = Modifier.padding(padding)) {
+                if (selectedTab == 0) {
+                    LogsList(logs)
+                } else {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Journal Generation Coming Soon")
+                    }
                 }
             }
         }

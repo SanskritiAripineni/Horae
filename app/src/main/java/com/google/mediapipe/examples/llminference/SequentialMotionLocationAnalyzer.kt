@@ -15,7 +15,7 @@ class SequentialMotionLocationAnalyzer(
 ) : Closeable {
     companion object {
         private const val TAG = "SequentialAnalyzer"
-        private const val MOTION_DURATION = 10000L // 10 seconds
+        private const val MOTION_DURATION = 15000L // 15 seconds
     }
 
     private val contextRef = WeakReference(context)

@@ -27,4 +27,17 @@ object GeminiClient {
             "Error calling Gemini: ${e.message}"
         }
     }
+
+    suspend fun generateResponse(prompt: String, image: android.graphics.Bitmap): String = withContext(Dispatchers.IO) {
+        try {
+            val content = com.google.ai.client.generativeai.type.content {
+                image(image)
+                text(prompt)
+            }
+            val response = model.generateContent(content)
+            response.text ?: "No response from Gemini"
+        } catch (e: Exception) {
+            "Error calling Gemini: ${e.message}"
+        }
+    }
 }
