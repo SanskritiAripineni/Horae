@@ -77,10 +77,10 @@ fun DevDashboardScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text("Demo Mode (2 Min Journal)", fontWeight = FontWeight.Bold)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Demo Mode", fontWeight = FontWeight.Bold)
                         Text(
-                            "Shortens journal generation interval for testing",
+                            "2-min journal interval",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -97,10 +97,10 @@ fun DevDashboardScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text("Keep Motion Active", fontWeight = FontWeight.Bold)
                         Text(
-                            "Continuously updates motion stats on dashboard (every 2s)",
+                            "Live updates every 2s",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }

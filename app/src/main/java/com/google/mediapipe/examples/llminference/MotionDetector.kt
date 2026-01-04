@@ -124,8 +124,7 @@ class MotionDetector(private val context: Context) : SensorEventListener {
         Log.d(TAG, "Detection - Steps: $sessionSteps, Accel: $acceleration, Speed: $speed, Alt: $altitudeChange")
 
         // Check for stationary state (highest priority)
-        // Check for stationary state (highest priority)
-        // Increased thresholds to avoid flickering "limited motion" when just sitting/standing
+        // Very strict conditions: minimal steps, low acceleration, no altitude change, no speed
         if (sessionSteps <= STATIONARY_STEPS_THRESHOLD && 
             acceleration <= STATIONARY_ACCEL_THRESHOLD &&
             abs(altitudeChange) <= 0.5 && 
@@ -134,25 +133,20 @@ class MotionDetector(private val context: Context) : SensorEventListener {
             return motions  // Return early if clearly stationary
         }
 
-        // Check for limited motion
+        // Check for vehicular motion first (high speed with low steps)
+        // This takes priority over walking/jogging checks
         if (sessionSteps <= LIMITED_MOTION_STEPS_THRESHOLD && 
-            abs(altitudeChange) <= 1.0 && 
-            speed < WALKING_SPEED_THRESHOLD) {
-            motions.add("limited motion")
+            speed >= VEHICLE_SPEED_MIN) {
+            motions.add("vehicle/subway/ferry/train")
+            return motions
         }
 
-        // Check for walking
-        if (sessionSteps >= WALKING_STEPS_THRESHOLD && 
-            speed >= WALKING_SPEED_THRESHOLD && 
-            speed < JOGGING_SPEED_MIN) {
-            motions.add("walking")
-        }
-
-        // Check for jogging/running
+        // Check for jogging/running (high step count AND high speed)
         if (sessionSteps >= JOGGING_STEPS_THRESHOLD && 
             speed >= JOGGING_SPEED_MIN && 
             speed <= JOGGING_SPEED_MAX) {
             motions.add("jogging/running")
+            return motions
         }
 
         // Check for cycling (high speed with moderate steps)
@@ -160,26 +154,52 @@ class MotionDetector(private val context: Context) : SensorEventListener {
             speed >= CYCLING_SPEED_MIN && 
             speed < VEHICLE_SPEED_MIN) {
             motions.add("cycling")
+            return motions
         }
 
-        // Check for vehicular motion (high speed with low steps)
-        if (sessionSteps <= LIMITED_MOTION_STEPS_THRESHOLD && 
-            speed >= VEHICLE_SPEED_MIN) {
-            motions.add("vehicle/subway/ferry/train")
+        // Check for walking - now with multiple detection methods
+        // Method 1: GPS speed based (outdoor walking)
+        val isWalkingBySpeed = speed >= WALKING_SPEED_THRESHOLD && speed < JOGGING_SPEED_MIN
+        // Method 2: Step count based (works better indoors where GPS may be inaccurate)
+        val isWalkingBySteps = sessionSteps >= WALKING_STEPS_THRESHOLD
+        // Method 3: Moderate steps with some acceleration (transitional walking)
+        val isWalkingByAccel = sessionSteps >= LIMITED_MOTION_STEPS_THRESHOLD && acceleration > 0.5
+        
+        if (isWalkingBySteps || (isWalkingBySpeed && sessionSteps > STATIONARY_STEPS_THRESHOLD) || isWalkingByAccel) {
+            motions.add("walking")
+            return motions
         }
 
-        // Check for elevator/escalator
-        // Increased threshold to 4.0m to avoid false positives from barometric pressure changes
+        // Check for elevator/escalator (significant altitude change with low steps)
         if (sessionSteps <= LIMITED_MOTION_STEPS_THRESHOLD && 
             abs(altitudeChange) > 4.0 && 
             speed < JOGGING_SPEED_MIN) {
             motions.add("escalator/elevator")
+            return motions
         }
 
-        // If no motions detected but there's some activity, default to limited motion
-        // Increased accel threshold to 0.3 to ignore minor sensor noise
-        if (motions.isEmpty() && (sessionSteps > 0 || acceleration > 0.3)) {
+        // Check for limited motion - some movement but not enough to classify as walking
+        // Must have more than stationary thresholds but less than walking thresholds
+        if (sessionSteps > STATIONARY_STEPS_THRESHOLD && sessionSteps < WALKING_STEPS_THRESHOLD) {
             motions.add("limited motion")
+            return motions
+        }
+        
+        // Very low activity that doesn't meet stationary criteria
+        // (e.g., minor fidgeting, phone movement)
+        if (acceleration > STATIONARY_ACCEL_THRESHOLD && sessionSteps <= STATIONARY_STEPS_THRESHOLD) {
+            motions.add("limited motion")
+            return motions
+        }
+
+        // Fallback: if we got here with some steps but no classification, use limited motion
+        if (motions.isEmpty() && sessionSteps > 0) {
+            motions.add("limited motion")
+        }
+
+        // Ultimate fallback for empty motions list
+        if (motions.isEmpty()) {
+            motions.add("stationary")
         }
 
         return motions
