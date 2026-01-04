@@ -2,60 +2,14 @@ package com.google.mediapipe.examples.llminference
 
 import android.content.Context
 import android.util.Log
-import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.Closeable
-
 
 class ContextFusionAnalyzer(private val context: Context) : Closeable {
     companion object {
         private const val TAG = "ContextFusionAnalyzer"
     }
-
-//    private val llmInference: LlmInference = LlmManager.getInstance(context)
-    private val llmInference: LlmInference? by lazy { LlmManager.safeGetInstance(context) }
-
-    private var motionStorage: MotionStorage? = null
-    private var fileStorage: FileStorage? = null
-
-
-    // ---------- ORIGINAL CODE --------------
-//    suspend fun performFusion(): String = withContext(Dispatchers.IO) {
-//        try {
-//            motionStorage = MotionStorage(context)
-//            fileStorage = FileStorage(context)
-//
-//            val motionHistory = motionStorage?.getMotionHistory() ?: "No motion data"
-//            val locationHistory = fileStorage?.getLastResponse() ?: "No location data"
-//
-//            val truncatedMotion = motionHistory.takeLast(200)
-//            val truncatedLocation = locationHistory.takeLast(200)
-//
-//            val prompt = """
-//                Given the following data, describe the most likely activity in exactly 20 words:
-//                Motion: $truncatedMotion
-//                Location: $truncatedLocation
-//            """.trimIndent()
-//
-//            Log.d(TAG, "Sending fusion prompt: $prompt")
-//
-//            val response = try {
-//                llmInference.generateResponse(prompt)
-//            } catch (e: Exception) {
-//                Log.e(TAG, "Error generating LLM response", e)
-//                "Fusion analysis failed: ${e.message}"
-//            }
-//
-//            Log.d(TAG, "Received fusion response: $response")
-//            response
-//
-//        } catch (e: Exception) {
-//            Log.e(TAG, "Error during fusion analysis", e)
-//            "Error during fusion: ${e.message}"
-//        }
-//    }
-
 
     suspend fun performFusion(): String = withContext(Dispatchers.IO) {
         try {
@@ -66,52 +20,29 @@ class ContextFusionAnalyzer(private val context: Context) : Closeable {
                 WifiScanner(context).getWifiNetworks()
             } catch (_: Exception) { emptyList() }
 
-            // --- ORIGINAL CODE ----
-//            val ssids = try {
-//                WifiScanner(context).scanNetworks()
-//            } catch (_: Exception) {
-//                emptyList()
-//            }
-
-            // If you fetch a static map / reverse-geocode, make those calls nullable and check:
-             // val mapBmp = mapsClient.fetchStaticMapOrNull(loc)
-            val mapBmp: Any? = null // make this return null on error
-            // val place = placesClient.reverseGeocodeOrNull(loc) // if you do this
-
-            // Build a robust prompt even with missing pieces
             val prompt = buildString {
-                appendLine("Fuse context from sensors:")
-                appendLine("- Location: ${loc.latitude}, ${loc.longitude}")
-                if (ssids.isEmpty()) appendLine("- Wi-Fi: (none visible)") else {
-                    appendLine("- Wi-Fi SSIDs:")
+                appendLine("You are an AI assistant for the 'AutoLife' automatic journaling app.")
+                appendLine("Fuse the following sensor data to infer the user's current context (activity and place).")
+                appendLine("- GPS Coordinates: ${loc.latitude}, ${loc.longitude}")
+                if (ssids.isEmpty()) {
+                    appendLine("- Nearby Wi-Fi: (none detected)")
+                } else {
+                    appendLine("- Nearby Wi-Fi SSIDs:")
                     ssids.take(10).forEach { appendLine("  • $it") }
                 }
-                if (mapBmp == null) appendLine("- Map: unavailable")
-                appendLine("Give a 50-word summary of likely place and activity.")
+                appendLine("\nProvide a 50-word synthesis of the likely location and what the user is currently doing.")
             }
 
-            // Use on-device LLM; if you changed LlmManager to nullable, fall back to Ollama here.
-            val llmInference = LlmManager.safeGetInstance(context)
-            val engine = llmInference ?: return@withContext "On-device LLM unavailable (model/runtime mismatch)."
-            val response = try {
-                engine.generateResponse(prompt)
-            } catch (e: Exception) {
-                Log.e("LocationAnalyzer", "LLM generate failed", e)
-                "Failed to generate LLM response: ${e.message}"
-            }
+            Log.d(TAG, "Sending fusion prompt to Gemini...")
+            val response = GeminiClient.generateResponse(prompt)
+            Log.d(TAG, "Received fusion response: $response")
+            
             response
         } catch (e: Exception) {
             "Fusion failed: ${e.message}"
         }
     }
 
-        override fun close() {
-        try {
-            // No need to close LLM instance as it's managed by LlmManager
-            motionStorage = null
-            fileStorage = null
-        } catch (e: Exception) {
-            Log.e(TAG, "Error during cleanup", e)
-        }
+    override fun close() {
     }
 }

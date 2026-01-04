@@ -1,166 +1,74 @@
-# Comprehensive Implementation Analysis
+# AutoLife: Automated Journaling Agent
 
-## **1. Data Collection & Duty Cycle**
+This Android application works to reproduce the core methodology of the research paper **"AutoLife: Automatic Life Journaling with Smartphones and LLMs"** (arXiv:2412.15714). It utilizes on-device sensors and the Gemini LLM to automatically infer and log the user's daily activities and context.
 
-### Implemented:
-- **Sensors:** Accelerometer, Gyroscope, Barometer (via `SensorManager`)
-- **WiFi Scanning:** `WifiScanner.java` 
-- **GPS:** `LocationManager` in `MotionAnalyzer.java`
+## **Project Status: Paper Reproduction**
 
-**Relevant Files:**
-- `MotionAnalyzer.java` - Sensor registration and data collection
-- `WifiScanner.java` - WiFi SSID scanning
-- `SequentialMotionLocationAnalyzer.java` - Main orchestrator
+We are actively working to reproduce the "AutoLife" system. Below is a detailed comparison of the implementation status against the methodology described in the research paper.
 
-### NOT Implemented:
-- **Duty Cycle (15s active/45s idle):** Currently uses 2-second continuous intervals
-- **60-second cycle:** No evidence of this pattern
-
----
-
-## **2. Motion Context Detection (Rule-Based)**
-
-### Partially Implemented:
-
-**What EXISTS in `MotionAnalyzer.java`:**
-```java
-private String classifyActivity(float[] accValues, int stepCount) {
-    // Basic thresholds exist but INCOMPLETE
-    if (stepCount < 5 && avgAcc < 0.5) return "stationary";
-    if (stepCount > 120) return "running";
-    if (stepCount > 30) return "walking";
-}
-```
-
-**Relevant Files:**
-- `MotionAnalyzer.java` - Has basic classification logic
-- `SequentialMotionLocationAnalyzer.java` - Calls motion analysis
-
-### MISSING from Paper's Algorithm:
-- **Altitude Change (Δh):** No barometer data processing visible
-- **GPS Speed (v):** Not integrated into classification
-- **Complex Rules:** 
-  - No "Cycling" detection (steps + speed)
-  - No "Transport" detection (low steps + high speed)
-  - No "Escalator/Elevator" detection (altitude change)
-- **Multiple Motion Output:** Returns single string, not list of ambiguous motions
+| Feature Area | Component | Implementation Status | Implementation vs Paper Specification |
+|---|---|---|---|
+| **Data Collection** | **Sensors** | ✅ **Implemented** | **Implemented:** Accelerometer, Gyroscope, Barometer, Step Counter. <br> **Paper:** Matches spec. |
+| | **Duty Cycle** | ⚠️ **Modified** | **Current:** 1 minute cycle (**10s** Active / 50s Idle). <br> **Paper:** 1 minute cycle (**15s** Active / 45s Idle). |
+| **Motion Context** | **Rule-Based Classification** | ✅ **Implemented** | **Implemented:** Detects Stationary, Walking, Running, cycling, Vehicle, Escalator/Elevator. Matches "Algorithm 1" in paper. |
+| | **Altitude Tracking** | ✅ **Implemented** | Uses Barometer for vertical transport detection (Elevator/Escalator). |
+| **Location Context** | **Method A: Visual Map** | ❌ **Not Implemented** | **Paper:** Fetches 250x250m Google Static Map (Zoom 18) and uses VLM to infer zone (e.g., "Residential"). <br> **Current:** Missing entirely. |
+| | **Method B: WiFi Analysis** | ✅ **Implemented** | **Paper:** Uses LLM to infer venue from SSIDs. <br> **Current:** Implemented with **Gemini 2.5 Flash Lite**. |
+| **Context Fusion** | **Multi-Modal Fusion** | ⚠️ **Partial** | **Paper:** Fuses Map + SSID + Motion using LLM to resolve ambiguities (e.g., High speed + Highway = Vehicle). <br> **Current:** Basic concatenation implemented (`ContextFusionAnalyzer`), but disabled in main loop. |
+| **Journaling** | **Temporal Aggregation** | ❌ **Not Implemented** | **Paper:** Aggregates **15** one-minute segments into a single "Context Block" before generating a journal. <br> **Current:** Logs individual 1-minute events. |
+| | **Narrative Generation** | ⚠️ **Basic** | **Paper:** Uses "Reasoning-Summary" prompt pattern and subjectivity removal pass. <br> **Current:** Simple generation prompt; lacks multi-step refinement. |
 
 ---
 
-## **3. Location Context Detection**
+## **Key Features**
 
-### Method B: WiFi SSID Analysis - IMPLEMENTED
+### 1. **Intelligent Motion Detection (`MotionDetector.kt`)**
+The app continuously monitors device sensors to classify activity. Unlike basic step counters, it uses a multi-factor rule engine:
+- **Stationary**: Low steps + Low acceleration.
+- **Elevator/Escalator**: Altitude change with low steps.
+- **Cycling/Vehicle**: Speed thresholds (GPS) combined with step frequency.
 
-**Evidence from logs:**
-```
-WifiScanner: Filtered networks: [MyResNet, RHS CLASSROOM, ...]
-LocationAnalyzer: Sending prompt to LLM
-LocationAnalyzer: Location, Received response from LLM: likely a college campus
-```
+### 2. **LLM-Powered Location Context (`LocationAnalyzer.kt`)**
+Instead of just logging coordinates, the app scans nearby WiFi networks (SSIDs) and sends them to the **Gemini LLM**.
+- **Input**: "Starbucks_Guest", "Google_Internal", "My_iPhone"
+- **Output**: "Coffee Shop" or "Office Environment"
+- *Note: This runs on the IO thread to prevent UI blocking.*
 
-**Relevant Files:**
-- `WifiScanner.java` - SSID collection
-- `LocationAnalyzer.java` - LLM inference from WiFi names
-- `LLMInterface.java` - Gemma model integration
-
-### ❌ Method A: Visual Map Analysis - NOT IMPLEMENTED
-- No Google Maps API integration
-- No image fetching from GPS coordinates
-- No Vision-Language Model (VLM) processing
-- GPS coordinates are collected but not used for map queries
+### 3. **Background Service (`AutoLifeService.kt`)**
+- Runs as a **Foreground Service** with a persistent notification ("Logging your life context...").
+- Wakes up every **60 seconds** to perform a sensor analysis burst.
+- Logs results to a local Room database.
 
 ---
 
-## **4. Context Fusion & Calibration**
+## **Setup & Configuration**
 
-### Partially Implemented:
+### **Prerequisites**
+- Android Studio Ladybug or newer.
+- A **Gemini API Key**.
 
-**What EXISTS:**
-```java
-// From SequentialMotionLocationAnalyzer.java
-private void fuseContexts(String motionContext, String locationContext) {
-    String fusedContext = motionContext + " at " + locationContext;
-    // Simple string concatenation
-}
-```
+### **Configuration Steps**
+1. **Get an API Key**: Visit [Google AI Studio](https://aistudio.google.com/) to get your Gemini API key.
+2. **Local Properties**: Open `local.properties` in the project root and add your key:
+   ```properties
+   GEMINI_API_KEY=your_api_key_here
+   ```
+3. **Build & Run**:
+   - Sync Gradle.
+   - Run on a physical device (Emulators often lack necessary sensors like Accelerometer/Wifi).
+   - **Grant Permissions**: The app requires `Location`, `Physical Activity`, and `Notification` permissions.
 
-**Relevant Files:**
-- `SequentialMotionLocationAnalyzer.java` - Has fusion method
+## **Architecture**
 
-### MISSING:
-- **Step A (Location Fusion):** No Map + WiFi comparison (because no Map data exists)
-- **Step B (Motion Calibration):** No LLM-based motion disambiguation
-  - No logic to select between ambiguous motions using location
-  - No examples like "Vehicle + Ocean = Ferry"
-- **Sophisticated Fusion:** Just concatenates strings, doesn't use LLM to merge intelligently
+- **Language**: Kotlin
+- **AI Model**: Gemini 2.5 Flash Lite (via `google-generativeai` SDK)
+- **Database**: Room (SQLite)
+- **Concurrency**: Kotlin Coroutines (`Dispatchers.Default` for analysis, `Dispatchers.Main` for UI updates)
 
----
+## **Project Structure**
 
-## **5. Context Refinement (Temporal Aggregation) - NOT IMPLEMENTED**
-
-### Missing Entirely:
-- No 15-minute windowing
-- No temporal aggregation of multiple context logs
-- No LLM-based selection of "best" or "most specific" location across time windows
-- No timeline format: `[time-1](map_loc, wifi_loc)...[time-n](map_loc, wifi_loc)`
-
-**Current Behavior:** Each 2-second cycle generates independent context, no aggregation.
-
----
-
-## **6. Final Journal Generation**
-
-### Partially Implemented:
-
-**What EXISTS:**
-```java
-private void generateJournalEntry(String motionContext, String locationContext) {
-    String prompt = "Based on this context: " + fusedContext + 
-                   ", generate a natural journal entry...";
-    llmInterface.generateResponse(prompt, ...);
-}
-```
-
-**Relevant Files:**
-- `SequentialMotionLocationAnalyzer.java` - Has `generateJournalEntry()` method
-- `FileStorage.java` - Saves journal entries
-
-### MISSING:
-- **Input Format:** No refined timeline (should aggregate 15-min windows, not single events)
-- **Few-Shot Prompting:** No examples in prompt to guide style
-- **Subjectivity Removal:** No second LLM pass to remove subjective language
-- **Commonsense Inference:** Uses basic prompt, not leveraging time-of-day or activity patterns
-
----
-
-# Summary Table
-
-| Component | Status | Files | Missing |
-|-----------|--------|-------|---------|
-| **Sensor Collection** | ✅ Partial | `MotionAnalyzer.java`, `WifiScanner.java` | Duty cycle (15s/45s) |
-| **Motion Detection** | ⚠️ Partial | `MotionAnalyzer.java` | Altitude, GPS speed, complex rules, multi-motion output |
-| **WiFi Location** | ✅ Full | `LocationAnalyzer.java`, `LLMInterface.java` | None |
-| **Visual Map Location** | ❌ None | N/A | Entire module (Maps API, VLM) |
-| **Context Fusion** | ⚠️ Basic | `SequentialMotionLocationAnalyzer.java` | LLM-based fusion, motion calibration |
-| **Temporal Aggregation** | ❌ None | N/A | 15-min windows, timeline format |
-| **Journal Generation** | ⚠️ Basic | `SequentialMotionLocationAnalyzer.java` | Few-shot prompts, subjectivity filter |
-
----
-
-# What Works End-to-End Right Now:
-
-1. Collect accelerometer + gyroscope + WiFi every 2 seconds
-2. Classify motion using basic rules (stationary/walking/running)
-3. Infer location from WiFi SSIDs using on-device LLM
-4. Concatenate motion + location strings
-5. Generate simple journal entry using LLM
-6. Save to file storage
-
-# What's Missing to Match Paper:
-
-1. **Duty cycle optimization** (battery savings)
-2. **Complete motion algorithm** (altitude, speed, complex activities)
-3. **Visual map analysis** (entire VLM pipeline)
-4. **Intelligent context fusion** (LLM-based disambiguation)
-5. **Temporal aggregation** (15-min windows)
-6. **Refined journal synthesis** (few-shot, subjectivity removal)
+- `MotionDetector.kt`: Raw sensor data processing and rule-based classification.
+- `WifiScanner.kt`: Scans visible SSIDs (requires Location permission).
+- `LocationAnalyzer.kt`: Interfaces with Gemini to predict location from WiFi.
+- `SequentialMotionLocationAnalyzer.kt`: Orchestrates the analysis pipeline (Motion -> Location).
+- `AutoLifeService.kt`: Background service managing the duty cycle.
