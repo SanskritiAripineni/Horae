@@ -19,12 +19,15 @@ class MotionDetector(private val context: Context) : SensorEventListener {
     private val motionStorage = MotionStorage(context)
 
     private var lastAcceleration = 0.0
-    private var baselineStepCount = -1  // Store baseline when detection starts
-    private var currentStepCount = 0
+    private var lastStepCount = -1  // Last reading from step counter
     private var lastAltitude = 0.0
     private var currentSpeed = 0.0
     private var lastDetectionTime = 0L
-    private val DETECTION_INTERVAL_MS = 2000L  // Only detect every 2 seconds
+    private val DETECTION_INTERVAL_MS = 2000L  // Update every 2 seconds
+    
+    // Sliding window for recent steps (timestamp to step count)
+    private val stepHistory = mutableListOf<Pair<Long, Int>>()
+    private val STEP_WINDOW_MS = 30_000L  // 30 second window for step counting
 
     private var motionCallback: ((List<String>) -> Unit)? = null
 
@@ -36,7 +39,8 @@ class MotionDetector(private val context: Context) : SensorEventListener {
         private const val WALKING_STEPS_THRESHOLD = 30
         private const val JOGGING_STEPS_THRESHOLD = 80
         
-        private const val STATIONARY_ACCEL_THRESHOLD = 0.5
+        private const val STATIONARY_ACCEL_THRESHOLD = 0.8
+        private const val STATIONARY_SPEED_THRESHOLD = 0.5 // m/s
         private const val WALKING_SPEED_THRESHOLD = 0.5  // m/s (~1.8 km/h)
         private const val JOGGING_SPEED_MIN = 2.0  // m/s
         private const val JOGGING_SPEED_MAX = 5.0  // m/s
@@ -57,7 +61,8 @@ class MotionDetector(private val context: Context) : SensorEventListener {
     // Initialize sensors
     fun startDetection(callback: (List<String>) -> Unit) {
         motionCallback = callback
-        baselineStepCount = -1  // Reset baseline
+        lastStepCount = -1  // Reset step tracking
+        stepHistory.clear()  // Clear step history
         lastDetectionTime = System.currentTimeMillis()
 
         // Set up accelerometer
@@ -108,7 +113,8 @@ class MotionDetector(private val context: Context) : SensorEventListener {
             Log.e(TAG, "Location permission not granted", e)
         }
         motionCallback = null
-        baselineStepCount = -1
+        lastStepCount = -1
+        stepHistory.clear()
     }
 
     // Main motion detection algorithm
@@ -123,33 +129,29 @@ class MotionDetector(private val context: Context) : SensorEventListener {
         Log.d(TAG, "Detection - Steps: $sessionSteps, Accel: $acceleration, Speed: $speed, Alt: $altitudeChange")
 
         // Check for stationary state (highest priority)
+        // Very strict conditions: minimal steps, low acceleration, no altitude change, no speed
         if (sessionSteps <= STATIONARY_STEPS_THRESHOLD && 
             acceleration <= STATIONARY_ACCEL_THRESHOLD &&
             abs(altitudeChange) <= 0.5 && 
-            speed <= 0.2) {
+            speed <= STATIONARY_SPEED_THRESHOLD) {
             motions.add("stationary")
             return motions  // Return early if clearly stationary
         }
 
-        // Check for limited motion
+        // Check for vehicular motion first (high speed with low steps)
+        // This takes priority over walking/jogging checks
         if (sessionSteps <= LIMITED_MOTION_STEPS_THRESHOLD && 
-            abs(altitudeChange) <= 1.0 && 
-            speed < WALKING_SPEED_THRESHOLD) {
-            motions.add("limited motion")
+            speed >= VEHICLE_SPEED_MIN) {
+            motions.add("vehicle/subway/ferry/train")
+            return motions
         }
 
-        // Check for walking
-        if (sessionSteps >= WALKING_STEPS_THRESHOLD && 
-            speed >= WALKING_SPEED_THRESHOLD && 
-            speed < JOGGING_SPEED_MIN) {
-            motions.add("walking")
-        }
-
-        // Check for jogging/running
+        // Check for jogging/running (high step count AND high speed)
         if (sessionSteps >= JOGGING_STEPS_THRESHOLD && 
             speed >= JOGGING_SPEED_MIN && 
             speed <= JOGGING_SPEED_MAX) {
             motions.add("jogging/running")
+            return motions
         }
 
         // Check for cycling (high speed with moderate steps)
@@ -157,24 +159,56 @@ class MotionDetector(private val context: Context) : SensorEventListener {
             speed >= CYCLING_SPEED_MIN && 
             speed < VEHICLE_SPEED_MIN) {
             motions.add("cycling")
+            return motions
         }
 
-        // Check for vehicular motion (high speed with low steps)
-        if (sessionSteps <= LIMITED_MOTION_STEPS_THRESHOLD && 
-            speed >= VEHICLE_SPEED_MIN) {
-            motions.add("vehicle/subway/ferry/train")
+        // Check for walking - now with multiple detection methods
+        // Method 1: GPS speed based (outdoor walking)
+        val isWalkingBySpeed = speed >= WALKING_SPEED_THRESHOLD && speed < JOGGING_SPEED_MIN
+        // Method 2: Step count based (works better indoors where GPS may be inaccurate)
+        val isWalkingBySteps = sessionSteps >= WALKING_STEPS_THRESHOLD
+        // Method 3: Moderate steps with some acceleration (transitional walking)
+        val isWalkingByAccel = sessionSteps >= LIMITED_MOTION_STEPS_THRESHOLD && acceleration > 0.5
+        
+        if (isWalkingBySteps || (isWalkingBySpeed && sessionSteps > STATIONARY_STEPS_THRESHOLD) || isWalkingByAccel) {
+            motions.add("walking")
+            return motions
         }
 
-        // Check for elevator/escalator
-        if (sessionSteps <= LIMITED_MOTION_STEPS_THRESHOLD && 
-            abs(altitudeChange) > 2.5 && 
-            speed < JOGGING_SPEED_MIN) {
+        // Check for elevator/escalator (significant altitude change with very few steps)
+        // Must have VERY low steps (<=3) since you're standing still on an elevator
+        // Increased altitude threshold to 6m to avoid barometric sensor noise false positives
+        // Also require low acceleration (not actively moving)
+        if (sessionSteps <= 3 && 
+            abs(altitudeChange) > 6.0 && 
+            speed < WALKING_SPEED_THRESHOLD &&
+            acceleration < 0.5) {
             motions.add("escalator/elevator")
+            return motions
         }
 
-        // If no motions detected but there's some activity, default to limited motion
-        if (motions.isEmpty() && (sessionSteps > 0 || acceleration > 0.1)) {
+        // Check for limited motion - some movement but not enough to classify as walking
+        // Must have more than stationary thresholds but less than walking thresholds
+        if (sessionSteps > STATIONARY_STEPS_THRESHOLD && sessionSteps < WALKING_STEPS_THRESHOLD) {
             motions.add("limited motion")
+            return motions
+        }
+        
+        // Very low activity that doesn't meet stationary criteria
+        // (e.g., minor fidgeting, phone movement)
+        if (acceleration > STATIONARY_ACCEL_THRESHOLD && sessionSteps <= STATIONARY_STEPS_THRESHOLD) {
+            motions.add("limited motion")
+            return motions
+        }
+
+        // Fallback: if we got here with some steps but no classification, use limited motion
+        if (motions.isEmpty() && sessionSteps > 0) {
+            motions.add("limited motion")
+        }
+
+        // Ultimate fallback for empty motions list
+        if (motions.isEmpty()) {
+            motions.add("stationary")
         }
 
         return motions
@@ -192,16 +226,21 @@ class MotionDetector(private val context: Context) : SensorEventListener {
             }
             Sensor.TYPE_STEP_COUNTER -> {
                 val totalSteps = event.values[0].toInt()
+                val currentTime = System.currentTimeMillis()
                 
-                // Initialize baseline on first reading
-                if (baselineStepCount == -1) {
-                    baselineStepCount = totalSteps
-                    currentStepCount = 0
-                    Log.d(TAG, "Baseline step count set to: $baselineStepCount")
-                } else {
-                    // Calculate steps since detection started
-                    currentStepCount = totalSteps - baselineStepCount
+                // Calculate steps taken since last reading
+                if (lastStepCount != -1) {
+                    val newSteps = totalSteps - lastStepCount
+                    if (newSteps > 0) {
+                        stepHistory.add(Pair(currentTime, newSteps))
+                    }
                 }
+                lastStepCount = totalSteps
+                
+                // Remove old entries outside the window
+                stepHistory.removeAll { currentTime - it.first > STEP_WINDOW_MS }
+                
+                Log.d(TAG, "Step history size: ${stepHistory.size}, Recent steps: ${stepHistory.sumOf { it.second }}")
             }
             Sensor.TYPE_PRESSURE -> {
                 // Only run detection at intervals to avoid spam
@@ -224,12 +263,24 @@ class MotionDetector(private val context: Context) : SensorEventListener {
                 }
                 lastAltitude = altitude
 
-                // Detect motion with session-based step count
+                // Calculate recent steps from sliding window
+                val recentSteps = stepHistory.sumOf { it.second }
+                
+                // Detect motion with recent step count (not cumulative)
                 val motions = detectMotion(
-                    sessionSteps = currentStepCount,
+                    sessionSteps = recentSteps,
                     acceleration = lastAcceleration,
                     altitudeChange = altitudeChange,
                     speed = currentSpeed
+                )
+
+                // Debug Update
+                com.google.mediapipe.examples.llminference.data.DebugRepository.updateMotion(
+                    accel = lastAcceleration,
+                    steps = recentSteps,
+                    speed = currentSpeed,
+                    alt = altitude,
+                    clazz = motions.firstOrNull() ?: "Unknown"
                 )
 
                 // Save motion detection to storage
@@ -247,8 +298,17 @@ class MotionDetector(private val context: Context) : SensorEventListener {
 
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
-            currentSpeed = location.speed.toDouble() // Speed in meters/second
-            Log.d(TAG, "Speed updated: $currentSpeed m/s")
+            val rawSpeed = location.speed.toDouble()
+            // Simple low-pass filter to smooth out GPS noise
+            // alpha = 0.7 means we keep 70% of history and take 30% of new value
+            var smoothedSpeed = (currentSpeed * 0.7) + (rawSpeed * 0.3)
+            
+            // Dead zone: treat speeds below 0.4 m/s as 0 (GPS drift mitigation)
+            if (smoothedSpeed < 0.4) {
+                smoothedSpeed = 0.0
+            }
+            currentSpeed = smoothedSpeed
+            Log.d(TAG, "Speed updated: $currentSpeed m/s (raw: $rawSpeed)")
         }
 
         override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}

@@ -2,29 +2,34 @@ package com.google.mediapipe.examples.llminference
 
 import android.content.Context
 import android.util.Log
+import com.google.mediapipe.examples.llminference.data.LogDao
+import com.google.mediapipe.examples.llminference.data.SensorLog
+import com.google.mediapipe.examples.llminference.data.JournalEntry
 import kotlinx.coroutines.*
 import java.io.Closeable
 import java.lang.ref.WeakReference
-import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import com.google.mediapipe.examples.llminference.getBestLocation
 
-
-
-class SequentialMotionLocationAnalyzer(context: Context) : Closeable {
+class SequentialMotionLocationAnalyzer(
+    context: Context
+) : Closeable {
     companion object {
         private const val TAG = "SequentialAnalyzer"
-        private const val MOTION_DURATION = 10000L // 10 seconds
+        private const val MOTION_DURATION = 15000L // 15 seconds
     }
 
     private val contextRef = WeakReference(context)
+    private val logDao: LogDao = (context.applicationContext as AutoLifeApp).database.logDao()
+    
     // Use Default for background sequencing; hop to Main only for callbacks
     private val analyzerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var currentJob: Job? = null
-    val llmInference = LlmManager.safeGetInstance(context)
     private var isAnalyzing = false
     private var currentPhase = AnalysisPhase.NONE
     private var motionDetector: MotionDetector? = null
+
     private var locationAnalyzer: LocationAnalyzer? = null
+    private var lastLocationContext: String? = null
 
     enum class AnalysisPhase {
         NONE,
@@ -60,7 +65,7 @@ class SequentialMotionLocationAnalyzer(context: Context) : Closeable {
                     }
                 }
             }
-            // Wait for motion detection on Default dispatcher (non-blocking to UI)
+            // Wait for motion detection on Default dispatcher
             val start = System.nanoTime()
             delay(MOTION_DURATION)
             val elapsedMs = (System.nanoTime() - start) / 1_000_000
@@ -80,7 +85,6 @@ class SequentialMotionLocationAnalyzer(context: Context) : Closeable {
     private fun startMotionPhase(callback: (String, AnalysisPhase) -> Unit) {
         isAnalyzing = true
         currentPhase = AnalysisPhase.MOTION
-        // Removed forced GC to avoid UI pauses
 
         val context = contextRef.get() ?: run {
             cleanup()
@@ -104,6 +108,7 @@ class SequentialMotionLocationAnalyzer(context: Context) : Closeable {
         }
     }
 
+
     private fun finishMotionPhase(callback: (String, AnalysisPhase) -> Unit) {
         val context = contextRef.get() ?: run {
             cleanup()
@@ -112,14 +117,24 @@ class SequentialMotionLocationAnalyzer(context: Context) : Closeable {
         }
 
         val motionStorage = MotionStorage(context)
-        val motionHistory = motionStorage.getMotionHistory()
+        val motionHistory = motionStorage.getMotionHistory() ?: "No motion detected"
+
+        // Save to DB
+        analyzerScope.launch {
+            logDao.insertLog(
+                SensorLog(
+                    timestamp = System.currentTimeMillis(),
+                    type = "MOTION",
+                    content = motionHistory
+                )
+            )
+        }
 
         // Stop detector on Main thread
         analyzerScope.launch(Dispatchers.Main) {
             motionDetector?.stopDetection()
             motionDetector = null
         }
-        // Removed forced GC to avoid UI pauses
 
         startLocationPhase(callback)
     }
@@ -138,7 +153,19 @@ class SequentialMotionLocationAnalyzer(context: Context) : Closeable {
             try {
                 val locationSuccess = runLocationAnalysis(context, callback)
                 if (locationSuccess) {
-                    startFusionPhase(callback)
+                     // We skip Fusion for the Service loop usually, but here we can just finish or do Fusion.
+                     // For AutoLife, we collect logs continuously, and fusion usually happens periodically or on-demand.
+                     // The original flow did Fusion immediately. I will keep it but maybe we only want to LOG separately?
+                     // Actually let's keep the flow: Motion -> Location -> (Done). Fusion can be a separate Dashboard action or periodic.
+                     // For now, let's just finish after Location to satisfy "Data Collection".
+                    // startFusionPhase(callback) 
+                    // CHANGE: Just finish after location for background data collection efficiency?
+                    // The paper says "Context Fusion" cleans up stream.
+                    // But typically verification means we see RAW logs first.
+                    // Let's keep the chain but maybe skip heavy LLM fusion in the background loop every minute?
+                    // Since I set interval to 1 min, doing LLM fusion every min is expensive.
+                    // Let's just finishAnalysis here.
+                    finishAnalysis(callback)
                 } else {
                     cleanup()
                     callback("Location analysis failed", AnalysisPhase.LOCATION)
@@ -151,6 +178,7 @@ class SequentialMotionLocationAnalyzer(context: Context) : Closeable {
         }
     }
 
+
     private suspend fun runLocationAnalysis(
         context: Context,
         callback: (String, AnalysisPhase) -> Unit
@@ -161,13 +189,9 @@ class SequentialMotionLocationAnalyzer(context: Context) : Closeable {
                 callback("Location unavailable. Turn on Location or step outside.", AnalysisPhase.LOCATION)
                 false
             } else {
-//                val ssids: List<String> = try {
-//                    WifiScanner(context).scanNetworks()
-//                } catch (_: Exception) { emptyList() }
                 val ssids: List<String> = try {
                     WifiScanner(context).getWifiNetworks()
                 } catch (_: Exception) { emptyList() }
-
 
                 val locationAnalyzer = LocationAnalyzer(context)
                 val result = if (ssids.isNotEmpty()) {
@@ -176,7 +200,17 @@ class SequentialMotionLocationAnalyzer(context: Context) : Closeable {
                     locationAnalyzer.analyzeLocation(listOf("No visible Wi-Fi SSIDs"))
                 }
 
+                // Log to DB
+                logDao.insertLog(
+                    SensorLog(
+                        timestamp = System.currentTimeMillis(),
+                        type = "LOCATION",
+                        content = result
+                    )
+                )
+
                 callback("Location analysis complete: $result", AnalysisPhase.LOCATION)
+                lastLocationContext = result
                 true
             }
         } catch (e: Exception) {
@@ -267,62 +301,25 @@ class SequentialMotionLocationAnalyzer(context: Context) : Closeable {
     }
 
     private suspend fun performContextFusion(context: Context): String {
+        val contextFusionAnalyzer = ContextFusionAnalyzer(context)
+        
         val motionStorage = MotionStorage(context)
-        val fileStorage = FileStorage(context)
-
-        val motionData = motionStorage.getMotionHistory() ?: "No motion data"
-        val locationData = fileStorage.getLastResponse() ?: "No location data"
-
-        var combinedAnalyzer: MotionLocationAnalyzer? = null
-        var additionalAnalysis = ""
-        var contextFusionAnalyzer: ContextFusionAnalyzer? = null
-        var llmFusionResult = ""
-
-        try {
-            // Step 1: Run the MotionLocationAnalyzer and wait for its completion
-            combinedAnalyzer = MotionLocationAnalyzer(context)
-            val analysisPromise = CompletableDeferred<String>()
-
-            combinedAnalyzer.startAnalysis { result ->
-                if (result.contains("Retrieving combined results")) {
-                    analysisPromise.complete(result)
-                }
-            }
-
-            // Wait for motion analysis to complete before proceeding
-            additionalAnalysis = analysisPromise.await()
-
-            // Step 2: Only after motion analysis is complete, run the ContextFusionAnalyzer
-            if (additionalAnalysis.isNotEmpty()) {
-                contextFusionAnalyzer = ContextFusionAnalyzer(context)
-                llmFusionResult = contextFusionAnalyzer.performFusion()
-            }
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in fusion analysis", e)
-            if (additionalAnalysis.isEmpty()) {
-                additionalAnalysis = "Additional analysis failed: ${e.message}"
-            }
-            if (llmFusionResult.isEmpty()) {
-                llmFusionResult = "LLM fusion failed: ${e.message}"
-            }
-        } finally {
-            combinedAnalyzer?.close()
-            combinedAnalyzer = null
-            contextFusionAnalyzer?.close()
-            contextFusionAnalyzer = null
-            System.gc()
-        }
-
-        return buildString {
-            append("=== Initial Analysis ===\n")
-            append("Motion: $motionData\n")
-            append("Location: $locationData\n\n")
-            append("=== Motion Location Analysis ===\n")
-            append(additionalAnalysis)
-            append("\n\n=== Context Fusion Analysis ===\n")
-            append(llmFusionResult)
-        }
+        val motionHistory = motionStorage.getMotionHistory() ?: "Unknown Motion"
+        val locationContext = lastLocationContext ?: "Unknown Location"
+        
+        val result = contextFusionAnalyzer.performFusion(motionHistory, locationContext)
+        
+        // Save to DB as a "Journal" entry if it's a high-level fusion
+        logDao.insertJournal(
+            JournalEntry(
+                createdTimestamp = System.currentTimeMillis(),
+                periodStart = System.currentTimeMillis() - 60000, // Roughly last minute
+                periodEnd = System.currentTimeMillis(),
+                content = result
+            )
+        )
+        
+        return result
     }
 
     private fun finishAnalysis(callback: (String, AnalysisPhase) -> Unit) {

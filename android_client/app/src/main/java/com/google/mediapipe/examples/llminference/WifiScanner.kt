@@ -13,42 +13,52 @@ class WifiScanner(private val context: Context) {
     }
 
     fun getWifiNetworks(): List<String> {
+        val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        
+        if (!wifiManager.isWifiEnabled) {
+            Log.w(TAG, "WiFi is disabled")
+            return listOf("WiFi is disabled")
+        }
+
         // Check for location permission
         if (ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.ACCESS_FINE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED) {
-            Log.w(TAG, "Location permission not granted")
-            return emptyList()
+            Log.w(TAG, "Location permission not granted - mandatory for WiFi scanning result access")
+            return listOf("Permission Denied: ACCESS_FINE_LOCATION")
         }
 
-        val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
-
         return try {
-            // Log all scan results including empty SSIDs
-            Log.d(TAG, "Raw scan results:")
-            wifiManager.scanResults.forEach { result ->
-                Log.d(TAG, "SSID: '${result.SSID}', BSSID: ${result.BSSID}, Signal Strength: ${result.level}dBm")
+            val results = wifiManager.scanResults
+            
+            if (results == null) {
+                Log.w(TAG, "scanResults returned null")
+                return listOf("Scan results null")
             }
 
-            val filteredNetworks = wifiManager.scanResults
+            Log.d(TAG, "Found ${results.size} raw scan results")
+            
+            val filteredNetworks = results
                 .mapNotNull { result ->
                     result.SSID.takeIf { it.isNotEmpty() }
                 }
                 .distinct()
 
-            // Log filtered networks
-            Log.d(TAG, "Filtered networks:")
-            filteredNetworks.forEach { ssid ->
-                Log.d(TAG, "Network SSID: '$ssid'")
+            Log.d(TAG, "Filtered to ${filteredNetworks.size} unique SSIDs")
+            
+            if (filteredNetworks.isEmpty()) {
+                Log.w(TAG, "No SSIDs found in scan results. Is Location service (GPS) enabled?")
+                return listOf("No visible Wi-Fi SSIDs")
             }
-
-            Log.d(TAG, "Total networks found: ${filteredNetworks.size}")
 
             filteredNetworks
         } catch (e: SecurityException) {
             Log.e(TAG, "Security exception while scanning WiFi", e)
-            emptyList()
+            listOf("Security Error: ${e.message}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Unexpected error in WifiScanner", e)
+            listOf("Error: ${e.message}")
         }
     }
 }
