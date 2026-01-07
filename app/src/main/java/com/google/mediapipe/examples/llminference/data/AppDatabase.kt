@@ -48,6 +48,9 @@ interface LogDao {
     @Query("SELECT * FROM journal_entries ORDER BY createdTimestamp DESC")
     fun observeJournals(): Flow<List<JournalEntry>>
 
+    @Query("SELECT * FROM journal_entries ORDER BY createdTimestamp ASC")
+    suspend fun getAllJournals(): List<JournalEntry>
+
     @Query("DELETE FROM sensor_logs")
     suspend fun deleteAllLogs()
 }
