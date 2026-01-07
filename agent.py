@@ -1,18 +1,18 @@
 """
 LLM Scheduler Agent - The "Conductor"
+Orchestrates journal analysis, mental health assessment, and calendar optimization.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
-from datetime import datetime
+from typing import Any, Dict, List
+from datetime import datetime, timedelta
 
 # Import config FIRST to load .env
 from config import config
 
 from tools.autolife_reader import AutoLifeReader
-from tools.ihope_model import IHopeModel
 from tools.vectordb_client import VectorDBClient
-from tools.calendar_api import CalendarAPI
+from tools.calendar_api import CalendarAPI, CalendarEvent
 from tools.llm_client import LLMClient
 from memory import MemoryModule
 
@@ -20,19 +20,205 @@ logger = logging.getLogger(__name__)
 
 
 class LLMSchedulerAgent:
+    """
+    Main agent that orchestrates the mental health analysis and calendar optimization.
+    """
+    
     def __init__(self, suggest_only: bool = True, user_id: str = "default"):
         self.suggest_only = suggest_only
         self.user_id = user_id
+        
+        # Initialize tools
         self.autolife_reader = AutoLifeReader()
-        self.ihope_model = IHopeModel()
-        self.vectordb_client = VectorDBClient()
+        self.vectordb = VectorDBClient()
         self.calendar_api = CalendarAPI(suggest_only=suggest_only)
         self.llm_client = LLMClient()
         self.memory = MemoryModule()
+        
+        logger.info("LLMSchedulerAgent initialized")
 
     def run(self, mode: str = "daily") -> Dict[str, Any]:
+        """Run the full agent workflow."""
         logger.info(f"Running agent in {mode} mode")
-        # Logic skeleton
-        return {'status': 'completed', 'user_id': self.user_id}
+        start_time = datetime.now()
+        
+        results = {
+            'status': 'running',
+            'user_id': self.user_id,
+            'mode': mode,
+            'timestamp': start_time.isoformat(),
+            'journal_summary': None,
+            'mental_health': None,
+            'recommendations': [],
+            'calendar_summary': None,
+            'proposed_changes': [],
+            'errors': []
+        }
+        
+        try:
+            # Step 1: Read journals
+            logger.info("Step 1: Reading journals...")
+            journals = self.autolife_reader.read_journals(limit=10)
+            
+            if not journals:
+                results['errors'].append("No journal entries found")
+                results['status'] = 'completed_with_warnings'
+                return results
+            
+            journal_text = self.autolife_reader.get_context_for_prompt(journals)
+            results['journal_count'] = len(journals)
+            
+            # Step 2: Analyze mental health with Gemini
+            logger.info("Step 2: Analyzing mental health...")
+            analysis = self.llm_client.analyze_mental_health(journal_text)
+            results['journal_summary'] = analysis.get('summary', '')
+            results['mental_health'] = {
+                'estimated_phq4': analysis.get('phq4_estimate', 3),
+                'risk_level': analysis.get('risk_level', 'minimal'),
+                'key_concerns': analysis.get('concerns', []),
+                'positive_indicators': analysis.get('positives', [])
+            }
+            
+            # Step 3: Get calendar info
+            logger.info("Step 3: Getting calendar information...")
+            calendar_summary = self.calendar_api.get_schedule_summary(days=7)
+            results['calendar_summary'] = calendar_summary
+            
+            # Step 4: Get research-backed interventions from VectorDB
+            logger.info("Step 4: Querying VectorDB for interventions...")
+            phq4 = results['mental_health']['estimated_phq4']
+            
+            if self.vectordb.initialize():
+                research_suggestions = self.vectordb.get_intervention_suggestions(
+                    phq4_score=phq4,
+                    journal_summary=results['journal_summary']
+                )
+            else:
+                research_suggestions = []
+                results['errors'].append("VectorDB not available")
+            
+            # Step 5: Generate recommendations
+            logger.info("Step 5: Generating recommendations...")
+            recommendations = self.llm_client.generate_recommendations(
+                journal_summary=results['journal_summary'],
+                risk_level=results['mental_health']['risk_level'],
+                concerns=results['mental_health']['key_concerns'],
+                research_context=research_suggestions
+            )
+            results['recommendations'] = recommendations
+            
+            # Step 6: Generate calendar optimization proposals
+            logger.info("Step 6: Generating calendar optimization proposals...")
+            proposed_changes = self.llm_client.generate_calendar_changes(
+                recommendations=recommendations,
+                calendar_summary=calendar_summary,
+                mental_health=results['mental_health']
+            )
+            results['proposed_changes'] = proposed_changes
+            
+            results['status'] = 'completed'
+            
+        except Exception as e:
+            logger.error(f"Agent workflow failed: {e}")
+            results['errors'].append(str(e))
+            results['status'] = 'failed'
+        
+        results['duration_seconds'] = (datetime.now() - start_time).total_seconds()
+        return results
 
+    def apply_calendar_changes(self, changes: List[Dict[str, Any]], user_comments: str = "") -> Dict[str, Any]:
+        """
+        Apply proposed calendar changes.
+        
+        Args:
+            changes: List of proposed changes from generate_calendar_changes
+            user_comments: Optional user comments to consider
+            
+        Returns:
+            Results of applying the changes
+        """
+        logger.info("Applying calendar changes...")
+        
+        # Save user comments to memory if provided
+        if user_comments:
+            self.memory.storage.save('user_feedback', f'calendar_{datetime.now().strftime("%Y%m%d")}', {
+                'comments': user_comments,
+                'timestamp': datetime.now().isoformat()
+            })
+            logger.info("Saved user comments to memory")
+        
+        results = {
+            'applied': [],
+            'failed': [],
+            'skipped': []
+        }
+        
+        # Actually apply changes (disable suggest_only mode)
+        self.calendar_api.suggest_only = False
+        
+        for change in changes:
+            action = change.get('action', 'add')
+            
+            try:
+                if action == 'add':
+                    # Create new event
+                    start_time = datetime.fromisoformat(change.get('start_time'))
+                    end_time = datetime.fromisoformat(change.get('end_time'))
+                    
+                    event = CalendarEvent(
+                        id=None,
+                        summary=change.get('title', 'Wellness Activity'),
+                        description=change.get('description', ''),
+                        start_time=start_time,
+                        end_time=end_time
+                    )
+                    
+                    event_id = self.calendar_api.create_event(event)
+                    if event_id:
+                        results['applied'].append({
+                            'action': 'created',
+                            'title': event.summary,
+                            'event_id': event_id
+                        })
+                    else:
+                        results['failed'].append(change)
+                        
+                elif action == 'update':
+                    event_id = change.get('event_id')
+                    updates = change.get('updates', {})
+                    
+                    if self.calendar_api.update_event(event_id, updates):
+                        results['applied'].append({
+                            'action': 'updated',
+                            'event_id': event_id,
+                            'updates': updates
+                        })
+                    else:
+                        results['failed'].append(change)
+                        
+                elif action == 'delete':
+                    event_id = change.get('event_id')
+                    
+                    if self.calendar_api.delete_event(event_id):
+                        results['applied'].append({
+                            'action': 'deleted',
+                            'event_id': event_id
+                        })
+                    else:
+                        results['failed'].append(change)
+                else:
+                    results['skipped'].append(change)
+                    
+            except Exception as e:
+                logger.error(f"Failed to apply change: {e}")
+                change['error'] = str(e)
+                results['failed'].append(change)
+        
+        # Re-enable suggest_only mode
+        self.calendar_api.suggest_only = True
+        
+        return results
+
+
+# Backwards compatibility
 Agent = LLMSchedulerAgent
