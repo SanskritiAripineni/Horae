@@ -27,6 +27,10 @@ import com.google.mediapipe.examples.llminference.data.DebugRepository
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import com.google.mediapipe.examples.llminference.data.DataExporter
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,6 +42,9 @@ fun DevDashboardScreen(
     val lastJournal by DebugRepository.lastJournal.collectAsStateWithLifecycle()
     val isDemoMode by DebugRepository.isDemoMode.collectAsStateWithLifecycle()
     val isPermanentMotionEnabled by DebugRepository.isPermanentMotionEnabled.collectAsStateWithLifecycle()
+    
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     
     var showFullMap by remember { mutableStateOf(false) }
     
@@ -108,6 +115,21 @@ fun DevDashboardScreen(
                         checked = isPermanentMotionEnabled,
                         onCheckedChange = { DebugRepository.setPermanentMotionEnabled(it) }
                     )
+                }
+                HorizontalDivider()
+                Button(
+                    onClick = {
+                        scope.launch {
+                            val success = DataExporter.exportJournals(context)
+                            val message = if (success) "Data exported to Downloads/AutoLife" else "Export failed"
+                            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text("Export Data (All Journals)")
                 }
             }
 

@@ -1,97 +1,81 @@
 """
 AutoLife Reader - Tool 1
-Parses generated journals from AutoLife data collection.
+Reads and parses daily journals exported from the AutoLife Android app.
 """
 
-import logging
-from typing import List, Dict, Any
-from pathlib import Path
+import os
 import json
+import logging
+from typing import List, Dict, Any, Optional
+from pathlib import Path
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-
 class AutoLifeReader:
     """
-    Reads and parses AutoLife journal entries.
-    Input: Raw sensor logs and journals from Android app
-    Output: Structured journal data for processing
+    Reader for AutoLife journals.
+    Supports reading from local directory and parsing exported JSON.
     """
     
     def __init__(self, data_dir: str = "data/raw_logs"):
-        """
-        Initialize the AutoLife reader.
-        
-        Args:
-            data_dir: Directory containing raw log files
-        """
         self.data_dir = Path(data_dir)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Initialized AutoLifeReader with data_dir: {self.data_dir}")
-    
-    def read_journals(self, limit: int = None) -> List[Dict[str, Any]]:
+
+    def read_journals(self, limit: int = 7) -> List[Dict[str, Any]]:
         """
-        Read journal entries from the data directory.
-        
-        Args:
-            limit: Maximum number of journals to read (None = all)
-            
-        Returns:
-            List of journal dictionaries
+        Read journals from the data directory.
+        Handles both individual .txt/.log files and the exported journals.json.
         """
         journals = []
         
-        if not self.data_dir.exists():
-            logger.warning(f"Data directory does not exist: {self.data_dir}")
-            return journals
-        
-        # Find all journal files
-        journal_files = sorted(self.data_dir.glob("journal_*.json"))
-        
-        if limit:
-            journal_files = journal_files[:limit]
-        
-        logger.info(f"Found {len(journal_files)} journal files")
-        
-        for journal_file in journal_files:
+        # 1. Check for journals.json (new export format)
+        export_file = self.data_dir / "journals.json"
+        if export_file.exists():
             try:
-                with open(journal_file, 'r') as f:
-                    journal_data = json.load(f)
-                    journals.append(journal_data)
+                with open(export_file, 'r') as f:
+                    data = json.load(f)
+                    # Expecting a list of journal entries
+                    if isinstance(data, list):
+                        journals.extend(data)
+                        logger.info(f"Loaded {len(data)} journals from journals.json")
             except Exception as e:
-                logger.error(f"Error reading journal {journal_file}: {e}")
+                logger.error(f"Error reading journals.json: {e}")
+
+        # 2. Check for individual files (legacy/manual format)
+        for file_path in self.data_dir.glob("*"):
+            if file_path.name == "journals.json":
+                continue
+            if file_path.suffix in ['.txt', '.log', '.json']:
+                try:
+                    with open(file_path, 'r') as f:
+                        content = f.read()
+                        journals.append({
+                            'id': file_path.stem,
+                            'content': content,
+                            'timestamp': datetime.fromtimestamp(file_path.stat().st_mtime).isoformat()
+                        })
+                except Exception as e:
+                    logger.warning(f"Failed to read {file_path.name}: {e}")
+
+        # Sort by timestamp (descending) and limit
+        journals.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+        return journals[:limit]
+
+    def get_sync_command(self) -> str:
+        """Return the ADB command to sync data from Android."""
+        return "adb pull /sdcard/Download/AutoLife/data_export.json data/raw_logs/journals.json"
+
+    def get_context_for_prompt(self, journals: List[Dict[str, Any]]) -> str:
+        """Format journals for LLM prompt."""
+        if not journals:
+            return "No recent journal entries found."
         
-        return journals
-    
-    def parse_sensor_data(self, raw_log_file: str) -> Dict[str, Any]:
-        """
-        Parse raw sensor log data into structured format.
-        
-        Args:
-            raw_log_file: Path to raw sensor log file
+        formatted = []
+        for j in journals:
+            date = j.get('timestamp', 'Unknown Date')
+            content = j.get('content', j.get('text', ''))
+            formatted.append(f"Date: {date}\nJournal: {content}\n")
             
-        Returns:
-            Dictionary containing parsed sensor data
-        """
-        # TODO: Implement sensor data parsing
-        # This should parse accelerometer, gyroscope, GPS, WiFi, etc.
-        logger.info(f"Parsing sensor data from: {raw_log_file}")
-        return {}
-    
-    def extract_context(self, journal: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Extract motion and location context from journal entry.
-        
-        Args:
-            journal: Journal dictionary
-            
-        Returns:
-            Dictionary containing extracted context information
-        """
-        context = {
-            'motion': journal.get('motion_context', 'unknown'),
-            'location': journal.get('location_context', 'unknown'),
-            'timestamp': journal.get('timestamp', None),
-            'duration': journal.get('duration_seconds', 0)
-        }
-        
-        return context
+        return "\n---\n".join(formatted)

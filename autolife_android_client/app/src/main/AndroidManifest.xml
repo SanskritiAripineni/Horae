@@ -10,6 +10,10 @@
     <!-- Android 13+ (API 33+) for Wi-Fi scans / nearby devices -->
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"/>
 
+    <!-- Storage permissions for Export feature -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

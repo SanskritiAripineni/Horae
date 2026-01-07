@@ -33,21 +33,15 @@ ENV/
 env.bak/
 venv.bak/
 
-# Android
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
+# Android / Gradle (Consolidated)
+.gradle/
+build/
+captures/
 .externalNativeBuild
 .cxx
+local.properties
+*.iml
+.idea/
 *.apk
 *.ap_
 *.aab
@@ -57,48 +51,16 @@ bin/
 gen/
 out/
 release/
-
-# Gradle files
-.gradle/
-build/
-
-# Local configuration file (sdk path, etc)
-local.properties
-
-# Android Studio
-*.iml
-.idea/
-.gradle
-/local.properties
-/.idea/workspace.xml
-/.idea/libraries
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-
-# Android specific build outputs
-/app/build/
 */build/
-*.apk
-*.aab
-
-# Keystore and signing files
+app/build/
 *.jks
 *.keystore
-
-# IntelliJ/IDEA workspace files (already partly covered)
-/.idea/*
-!/.idea/codeStyles/
-
-# Misc
-captures/
-*.DS_Store
 
 # Data and model files
 data/raw_logs/*.log
 data/ihope_weights/*.h5
 data/ihope_weights/*.pb
+data/tokens/*.json
 *.pkl
 *.npy
 
@@ -107,3 +69,8 @@ secrets.json
 credentials.json
 *.key
 .env
+.DS_Store
+.vscode/
+
+# Project Specific
+memory/data/

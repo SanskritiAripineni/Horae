@@ -1,129 +1,121 @@
 """
-Vector DB Client - Tool 3
-Fetches Top K concepts from vector database.
+VectorDB Client - Wellness Knowledge Retrieval (Python 3.9 Compatible)
+Uses ChromaDB's native embedding for similarity search.
 """
 
 import logging
-from typing import List, Dict, Any
-import numpy as np
+from typing import List, Dict, Any, Optional
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+WELLNESS_CATEGORIES = [
+    "Sleep Hygiene",
+    "Stress Management", 
+    "Social connection",
+    "Physical Activity",
+    "Mindfulness"
+]
 
 class VectorDBClient:
     """
-    Vector database client for concept retrieval.
-    Fetches top K relevant concepts based on journal content.
+    Client for retrieving wellness concepts from ChromaDB.
+    
+    This VectorDB contains research-backed interventions extracted from 10+ 
+    peer-reviewed papers on: sleep, stress, social health, physical activity,
+    and mindfulness. When the agent detects mental health risk, it queries
+    this database to find evidence-based suggestions.
     """
     
-    def __init__(self, db_type: str = "chromadb", collection_name: str = "mental_health_concepts"):
+    def __init__(self, chroma_dir: str = "vectordb/chroma_db"):
+        self.chroma_dir = Path(chroma_dir)
+        self.collection = None
+        self._initialized = False
+        logger.info(f"Initialized VectorDBClient with chroma_dir: {chroma_dir}")
+    
+    def initialize(self) -> bool:
+        """Initialize ChromaDB connection."""
+        try:
+            import chromadb
+            
+            if not self.chroma_dir.exists():
+                logger.warning(f"ChromaDB not found at {self.chroma_dir}. Run vectordb/ingest_simple.py first.")
+                return False
+            
+            client = chromadb.PersistentClient(path=str(self.chroma_dir))
+            self.collection = client.get_collection("wellness_papers")
+            self._initialized = True
+            logger.info(f"VectorDB initialized with {self.collection.count()} documents")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize VectorDB: {e}")
+            return False
+    
+    def retrieve(self, query: str, category: Optional[str] = None, top_k: int = 3) -> List[Dict[str, Any]]:
         """
-        Initialize the vector database client.
+        Retrieve relevant wellness concepts.
         
         Args:
-            db_type: Type of vector database (chromadb, faiss, etc.)
-            collection_name: Name of the concept collection
-        """
-        self.db_type = db_type
-        self.collection_name = collection_name
-        self.client = None
-        logger.info(f"Initialized VectorDBClient with db_type: {db_type}")
-        
-        # Initialize database connection
-        self._connect()
-    
-    def _connect(self):
-        """Connect to the vector database."""
-        # TODO: Implement actual database connection
-        # For now, using placeholder
-        logger.info(f"Connecting to {self.db_type} database...")
-        self.client = "placeholder_client"
-    
-    def fetch_top_k_concepts(self, journals: List[Dict[str, Any]], k: int = 5) -> List[List[Dict[str, Any]]]:
-        """
-        Fetch top K relevant concepts for each journal entry.
-        
-        Args:
-            journals: List of journal dictionaries
-            k: Number of top concepts to retrieve
+            query: Search query (e.g., "how to improve sleep")
+            category: Optional filter (Sleep Hygiene, Stress Management, etc.)
+            top_k: Number of results
             
         Returns:
-            List of lists, where each inner list contains K concept dictionaries
+            List of concept dictionaries with content and metadata
         """
-        all_concepts = []
+        if not self._initialized:
+            if not self.initialize():
+                return []
         
-        for journal in journals:
-            # Extract query embedding from journal
-            query_embedding = self._create_embedding(journal)
+        try:
+            where_filter = {"category": category} if category else None
+            results = self.collection.query(
+                query_texts=[query],
+                n_results=top_k,
+                where=where_filter
+            )
             
-            # Search for similar concepts
-            concepts = self._search_concepts(query_embedding, k)
+            concepts = []
+            for i, doc in enumerate(results['documents'][0]):
+                concepts.append({
+                    'content': doc,
+                    'category': results['metadatas'][0][i].get('category', 'Unknown'),
+                    'source': results['metadatas'][0][i].get('filename', 'Unknown')
+                })
             
-            all_concepts.append(concepts)
-        
-        logger.info(f"Fetched top {k} concepts for {len(journals)} journals")
-        return all_concepts
+            logger.info(f"Retrieved {len(concepts)} concepts for query")
+            return concepts
+            
+        except Exception as e:
+            logger.error(f"Retrieval failed: {e}")
+            return []
     
-    def _create_embedding(self, journal: Dict[str, Any]) -> np.ndarray:
+    def get_intervention_suggestions(self, phq4_score: int, journal_summary: str = "") -> List[Dict[str, Any]]:
         """
-        Create embedding vector from journal content.
+        Get research-backed intervention suggestions based on mental health state.
         
         Args:
-            journal: Journal dictionary
-            
-        Returns:
-            Embedding vector as numpy array
-        """
-        # TODO: Implement actual embedding generation
-        # Should use a language model to embed journal text
-        text = journal.get('text', '')
-        
-        # Placeholder: random embedding
-        return np.random.rand(768)
-    
-    def _search_concepts(self, query_embedding: np.ndarray, k: int) -> List[Dict[str, Any]]:
-        """
-        Search for top K concepts similar to query embedding.
-        
-        Args:
-            query_embedding: Query vector
-            k: Number of results to return
+            phq4_score: PHQ-4 score (0-12)
+            journal_summary: Optional context from journals
             
         Returns:
-            List of concept dictionaries
+            List of intervention suggestions from research papers
         """
-        # TODO: Implement actual vector similarity search
-        # Placeholder concepts
-        placeholder_concepts = [
-            {
-                'concept': 'mindfulness_meditation',
-                'description': 'Practice of focused attention and awareness',
-                'intervention_type': 'behavioral',
-                'similarity_score': 0.95 - (i * 0.05)
-            }
-            for i in range(k)
-        ]
+        # Determine priority areas based on severity
+        if phq4_score >= 9:
+            # Severe - immediate support focus
+            queries = ["emotional coping strategies", "social support wellness"]
+        elif phq4_score >= 6:
+            # Moderate - balanced interventions  
+            queries = ["stress reduction techniques", "sleep improvement mental health"]
+        else:
+            # Minimal/Mild - preventive
+            queries = ["habit formation daily routine", "mindfulness practice"]
         
-        return placeholder_concepts
-    
-    def add_concept(self, concept: Dict[str, Any]):
-        """
-        Add a new concept to the vector database.
+        all_suggestions = []
+        for query in queries:
+            suggestions = self.retrieve(query, top_k=2)
+            all_suggestions.extend(suggestions)
         
-        Args:
-            concept: Dictionary containing concept information
-        """
-        # TODO: Implement concept addition
-        logger.info(f"Adding concept: {concept.get('concept', 'unknown')}")
-    
-    def update_collection(self, concepts: List[Dict[str, Any]]):
-        """
-        Bulk update the concept collection.
-        
-        Args:
-            concepts: List of concept dictionaries to add/update
-        """
-        for concept in concepts:
-            self.add_concept(concept)
-        
-        logger.info(f"Updated collection with {len(concepts)} concepts")
+        return all_suggestions[:4]

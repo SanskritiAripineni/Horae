@@ -1,40 +1,24 @@
 """
-Main entry point for the multi-agent framework.
-Runs the scheduler to orchestrate the agent workflow.
+LLM Scheduler Agent - Entry Point
 """
 
 import logging
-from agent import Agent
+import argparse
+from agent import LLMSchedulerAgent
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-
-logger = logging.getLogger(__name__)
-
+logging.basicConfig(level=logging.INFO)
 
 def main():
-    """
-    Entry point to run the scheduler.
-    Initializes and runs the agent conductor.
-    """
-    logger.info("Starting Framework Rishi")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--quick', action='store_true')
+    args = parser.parse_args()
     
-    # Initialize the agent
-    agent = Agent()
-    
-    # Run the agent workflow
-    try:
-        agent.run()
-    except KeyboardInterrupt:
-        logger.info("Received interrupt signal. Shutting down...")
-    except Exception as e:
-        logger.error(f"Error running agent: {e}", exc_info=True)
-    finally:
-        logger.info("Framework Rishi shutdown complete")
-
+    agent = LLMSchedulerAgent()
+    if args.quick:
+        print("Running quick check...")
+    else:
+        result = agent.run()
+        print(f"Result: {result}")
 
 if __name__ == "__main__":
     main()
