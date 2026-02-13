@@ -1,0 +1,26 @@
+# Student Wellness RAG Application - Dependencies
+# Python 3.10+ required
+
+# Core ML & Embeddings
+langchain>=0.2.0
+langchain-huggingface>=0.0.3
+langchain-chroma>=0.1.0
+langchain-openai>=0.1.0
+sentence-transformers>=2.2.0
+
+# Vector Database
+chromadb>=0.4.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Similarity Calculations
+scikit-learn>=1.3.0
+
+# Web Interface
+streamlit>=1.28.0
+
+# Environment Variables
+python-dotenv>=1.0.0
+
