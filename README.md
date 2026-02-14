@@ -48,6 +48,12 @@ data/
 
 - Launch app:
   - `python scripts/run_app.py --experiment by_type`
+  - Optional retrieval tuning via env:
+    - `RETRIEVAL_TOP_K` (default `4`)
+    - `RETRIEVAL_FETCH_K` (default `24`)
+    - `RETRIEVAL_MAX_PER_SOURCE` (default `2`)
+    - `RETRIEVAL_MMR_LAMBDA` (default `0.5`)
+    - `RETRIEVAL_MIN_SCORE` (default `0.05`)
 
 - Verify DB:
   - `python scripts/verify_chroma.py --experiment by_type`

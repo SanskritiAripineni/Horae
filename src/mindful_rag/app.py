@@ -6,6 +6,7 @@ API Key loaded securely from .env file.
 """
 
 import os
+import time
 import streamlit as st
 from dotenv import load_dotenv
 from google import genai
@@ -14,6 +15,7 @@ from langchain_core.embeddings import Embeddings
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 from src.mindful_rag.config import ROOT_DIR, get_experiment
+from src.mindful_rag.retrieval import RetrievalSettings, production_retrieve
 
 
 # ============================================================================
@@ -29,6 +31,35 @@ CHROMA_DIR = os.getenv("CHROMA_DIR", str(EXPERIMENT.chroma_dir))
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", EXPERIMENT.collection_name)
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 GENERATION_MODEL = "gemini-2.5-flash"
+
+
+def _env_int(name: str, default: int, min_value: int, max_value: int) -> int:
+    raw = os.getenv(name, str(default))
+    try:
+        parsed = int(raw)
+    except ValueError:
+        return default
+    return max(min_value, min(max_value, parsed))
+
+
+def _env_float(name: str, default: float, min_value: float, max_value: float) -> float:
+    raw = os.getenv(name, str(default))
+    try:
+        parsed = float(raw)
+    except ValueError:
+        return default
+    return max(min_value, min(max_value, parsed))
+
+
+RETRIEVAL_SETTINGS = RetrievalSettings(
+    top_k=_env_int("RETRIEVAL_TOP_K", 4, 1, 12),
+    fetch_k=_env_int("RETRIEVAL_FETCH_K", 24, 4, 128),
+    mmr_lambda=_env_float("RETRIEVAL_MMR_LAMBDA", 0.5, 0.0, 1.0),
+    max_per_source=_env_int("RETRIEVAL_MAX_PER_SOURCE", 2, 1, 6),
+    min_hybrid_score=_env_float("RETRIEVAL_MIN_SCORE", 0.05, 0.0, 1.0),
+)
+GENERATION_MAX_RETRIES = _env_int("GENERATION_MAX_RETRIES", 2, 0, 5)
+GENERATION_RETRY_BASE_SECONDS = _env_float("GENERATION_RETRY_BASE_SECONDS", 1.0, 0.1, 10.0)
 
 # System prompt for the LLM
 SYSTEM_PROMPT = """You are an expert academic wellness scheduler. Your goal is to convert research abstracts into a strict, actionable plan.
@@ -104,29 +135,12 @@ def get_llm(api_key: str):
 # RETRIEVAL LOGIC
 # ============================================================================
 
-def retrieve_relevant_chunks(query: str, vectorstore, top_k: int = 4, fetch_k: int = 20) -> list[dict]:
+def retrieve_relevant_chunks(query: str, vectorstore) -> tuple[list[dict], dict]:
     """
-    Retrieve semantically relevant chunks using a standard MMR retriever.
-    MMR improves diversity while keeping relevance high.
+    Retrieve chunks with hybrid ranking + fallback behavior.
     """
-    retriever = vectorstore.as_retriever(
-        search_type="mmr",
-        search_kwargs={
-            "k": top_k,
-            "fetch_k": max(fetch_k, top_k),
-            "lambda_mult": 0.5,
-        },
-    )
-    docs = retriever.invoke(query)
-
-    return [
-        {
-            'content': doc.page_content,
-            'filename': str(doc.metadata.get('filename') or doc.metadata.get('source') or 'Unknown').replace('.pdf', ''),
-            'category': doc.metadata.get('category', 'Unknown'),
-        }
-        for doc in docs
-    ]
+    result = production_retrieve(query=query, vectorstore=vectorstore, settings=RETRIEVAL_SETTINGS)
+    return result.chunks, result.stats
 
 
 # ============================================================================
@@ -157,11 +171,26 @@ USER QUERY: {user_query}
 
 Based on the above research context, provide an actionable wellness plan following the exact output format specified."""
 
-    response = client.models.generate_content(
-        model=GENERATION_MODEL,
-        contents=prompt,
+    last_error = None
+    for attempt in range(GENERATION_MAX_RETRIES + 1):
+        try:
+            response = client.models.generate_content(
+                model=GENERATION_MODEL,
+                contents=prompt,
+            )
+            if getattr(response, "text", None):
+                return response.text
+            return "No response generated."
+        except Exception as exc:
+            last_error = exc
+            if attempt < GENERATION_MAX_RETRIES:
+                backoff = GENERATION_RETRY_BASE_SECONDS * (2 ** attempt)
+                time.sleep(backoff)
+
+    return (
+        "I could not generate a response right now due to a temporary model error. "
+        f"Please try again. ({last_error})"
     )
-    return response.text if getattr(response, "text", None) else "No response generated."
 
 
 # ============================================================================
@@ -221,6 +250,12 @@ def main():
     st.caption(
         f"Experiment: `{EXPERIMENT.name}` | Collection: `{COLLECTION_NAME}` | DB: `{CHROMA_DIR}`"
     )
+    st.caption(
+        "Retrieval: "
+        f"top_k={RETRIEVAL_SETTINGS.top_k}, "
+        f"fetch_k={RETRIEVAL_SETTINGS.fetch_k}, "
+        f"max_per_source={RETRIEVAL_SETTINGS.max_per_source}"
+    )
     
     # =========================================================================
     # API KEY VALIDATION
@@ -264,17 +299,15 @@ def main():
         with st.chat_message("assistant"):
             with st.spinner("Generating your personalized plan..."):
                 # Step 1: Retrieve relevant chunks
-                chunks = retrieve_relevant_chunks(
-                    query=prompt,
-                    vectorstore=vectorstore,
-                    top_k=4
-                )
+                chunks, retrieval_stats = retrieve_relevant_chunks(query=prompt, vectorstore=vectorstore)
                 
                 # Step 2: Generate response with LLM
                 response = generate_response_with_llm(prompt, chunks, client)
                 
                 # Display response
                 st.markdown(response)
+                with st.expander("Retrieval Diagnostics", expanded=False):
+                    st.json(retrieval_stats)
         
         # Save to history
         st.session_state.messages.append({"role": "assistant", "content": response})
