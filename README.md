@@ -1,14 +1,53 @@
-# Multi-Agent-LLM
-Multi-agent LLM system driven by physical and mental state sensing.
+# Mindful RAG Scheduler
 
-## The Purpose
+Single-project structure for the student wellness RAG app and ablation pipelines.
 
-Existing productivity tools like Google Calendar and Notion are effective for organizing tasks, but they fail to account for a user's cognitive and emotional state. This disconnect can lead to burnout, cognitive overload, and a decreased quality of life. Our system addresses this gap by creating dynamic, personalized schedules that adapt to a user's real-time mental and physical state.
+## Folder Layout
 
-## Key Contributions
+```text
+src/mindful_rag/
+  app.py
+  config.py
+  evaluators.py
+  ingest_raw.py
+  ingest_intro_concl.py
+  ingest_by_type.py
+scripts/
+  run_app.py
+  ingest.py
+  verify_chroma.py
+  demo_evaluators.py
+tests/
+  test_evaluators.py
+configs/experiments/
+  raw.yaml
+  intro_concl.yaml
+  by_type.yaml
+data/
+  raw/research_papers/*.pdf
+  index/research_index.csv
+  chroma/raw/
+  chroma/intro_concl/
+  chroma/by_type/
+```
 
-This research aims to make three key contributions:
+## Setup
 
-1.  **Bridge Sensing and Intervention:** It connects passive monitoring of mental states with active, personalized interventions, which current systems fail to do.
-2.  **Contextual LLM Reasoning:** It demonstrates how LLMs can reason about complex personal contexts to generate actionable recommendations grounded in behavioral psychology.
-3.  **Closed-Loop Learning:** The system tracks mental health trends over time and adapts its scheduling strategies, creating iterative improvement rather than static recommendations.
+1. Install dependencies:
+   `pip install -r requirements.txt`
+2. Create `.env` in project root:
+   - `OPENAI_API_KEY=...`
+   - `GOOGLE_API_KEY=...`
+
+## Run
+
+- Ingest vectors:
+  - `python scripts/ingest.py --experiment raw`
+  - `python scripts/ingest.py --experiment intro_concl`
+  - `python scripts/ingest.py --experiment by_type`
+
+- Launch app:
+  - `python scripts/run_app.py --experiment by_type`
+
+- Verify DB:
+  - `python scripts/verify_chroma.py --experiment by_type`

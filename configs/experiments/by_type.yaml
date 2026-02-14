@@ -1,0 +1,4 @@
+name: by_type
+collection_name: research_papers
+chroma_dir: data/chroma/by_type
+description: Apply extraction rules based on paper type before chunking.

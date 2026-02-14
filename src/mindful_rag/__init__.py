@@ -1,0 +1,2 @@
+"""Mindful RAG package."""
+

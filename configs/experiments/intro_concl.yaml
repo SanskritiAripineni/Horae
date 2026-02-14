@@ -1,0 +1,4 @@
+name: intro_concl
+collection_name: wellness_ablation
+chroma_dir: data/chroma/intro_concl
+description: Ingest introduction and conclusion/discussion sections only.

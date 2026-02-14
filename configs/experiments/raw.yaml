@@ -1,0 +1,4 @@
+name: raw
+collection_name: wellness_papers
+chroma_dir: data/chroma/raw
+description: Full text ingestion without section filtering.

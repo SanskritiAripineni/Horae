@@ -205,3 +205,11 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# OS clutter
+.DS_Store
+**/.DS_Store
+
+# Local vector DBs and caches
+data/chroma/
+**/chroma_db/
