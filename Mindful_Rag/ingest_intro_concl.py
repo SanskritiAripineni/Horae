@@ -8,25 +8,26 @@ Uses fuzzy matching to link CSV titles to PDF filenames.
 
 import os
 import re
+from typing import Optional
 import pandas as pd
 import fitz  # pymupdf
+from dotenv import load_dotenv
 from thefuzz import process
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 # Configuration
 CSV_PATH = "research_index.csv"
 PDF_DIR = "research paperss"  # Note: user specified 'research paperss' with double 's'
 CHROMA_DIR = "chroma_db"
 COLLECTION_NAME = "wellness_ablation"
+EMBEDDING_MODEL = "models/gemini-embedding-001"
 
 def clean_text(text: str) -> str:
     """Basic text cleaning."""
     return re.sub(r'\s+', ' ', text).strip()
-
-from typing import Optional
 
 def find_pdf_path(title: str, pdf_files: list[str]) -> Optional[str]:
     """Fuzzy match paper title to PDF filenames."""
@@ -131,6 +132,13 @@ def extract_sections(pdf_path: str) -> str:
     return combined
 
 def main():
+    load_dotenv()
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    if not google_api_key:
+        print("Error: GOOGLE_API_KEY not found in environment.")
+        print("Add GOOGLE_API_KEY=your-google-api-key-here to your .env file.")
+        return
+
     if not os.path.exists(CSV_PATH):
         print(f"Error: {CSV_PATH} not found.")
         return
@@ -191,8 +199,12 @@ def main():
     print(f"Created {len(docs)} chunks.")
 
     # Embedding
-    print(f"Embedding and storing to {CHROMA_DIR}...")
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    print(f"Embedding and storing to {CHROMA_DIR} with {EMBEDDING_MODEL}...")
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model=EMBEDDING_MODEL,
+        google_api_key=google_api_key,
+        task_type="retrieval_document"
+    )
     
     vectorstore = Chroma.from_documents(
         documents=docs,

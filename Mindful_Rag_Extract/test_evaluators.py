@@ -10,11 +10,11 @@ Usage:
 
 import os
 from dotenv import load_dotenv
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_openai import ChatOpenAI
+from langchain_core.embeddings import Embeddings
 from langchain_core.messages import SystemMessage, HumanMessage
-from langchain.schema import Document
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 # Import your evaluators
 from evaluators import correctness, relevance, groundedness, retrieval_relevance
@@ -25,6 +25,7 @@ load_dotenv()
 # Configuration (matching app.py)
 CHROMA_DIR = "chroma_db"
 COLLECTION_NAME = "research_papers"
+EMBEDDING_MODEL = "models/gemini-embedding-001"
 SYSTEM_PROMPT = """You are an expert academic wellness scheduler. Your goal is to convert research abstracts into a strict, actionable plan.
 
 RULES:
@@ -47,13 +48,35 @@ Step 3: Provide exactly 4-5 bullet points.
 Step 4: List sources at the bottom."""
 
 
+class GeminiDualTaskEmbeddings(Embeddings):
+    """Use retrieval-optimized task types for document and query embeddings."""
+
+    def __init__(self, api_key: str):
+        self._doc_embedder = GoogleGenerativeAIEmbeddings(
+            model=EMBEDDING_MODEL,
+            google_api_key=api_key,
+            task_type="retrieval_document"
+        )
+        self._query_embedder = GoogleGenerativeAIEmbeddings(
+            model=EMBEDDING_MODEL,
+            google_api_key=api_key,
+            task_type="retrieval_query"
+        )
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self._doc_embedder.embed_documents(texts)
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._query_embedder.embed_query(text)
+
+
 def load_rag_system():
     """Initialize the RAG system components."""
-    embeddings = HuggingFaceEmbeddings(
-        model_name="all-MiniLM-L6-v2",
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={'normalize_embeddings': True}
-    )
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    if not google_api_key:
+        raise ValueError("GOOGLE_API_KEY not found in environment.")
+
+    embeddings = GeminiDualTaskEmbeddings(google_api_key)
     
     vectorstore = Chroma(
         persist_directory=CHROMA_DIR,
@@ -70,33 +93,28 @@ def load_rag_system():
     return vectorstore, llm
 
 
-def retrieve_and_generate(question: str, vectorstore, llm, category: str = None, top_k: int = 3):
+def retrieve_and_generate(question: str, vectorstore, llm, top_k: int = 4, fetch_k: int = 20):
     """
     Retrieve relevant documents and generate an answer.
     Returns both the answer and the retrieved documents.
     """
-    # Retrieve documents
-    if category:
-        results = vectorstore.similarity_search_with_score(
-            query=question,
-            k=top_k,
-            filter={"category": category}
-        )
-    else:
-        results = vectorstore.similarity_search_with_score(
-            query=question,
-            k=top_k
-        )
-    
-    if not results:
+    retriever = vectorstore.as_retriever(
+        search_type="mmr",
+        search_kwargs={
+            "k": top_k,
+            "fetch_k": max(fetch_k, top_k),
+            "lambda_mult": 0.5,
+        },
+    )
+    documents = retriever.invoke(question)
+
+    if not documents:
         return "No relevant research found.", []
-    
-    documents = [doc for doc, score in results]
-    
+
     # Build context
     context_parts = []
     for i, doc in enumerate(documents, 1):
-        source = doc.metadata.get('source', 'Unknown').replace('.pdf', '')
+        source = str(doc.metadata.get('filename') or doc.metadata.get('source') or 'Unknown').replace('.pdf', '')
         context_parts.append(f"Source {i} ({source}):\n{doc.page_content}")
     
     context = "\n\n".join(context_parts)
@@ -142,8 +160,7 @@ def run_evaluation_example():
         question=test_question,
         vectorstore=vectorstore,
         llm=llm,
-        category="Sleep Hygiene",
-        top_k=3
+        top_k=4
     )
     
     print(f"\n✓ Retrieved {len(documents)} documents")
@@ -187,7 +204,7 @@ def run_evaluation_example():
     print("\n📄 RETRIEVED DOCUMENTS:")
     for i, doc in enumerate(documents, 1):
         print(f"\n--- Document {i} ---")
-        print(f"Source: {doc.metadata.get('source', 'Unknown')}")
+        print(f"Source: {doc.metadata.get('filename') or doc.metadata.get('source', 'Unknown')}")
         print(f"Category: {doc.metadata.get('category', 'Unknown')}")
         print(f"Content: {doc.page_content[:200]}...")
     

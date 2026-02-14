@@ -1,19 +1,18 @@
 """
 Student Wellness Scheduler - Streamlit RAG Chat Interface
 ----------------------------------------------------------
-Uses local embeddings for classification/retrieval and OpenAI for generation.
+Uses Gemini embeddings for retrieval and OpenAI for generation.
 API Key loaded securely from .env file.
 """
 
 import os
 import streamlit as st
-import numpy as np
 from dotenv import load_dotenv
-from sklearn.metrics.pairwise import cosine_similarity
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_openai import ChatOpenAI
+from langchain_core.embeddings import Embeddings
 from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 
 # ============================================================================
@@ -23,18 +22,9 @@ from langchain_core.messages import SystemMessage, HumanMessage
 # Load environment variables from .env file
 load_dotenv()
 
-WELLNESS_CATEGORIES = [
-    "Physical Activity",
-    "Sleep Hygiene", 
-    "Dietary Intake",
-    "Stress Management",
-    "Social Connection",
-    "Substance Use",
-    "Mindfulness"
-]
-
 CHROMA_DIR = "chroma_db"
 COLLECTION_NAME = "wellness_papers"
+EMBEDDING_MODEL = "models/gemini-embedding-001"
 
 # System prompt for the LLM
 SYSTEM_PROMPT = """You are an expert academic wellness scheduler. Your goal is to convert research abstracts into a strict, actionable plan.
@@ -63,14 +53,32 @@ Step 4: List sources at the bottom."""
 # CACHED RESOURCES
 # ============================================================================
 
+class GeminiDualTaskEmbeddings(Embeddings):
+    """Use retrieval-optimized task types for document and query embeddings."""
+
+    def __init__(self, api_key: str):
+        self._doc_embedder = GoogleGenerativeAIEmbeddings(
+            model=EMBEDDING_MODEL,
+            google_api_key=api_key,
+            task_type="retrieval_document"
+        )
+        self._query_embedder = GoogleGenerativeAIEmbeddings(
+            model=EMBEDDING_MODEL,
+            google_api_key=api_key,
+            task_type="retrieval_query"
+        )
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self._doc_embedder.embed_documents(texts)
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._query_embedder.embed_query(text)
+
+
 @st.cache_resource
-def load_embedding_model():
-    """Load the local HuggingFace embedding model (cached)."""
-    return HuggingFaceEmbeddings(
-        model_name="all-MiniLM-L6-v2",
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={'normalize_embeddings': True}
-    )
+def load_embedding_model(api_key: str):
+    """Load Gemini embedding model wrapper (cached)."""
+    return GeminiDualTaskEmbeddings(api_key)
 
 
 @st.cache_resource
@@ -83,13 +91,6 @@ def load_vectorstore(_embeddings):
     )
 
 
-@st.cache_resource
-def get_category_embeddings(_embeddings):
-    """Pre-compute embeddings for all categories (cached)."""
-    category_vectors = _embeddings.embed_documents(WELLNESS_CATEGORIES)
-    return np.array(category_vectors)
-
-
 def get_llm(api_key: str):
     """Initialize OpenAI LLM with the provided API key."""
     return ChatOpenAI(
@@ -100,44 +101,31 @@ def get_llm(api_key: str):
 
 
 # ============================================================================
-# CLASSIFICATION LOGIC
-# ============================================================================
-
-def classify_intent(user_query: str, embeddings, category_embeddings: np.ndarray) -> tuple[str, float]:
-    """
-    Classify user query into one of the 7 wellness categories.
-    Uses cosine similarity between query embedding and category name embeddings.
-    """
-    query_vector = embeddings.embed_query(user_query)
-    query_vector = np.array(query_vector).reshape(1, -1)
-    similarities = cosine_similarity(query_vector, category_embeddings)[0]
-    best_idx = np.argmax(similarities)
-    return WELLNESS_CATEGORIES[best_idx], similarities[best_idx]
-
-
-# ============================================================================
 # RETRIEVAL LOGIC
 # ============================================================================
 
-def retrieve_relevant_chunks(query: str, category: str, vectorstore, top_k: int = 3) -> list[dict]:
-    """Retrieve top_k relevant chunks from ChromaDB filtered by category."""
-    results = vectorstore.similarity_search_with_score(
-        query=query,
-        k=top_k,
-        filter={"category": category}
+def retrieve_relevant_chunks(query: str, vectorstore, top_k: int = 4, fetch_k: int = 20) -> list[dict]:
+    """
+    Retrieve semantically relevant chunks using a standard MMR retriever.
+    MMR improves diversity while keeping relevance high.
+    """
+    retriever = vectorstore.as_retriever(
+        search_type="mmr",
+        search_kwargs={
+            "k": top_k,
+            "fetch_k": max(fetch_k, top_k),
+            "lambda_mult": 0.5,
+        },
     )
-    
-    # Fallback: if no results with filter, try without
-    if not results:
-        results = vectorstore.similarity_search_with_score(query=query, k=top_k)
-    
+    docs = retriever.invoke(query)
+
     return [
         {
             'content': doc.page_content,
-            'filename': doc.metadata.get('filename', 'Unknown').replace('.pdf', ''),
+            'filename': str(doc.metadata.get('filename') or doc.metadata.get('source') or 'Unknown').replace('.pdf', ''),
             'category': doc.metadata.get('category', 'Unknown'),
         }
-        for doc, score in results
+        for doc in docs
     ]
 
 
@@ -236,21 +224,26 @@ def main():
     # =========================================================================
     # API KEY VALIDATION
     # =========================================================================
-    api_key = os.getenv("OPENAI_API_KEY")
-    
-    if not api_key:
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+
+    if not openai_api_key:
         st.error("**System Error:** API Key not found in environment. Please add `OPENAI_API_KEY` to your `.env` file.")
         st.info("Create a `.env` file in the project root with:\n```\nOPENAI_API_KEY=your-api-key-here\n```")
         st.stop()
-    
+
+    if not google_api_key:
+        st.error("**System Error:** API Key not found in environment. Please add `GOOGLE_API_KEY` to your `.env` file.")
+        st.info("Create a `.env` file in the project root with:\n```\nGOOGLE_API_KEY=your-google-api-key-here\n```")
+        st.stop()
+
     # =========================================================================
     # LOAD RESOURCES
     # =========================================================================
     with st.spinner("Initializing..."):
-        embeddings = load_embedding_model()
+        embeddings = load_embedding_model(google_api_key)
         vectorstore = load_vectorstore(embeddings)
-        category_embeddings = get_category_embeddings(embeddings)
-        llm = get_llm(api_key)
+        llm = get_llm(openai_api_key)
     
     # =========================================================================
     # CHAT INTERFACE
@@ -275,20 +268,14 @@ def main():
         # Process query
         with st.chat_message("assistant"):
             with st.spinner("Generating your personalized plan..."):
-                # Step 1: Classify intent (silent - no UI output)
-                detected_category, _ = classify_intent(
-                    prompt, embeddings, category_embeddings
-                )
-                
-                # Step 2: Retrieve relevant chunks
+                # Step 1: Retrieve relevant chunks
                 chunks = retrieve_relevant_chunks(
                     query=prompt,
-                    category=detected_category,
                     vectorstore=vectorstore,
-                    top_k=3
+                    top_k=4
                 )
                 
-                # Step 3: Generate response with LLM
+                # Step 2: Generate response with LLM
                 response = generate_response_with_llm(prompt, chunks, llm)
                 
                 # Display response

@@ -13,10 +13,11 @@ from typing import Optional
 import pandas as pd
 import fitz  # PyMuPDF
 from pathlib import Path
+from dotenv import load_dotenv
 from thefuzz import process
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 # ============================================================================
 # CONFIGURATION
@@ -32,7 +33,7 @@ CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 100
 
 # Embedding model (same as app.py for consistency)
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+EMBEDDING_MODEL = "models/gemini-embedding-001"
 
 # ============================================================================
 # STEP 1: LOAD CSV AND PDF FILES
@@ -160,7 +161,7 @@ def ingest_to_chromadb(documents: list[dict], embeddings) -> Chroma:
     
     Args:
         documents: List of dicts with 'text' and 'metadata' keys
-        embeddings: HuggingFace embeddings model
+        embeddings: Gemini embeddings model
     
     Returns:
         ChromaDB vector store instance
@@ -190,7 +191,13 @@ def ingest_to_chromadb(documents: list[dict], embeddings) -> Chroma:
 
 def main():
     """Main ingestion pipeline for raw baseline experiment."""
-    
+    load_dotenv()
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    if not google_api_key:
+        print("Error: GOOGLE_API_KEY not found in environment.")
+        print("Add GOOGLE_API_KEY=your-google-api-key-here to your .env file.")
+        return
+
     print("=" * 70)
     print("RAW BASELINE INGESTION - ABLATION STUDY")
     print("=" * 70)
@@ -204,10 +211,10 @@ def main():
     
     # Step 2: Initialize embeddings
     print(f"\n🤖 Loading embedding model: {EMBEDDING_MODEL}")
-    embeddings = HuggingFaceEmbeddings(
-        model_name=EMBEDDING_MODEL,
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={'normalize_embeddings': True}
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model=EMBEDDING_MODEL,
+        google_api_key=google_api_key,
+        task_type="retrieval_document"
     )
     print("✓ Embedding model loaded")
     
