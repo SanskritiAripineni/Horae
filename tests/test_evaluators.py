@@ -12,10 +12,9 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
+from google import genai
 from langchain_chroma import Chroma
-from langchain_openai import ChatOpenAI
 from langchain_core.embeddings import Embeddings
-from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,6 +33,7 @@ EXPERIMENT = get_experiment("by_type")
 CHROMA_DIR = str(EXPERIMENT.chroma_dir)
 COLLECTION_NAME = EXPERIMENT.collection_name
 EMBEDDING_MODEL = "models/gemini-embedding-001"
+GENERATION_MODEL = "gemini-2.5-flash"
 SYSTEM_PROMPT = """You are an expert academic wellness scheduler. Your goal is to convert research abstracts into a strict, actionable plan.
 
 RULES:
@@ -92,16 +92,11 @@ def load_rag_system():
         collection_name=COLLECTION_NAME
     )
     
-    llm = ChatOpenAI(
-        model="gpt-4o-mini",
-        temperature=0.3,
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
-    
-    return vectorstore, llm
+    client = genai.Client(api_key=google_api_key)
+    return vectorstore, client
 
 
-def retrieve_and_generate(question: str, vectorstore, llm, top_k: int = 4, fetch_k: int = 20):
+def retrieve_and_generate(question: str, vectorstore, client, top_k: int = 4, fetch_k: int = 20):
     """
     Retrieve relevant documents and generate an answer.
     Returns both the answer and the retrieved documents.
@@ -128,21 +123,21 @@ def retrieve_and_generate(question: str, vectorstore, llm, top_k: int = 4, fetch
     context = "\n\n".join(context_parts)
     
     # Generate answer
-    human_message = f"""CONTEXT (Research Abstracts):
+    prompt = f"""{SYSTEM_PROMPT}
+
+CONTEXT (Research Abstracts):
 {context}
 
 USER QUERY: {question}
 
 Based on the above research context, provide an actionable wellness plan following the exact output format specified."""
-    
-    messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=human_message)
-    ]
-    
-    response = llm.invoke(messages)
-    
-    return response.content, documents
+
+    response = client.models.generate_content(
+        model=GENERATION_MODEL,
+        contents=prompt,
+    )
+
+    return (response.text if getattr(response, "text", None) else "No response generated."), documents
 
 
 def run_evaluation_example():
@@ -153,7 +148,7 @@ def run_evaluation_example():
     
     # Load RAG system
     print("\n[1/5] Loading RAG system...")
-    vectorstore, llm = load_rag_system()
+    vectorstore, client = load_rag_system()
     print("✓ RAG system loaded")
     
     # Define test case
@@ -167,7 +162,7 @@ def run_evaluation_example():
     answer, documents = retrieve_and_generate(
         question=test_question,
         vectorstore=vectorstore,
-        llm=llm,
+        client=client,
         top_k=4
     )
     

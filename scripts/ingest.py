@@ -22,14 +22,23 @@ def main() -> None:
         default=DEFAULT_EXPERIMENT,
         help="Select ingestion strategy.",
     )
+    parser.add_argument(
+        "--reset-db",
+        action="store_true",
+        help="Only for raw experiment: delete existing DB before ingest.",
+    )
     args = parser.parse_args()
 
     if args.experiment == "raw":
-        ingest_raw()
+        ingest_raw(reset_db=args.reset_db)
         return
     if args.experiment == "intro_concl":
+        if args.reset_db:
+            print("Warning: --reset-db is only used by 'raw'; ignoring flag.")
         ingest_intro_concl()
         return
+    if args.reset_db:
+        print("Warning: --reset-db is only used by 'raw'; ignoring flag.")
     ingest_by_type()
 
 

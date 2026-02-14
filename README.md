@@ -36,13 +36,13 @@ data/
 1. Install dependencies:
    `pip install -r requirements.txt`
 2. Create `.env` in project root:
-   - `OPENAI_API_KEY=...`
    - `GOOGLE_API_KEY=...`
 
 ## Run
 
 - Ingest vectors:
   - `python scripts/ingest.py --experiment raw`
+  - `python scripts/ingest.py --experiment raw --reset-db` (optional clean rebuild)
   - `python scripts/ingest.py --experiment intro_concl`
   - `python scripts/ingest.py --experiment by_type`
 

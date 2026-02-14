@@ -15,7 +15,7 @@ if str(ROOT) not in sys.path:
 
 from src.mindful_rag.config import ROOT_DIR
 
-load_dotenv(dotenv_path=ROOT_DIR / ".env")  # Load OpenAI API key from .env
+load_dotenv(dotenv_path=ROOT_DIR / ".env")  # Load GOOGLE_API_KEY from .env
 
 from src.mindful_rag.evaluators import correctness, relevance, groundedness, retrieval_relevance
 from langchain.schema import Document

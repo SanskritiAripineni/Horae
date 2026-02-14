@@ -1,17 +1,16 @@
 """
 Student Wellness Scheduler - Streamlit RAG Chat Interface
 ----------------------------------------------------------
-Uses Gemini embeddings for retrieval and OpenAI for generation.
+Uses Gemini embeddings for retrieval and Gemini 2.5 Flash for generation.
 API Key loaded securely from .env file.
 """
 
 import os
 import streamlit as st
 from dotenv import load_dotenv
+from google import genai
 from langchain_chroma import Chroma
-from langchain_openai import ChatOpenAI
 from langchain_core.embeddings import Embeddings
-from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 from src.mindful_rag.config import ROOT_DIR, get_experiment
@@ -29,6 +28,7 @@ EXPERIMENT = get_experiment(EXPERIMENT_NAME)
 CHROMA_DIR = os.getenv("CHROMA_DIR", str(EXPERIMENT.chroma_dir))
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", EXPERIMENT.collection_name)
 EMBEDDING_MODEL = "models/gemini-embedding-001"
+GENERATION_MODEL = "gemini-2.5-flash"
 
 # System prompt for the LLM
 SYSTEM_PROMPT = """You are an expert academic wellness scheduler. Your goal is to convert research abstracts into a strict, actionable plan.
@@ -96,12 +96,8 @@ def load_vectorstore(_embeddings):
 
 
 def get_llm(api_key: str):
-    """Initialize OpenAI LLM with the provided API key."""
-    return ChatOpenAI(
-        model="gpt-4o-mini",
-        temperature=0.3,
-        api_key=api_key
-    )
+    """Initialize Google GenAI client with the provided API key."""
+    return genai.Client(api_key=api_key)
 
 
 # ============================================================================
@@ -137,9 +133,9 @@ def retrieve_relevant_chunks(query: str, vectorstore, top_k: int = 4, fetch_k: i
 # LLM GENERATION LOGIC
 # ============================================================================
 
-def generate_response_with_llm(user_query: str, chunks: list[dict], llm) -> str:
+def generate_response_with_llm(user_query: str, chunks: list[dict], client) -> str:
     """
-    Generate a tailored response using OpenAI LLM.
+    Generate a tailored response using Gemini LLM.
     Passes retrieved context + user query to the model.
     """
     if not chunks:
@@ -152,22 +148,20 @@ def generate_response_with_llm(user_query: str, chunks: list[dict], llm) -> str:
     
     context = "\n\n".join(context_parts)
     
-    # Build the human message with context and query
-    human_message = f"""CONTEXT (Research Abstracts):
+    prompt = f"""{SYSTEM_PROMPT}
+
+CONTEXT (Research Abstracts):
 {context}
 
 USER QUERY: {user_query}
 
 Based on the above research context, provide an actionable wellness plan following the exact output format specified."""
 
-    # Call the LLM
-    messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=human_message)
-    ]
-    
-    response = llm.invoke(messages)
-    return response.content
+    response = client.models.generate_content(
+        model=GENERATION_MODEL,
+        contents=prompt,
+    )
+    return response.text if getattr(response, "text", None) else "No response generated."
 
 
 # ============================================================================
@@ -231,13 +225,7 @@ def main():
     # =========================================================================
     # API KEY VALIDATION
     # =========================================================================
-    openai_api_key = os.getenv("OPENAI_API_KEY")
     google_api_key = os.getenv("GOOGLE_API_KEY")
-
-    if not openai_api_key:
-        st.error("**System Error:** API Key not found in environment. Please add `OPENAI_API_KEY` to your `.env` file.")
-        st.info("Create a `.env` file in the project root with:\n```\nOPENAI_API_KEY=your-api-key-here\n```")
-        st.stop()
 
     if not google_api_key:
         st.error("**System Error:** API Key not found in environment. Please add `GOOGLE_API_KEY` to your `.env` file.")
@@ -250,7 +238,7 @@ def main():
     with st.spinner("Initializing..."):
         embeddings = load_embedding_model(google_api_key)
         vectorstore = load_vectorstore(embeddings)
-        llm = get_llm(openai_api_key)
+        client = get_llm(google_api_key)
     
     # =========================================================================
     # CHAT INTERFACE
@@ -283,7 +271,7 @@ def main():
                 )
                 
                 # Step 2: Generate response with LLM
-                response = generate_response_with_llm(prompt, chunks, llm)
+                response = generate_response_with_llm(prompt, chunks, client)
                 
                 # Display response
                 st.markdown(response)

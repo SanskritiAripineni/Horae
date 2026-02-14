@@ -1,21 +1,71 @@
+import json
 import os
-from typing import Annotated, TypedDict
-from langchain_openai import ChatOpenAI
+import re
+
+from google import genai
+
 
 # ---------------------------------------------------------
 # SETUP: Model Configuration
 # ---------------------------------------------------------
-# Updated to GPT-4o as requested. 
-# This model is faster and excellent for structured outputs.
-EVALUATOR_MODEL = "gpt-4o" 
+EVALUATOR_MODEL = "gemini-2.5-flash"
+_GENAI_CLIENT = None
+
+
+def _get_genai_client():
+    """Create (once) and return a Google GenAI client."""
+    global _GENAI_CLIENT
+    if _GENAI_CLIENT is None:
+        google_api_key = os.getenv("GOOGLE_API_KEY")
+        if not google_api_key:
+            raise ValueError("GOOGLE_API_KEY not found in environment.")
+        _GENAI_CLIENT = genai.Client(api_key=google_api_key)
+    return _GENAI_CLIENT
+
+
+def _extract_json_object(text: str) -> dict:
+    """Extract a JSON object from model text output."""
+    cleaned = text.strip()
+
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
+        if not match:
+            raise
+        return json.loads(match.group(0))
+
+
+def _grade_boolean(instructions: str, payload: str, field_name: str) -> bool:
+    """Run one evaluator prompt and return a boolean verdict."""
+    prompt = f"""{instructions}
+
+Return ONLY a valid JSON object with exactly these fields:
+- "explanation": string
+- "{field_name}": boolean
+
+INPUT:
+{payload}
+"""
+    response = _get_genai_client().models.generate_content(
+        model=EVALUATOR_MODEL,
+        contents=prompt,
+    )
+    text = response.text if getattr(response, "text", None) else ""
+    grade = _extract_json_object(text)
+
+    if field_name not in grade:
+        raise ValueError(f"Evaluator response missing field '{field_name}': {grade}")
+    return bool(grade[field_name])
+
 
 # ---------------------------------------------------------
 # METRIC 1: CORRECTNESS (Answer vs Ground Truth)
 # ---------------------------------------------------------
-class CorrectnessGrade(TypedDict):
-    explanation: Annotated[str, ..., "Explain your reasoning for the score"]
-    correct: Annotated[bool, ..., "True if the answer is correct, False otherwise."]
-
 correctness_instructions = """You are a teacher grading a quiz. You will be given a QUESTION, the GROUND TRUTH (correct) ANSWER, and the STUDENT ANSWER. Here is the grade criteria to follow:
 (1) Grade the student answers based ONLY on their factual accuracy relative to the ground truth answer. (2) Ensure that the student answer does not contain any conflicting statements.
 (3) It is OK if the student answer contains more information than the ground truth answer, as long as it is factually accurate relative to the  ground truth answer.
@@ -26,9 +76,6 @@ A correctness value of False means that the student's answer does not meet all o
 
 Explain your reasoning in a step-by-step manner to ensure your reasoning and conclusion are correct. Avoid simply stating the correct answer at the outset."""
 
-correctness_llm = ChatOpenAI(model=EVALUATOR_MODEL, temperature=0).with_structured_output(
-    CorrectnessGrade, method="json_schema", strict=True
-)
 
 def correctness(inputs: dict, outputs: dict, reference_outputs: dict) -> bool:
     """An evaluator for RAG answer accuracy."""
@@ -36,20 +83,12 @@ def correctness(inputs: dict, outputs: dict, reference_outputs: dict) -> bool:
 QUESTION: {inputs['question']}
 GROUND TRUTH ANSWER: {reference_outputs['answer']}
 STUDENT ANSWER: {outputs['answer']}"""
-    grade = correctness_llm.invoke([
-        {"role": "system", "content": correctness_instructions},
-        {"role": "user", "content": answers}
-    ])
-    return grade["correct"]
+    return _grade_boolean(correctness_instructions, answers, "correct")
 
 
 # ---------------------------------------------------------
 # METRIC 2: RELEVANCE (Answer vs Question)
 # ---------------------------------------------------------
-class RelevanceGrade(TypedDict):
-    explanation: Annotated[str, ..., "Explain your reasoning for the score"]
-    relevant: Annotated[bool, ..., "Provide the score on whether the answer addresses the question"]
-
 relevance_instructions = """You are a teacher grading a quiz. You will be given a QUESTION and a STUDENT ANSWER. Here is the grade criteria to follow:
 (1) Ensure the STUDENT ANSWER is concise and relevant to the QUESTION
 (2) Ensure the STUDENT ANSWER helps to answer the QUESTION
@@ -60,27 +99,16 @@ A relevance value of False means that the student's answer does not meet all of 
 
 Explain your reasoning in a step-by-step manner to ensure your reasoning and conclusion are correct. Avoid simply stating the correct answer at the outset."""
 
-relevance_llm = ChatOpenAI(model=EVALUATOR_MODEL, temperature=0).with_structured_output(
-    RelevanceGrade, method="json_schema", strict=True
-)
 
 def relevance(inputs: dict, outputs: dict) -> bool:
     """A simple evaluator for RAG answer helpfulness."""
     answer = f"QUESTION: {inputs['question']}\nSTUDENT ANSWER: {outputs['answer']}"
-    grade = relevance_llm.invoke([
-        {"role": "system", "content": relevance_instructions},
-        {"role": "user", "content": answer}
-    ])
-    return grade["relevant"]
+    return _grade_boolean(relevance_instructions, answer, "relevant")
 
 
 # ---------------------------------------------------------
 # METRIC 3: GROUNDEDNESS (Answer vs Retrieved Docs)
 # ---------------------------------------------------------
-class GroundedGrade(TypedDict):
-    explanation: Annotated[str, ..., "Explain your reasoning for the score"]
-    grounded: Annotated[bool, ..., "Provide the score on if the answer hallucinates from the documents"]
-
 grounded_instructions = """You are a teacher grading a quiz. You will be given FACTS and a STUDENT ANSWER. Here is the grade criteria to follow:
 (1) Ensure the STUDENT ANSWER is grounded in the FACTS. (2) Ensure the STUDENT ANSWER does not contain "hallucinated" information outside the scope of the FACTS.
 
@@ -90,29 +118,17 @@ A grounded value of False means that the student's answer does not meet all of t
 
 Explain your reasoning in a step-by-step manner to ensure your reasoning and conclusion are correct. Avoid simply stating the correct answer at the outset."""
 
-grounded_llm = ChatOpenAI(model=EVALUATOR_MODEL, temperature=0).with_structured_output(
-    GroundedGrade, method="json_schema", strict=True
-)
 
 def groundedness(inputs: dict, outputs: dict) -> bool:
     """A simple evaluator for RAG answer groundedness."""
-    # Assumes outputs["documents"] is a list of LangChain Document objects
     doc_string = "\n\n".join(doc.page_content for doc in outputs["documents"])
     answer = f"FACTS: {doc_string}\nSTUDENT ANSWER: {outputs['answer']}"
-    grade = grounded_llm.invoke([
-        {"role": "system", "content": grounded_instructions},
-        {"role": "user", "content": answer}
-    ])
-    return grade["grounded"]
+    return _grade_boolean(grounded_instructions, answer, "grounded")
 
 
 # ---------------------------------------------------------
 # METRIC 4: RETRIEVAL RELEVANCE (Retrieved Docs vs Question)
 # ---------------------------------------------------------
-class RetrievalRelevanceGrade(TypedDict):
-    explanation: Annotated[str, ..., "Explain your reasoning for the score"]
-    relevant: Annotated[bool, ..., "True if the retrieved documents are relevant to the question, False otherwise"]
-
 retrieval_relevance_instructions = """You are a teacher grading a quiz. You will be given a QUESTION and a set of FACTS provided by the student. Here is the grade criteria to follow:
 (1) You goal is to identify FACTS that are completely unrelated to the QUESTION
 (2) If the facts contain ANY keywords or semantic meaning related to the question, consider them relevant
@@ -124,17 +140,9 @@ A relevance value of False means that the FACTS are completely unrelated to the 
 
 Explain your reasoning in a step-by-step manner to ensure your reasoning and conclusion are correct. Avoid simply stating the correct answer at the outset."""
 
-retrieval_relevance_llm = ChatOpenAI(model=EVALUATOR_MODEL, temperature=0).with_structured_output(
-    RetrievalRelevanceGrade, method="json_schema", strict=True
-)
 
 def retrieval_relevance(inputs: dict, outputs: dict) -> bool:
     """An evaluator for document relevance."""
-    # Assumes outputs["documents"] is a list of LangChain Document objects
     doc_string = "\n\n".join(doc.page_content for doc in outputs["documents"])
     answer = f"FACTS: {doc_string}\nQUESTION: {inputs['question']}"
-    grade = retrieval_relevance_llm.invoke([
-        {"role": "system", "content": retrieval_relevance_instructions},
-        {"role": "user", "content": answer}
-    ])
-    return grade["relevant"]
+    return _grade_boolean(retrieval_relevance_instructions, answer, "relevant")
