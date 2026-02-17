@@ -14,7 +14,7 @@ from langchain_chroma import Chroma
 from langchain_core.embeddings import Embeddings
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-from mindful_rag.config import ROOT_DIR, get_experiment
+from mindful_rag.config import ROOT_DIR, get_env_file, get_experiment
 from mindful_rag.retrieval import RetrievalSettings, production_retrieve
 
 
@@ -23,7 +23,7 @@ from mindful_rag.retrieval import RetrievalSettings, production_retrieve
 # ============================================================================
 
 # Load environment variables from root .env file
-load_dotenv(dotenv_path=ROOT_DIR / ".env")
+load_dotenv(dotenv_path=get_env_file())
 
 EXPERIMENT_NAME = os.getenv("RAG_EXPERIMENT", "by_type")
 EXPERIMENT = get_experiment(EXPERIMENT_NAME)

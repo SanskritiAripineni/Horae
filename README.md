@@ -1,67 +1,46 @@
-# Mindful RAG Scheduler
+# Multi-Agent-LLM
 
-Student wellness RAG app plus ingestion/ablation pipelines.
+Repository root now uses an app-scoped layout.
 
-## Folder Layout
+## Active App
 
-```text
-src/mindful_rag/
-  __main__.py
-  cli.py
-  app.py
-  config.py
-  retrieval.py
-  evaluators.py
-  ingest_raw.py
-  ingest_intro_concl.py
-  ingest_by_type.py
-scripts/
-  _bootstrap.py
-  run_app.py
-  ingest.py
-  verify_chroma.py
-  demo_evaluators.py
-tests/
-  conftest.py
-  test_retrieval.py
-  test_evaluators.py
-configs/experiments/
-  raw.yaml
-  intro_concl.yaml
-  by_type.yaml
-data/
-  raw/research_papers/*.pdf
-  index/research_index.csv
-  chroma/<experiment_name>/
-pyproject.toml
+- `apps/mindful-rag/`: Student wellness RAG app and ingestion pipelines.
+
+## Quick Start
+
+```bash
+cd apps/mindful-rag
+pip install -r requirements.txt
+pip install -e .
 ```
 
-## Setup
+Or from repo root:
 
-1. Install dependencies:
-   - `pip install -r requirements.txt`
-   - `pip install -e .`
-2. Create `.env` in project root:
-   - `GOOGLE_API_KEY=...`
+```bash
+make install
+```
 
 ## Run
 
-- Ingest vectors:
-  - `mindful-rag ingest --experiment raw`
-  - `mindful-rag ingest --experiment raw --reset-db` (optional clean rebuild)
-  - `mindful-rag ingest --experiment intro_concl`
-  - `mindful-rag ingest --experiment by_type`
+From repository root:
 
-- Launch app:
-  - `mindful-rag run-app --experiment by_type`
-  - Optional retrieval tuning via env:
-    - `RETRIEVAL_TOP_K` (default `4`)
-    - `RETRIEVAL_FETCH_K` (default `24`)
-    - `RETRIEVAL_MAX_PER_SOURCE` (default `2`)
-    - `RETRIEVAL_MMR_LAMBDA` (default `0.5`)
-    - `RETRIEVAL_MIN_SCORE` (default `0.05`)
+```bash
+python apps/mindful-rag/scripts/ingest.py --experiment by_type
+python apps/mindful-rag/scripts/run_app.py --experiment by_type
+python apps/mindful-rag/scripts/verify_chroma.py --experiment by_type
+```
 
-- Verify DB:
-  - `mindful-rag verify-chroma --experiment by_type`
+Or from `apps/mindful-rag`:
 
-Legacy wrappers in `scripts/` still work and forward to the new CLI.
+```bash
+mindful-rag ingest --experiment by_type
+mindful-rag run-app --experiment by_type
+mindful-rag verify-chroma --experiment by_type
+```
+
+## Root Tasks
+
+```bash
+make help
+make check
+```

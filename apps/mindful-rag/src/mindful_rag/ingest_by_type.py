@@ -11,7 +11,7 @@ from langchain.schema import Document
 from langchain_chroma import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-from mindful_rag.config import INDEX_CSV, PDF_DIR, ROOT_DIR, get_experiment
+from mindful_rag.config import INDEX_CSV, PDF_DIR, get_env_file, get_experiment
 
 # --- Configuration ---
 EXPERIMENT = get_experiment("by_type")
@@ -139,7 +139,7 @@ def extract_full_text(pdf_path: str) -> str:
 
 
 def ingest():
-    load_dotenv(dotenv_path=ROOT_DIR / ".env")
+    load_dotenv(dotenv_path=get_env_file())
     google_api_key = os.getenv("GOOGLE_API_KEY")
     if not google_api_key:
         print("Error: GOOGLE_API_KEY not found in environment.")

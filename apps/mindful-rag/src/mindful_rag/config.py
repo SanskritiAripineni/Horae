@@ -18,6 +18,10 @@ PDF_DIR = DATA_DIR / "raw" / "research_papers"
 INDEX_CSV = DATA_DIR / "index" / "research_index.csv"
 CHROMA_ROOT = DATA_DIR / "chroma"
 EXPERIMENTS_DIR = ROOT_DIR / "configs" / "experiments"
+REPO_ROOT = ROOT_DIR.parents[1]
+
+ENV_FILE = ROOT_DIR / ".env"
+LEGACY_ENV_FILE = REPO_ROOT / ".env"
 
 DEFAULT_EXPERIMENT = "by_type"
 
@@ -102,6 +106,13 @@ def load_experiments() -> dict[str, ExperimentConfig]:
 def list_experiment_names() -> list[str]:
     """Return known experiment names."""
     return sorted(load_experiments().keys())
+
+
+def get_env_file() -> Path:
+    """Return preferred dotenv path, supporting legacy repo-root location."""
+    if ENV_FILE.exists():
+        return ENV_FILE
+    return LEGACY_ENV_FILE
 
 
 def get_experiment(name: str | None) -> ExperimentConfig:

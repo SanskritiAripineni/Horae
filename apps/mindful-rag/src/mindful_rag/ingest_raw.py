@@ -26,7 +26,7 @@ from langchain_chroma import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from thefuzz import fuzz, process
 
-from mindful_rag.config import INDEX_CSV, PDF_DIR, ROOT_DIR, get_experiment
+from mindful_rag.config import INDEX_CSV, PDF_DIR, get_env_file, get_experiment
 
 # ============================================================================
 # CONFIGURATION
@@ -300,7 +300,7 @@ def ingest_to_chromadb(documents: list[dict], embeddings, reset_db: bool = False
 
 def main(reset_db: bool = False) -> None:
     """Main ingestion pipeline for raw baseline experiment."""
-    load_dotenv(dotenv_path=ROOT_DIR / ".env")
+    load_dotenv(dotenv_path=get_env_file())
     google_api_key = os.getenv("GOOGLE_API_KEY")
     if not google_api_key:
         print("Error: GOOGLE_API_KEY not found in environment.")

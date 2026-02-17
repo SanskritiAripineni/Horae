@@ -10,9 +10,9 @@ from _bootstrap import bootstrap_local_src
 
 bootstrap_local_src()
 
-from mindful_rag.config import ROOT_DIR
+from mindful_rag.config import get_env_file
 
-load_dotenv(dotenv_path=ROOT_DIR / ".env")  # Load GOOGLE_API_KEY from .env
+load_dotenv(dotenv_path=get_env_file())  # Load GOOGLE_API_KEY from .env
 
 from mindful_rag.evaluators import correctness, relevance, groundedness, retrieval_relevance
 from langchain.schema import Document

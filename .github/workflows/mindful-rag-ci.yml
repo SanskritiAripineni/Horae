@@ -1,0 +1,31 @@
+name: Mindful RAG CI
+
+on:
+  push:
+    paths:
+      - "apps/mindful-rag/**"
+      - "Makefile"
+      - ".github/workflows/mindful-rag-ci.yml"
+  pull_request:
+    paths:
+      - "apps/mindful-rag/**"
+      - "Makefile"
+      - ".github/workflows/mindful-rag-ci.yml"
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install app dependencies
+        run: make install
+
+      - name: Run compile and tests
+        run: make check

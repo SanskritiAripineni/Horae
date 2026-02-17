@@ -212,6 +212,8 @@ __marimo__/
 
 # Local vector DBs and caches
 data/chroma/
+apps/mindful-rag/data/chroma/
+**/data/chroma/
 **/chroma_db/
 
 # IDE and local project files
@@ -222,6 +224,8 @@ local.properties
 # Secrets and local auth artifacts
 credentials.json
 data/tokens/
+apps/mindful-rag/data/tokens/
+**/data/tokens/
 
 # Android build artifacts
 autolife_android_client/.gradle/

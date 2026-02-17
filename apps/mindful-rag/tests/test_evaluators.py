@@ -21,10 +21,10 @@ bootstrap_local_src()
 
 # Import your evaluators
 from mindful_rag.evaluators import correctness, relevance, groundedness, retrieval_relevance
-from mindful_rag.config import ROOT_DIR, get_experiment
+from mindful_rag.config import get_env_file, get_experiment
 
 # Load environment
-load_dotenv(dotenv_path=ROOT_DIR / ".env")
+load_dotenv(dotenv_path=get_env_file())
 
 # Configuration (matching app.py)
 EXPERIMENT = get_experiment("by_type")
