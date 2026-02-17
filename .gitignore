@@ -213,3 +213,16 @@ __marimo__/
 # Local vector DBs and caches
 data/chroma/
 **/chroma_db/
+
+# IDE and local project files
+.idea/
+.vscode/
+local.properties
+
+# Secrets and local auth artifacts
+credentials.json
+data/tokens/
+
+# Android build artifacts
+autolife_android_client/.gradle/
+autolife_android_client/**/build/

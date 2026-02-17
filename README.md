@@ -1,23 +1,29 @@
 # Mindful RAG Scheduler
 
-Single-project structure for the student wellness RAG app and ablation pipelines.
+Student wellness RAG app plus ingestion/ablation pipelines.
 
 ## Folder Layout
 
 ```text
 src/mindful_rag/
+  __main__.py
+  cli.py
   app.py
   config.py
+  retrieval.py
   evaluators.py
   ingest_raw.py
   ingest_intro_concl.py
   ingest_by_type.py
 scripts/
+  _bootstrap.py
   run_app.py
   ingest.py
   verify_chroma.py
   demo_evaluators.py
 tests/
+  conftest.py
+  test_retrieval.py
   test_evaluators.py
 configs/experiments/
   raw.yaml
@@ -26,28 +32,28 @@ configs/experiments/
 data/
   raw/research_papers/*.pdf
   index/research_index.csv
-  chroma/raw/
-  chroma/intro_concl/
-  chroma/by_type/
+  chroma/<experiment_name>/
+pyproject.toml
 ```
 
 ## Setup
 
 1. Install dependencies:
-   `pip install -r requirements.txt`
+   - `pip install -r requirements.txt`
+   - `pip install -e .`
 2. Create `.env` in project root:
    - `GOOGLE_API_KEY=...`
 
 ## Run
 
 - Ingest vectors:
-  - `python scripts/ingest.py --experiment raw`
-  - `python scripts/ingest.py --experiment raw --reset-db` (optional clean rebuild)
-  - `python scripts/ingest.py --experiment intro_concl`
-  - `python scripts/ingest.py --experiment by_type`
+  - `mindful-rag ingest --experiment raw`
+  - `mindful-rag ingest --experiment raw --reset-db` (optional clean rebuild)
+  - `mindful-rag ingest --experiment intro_concl`
+  - `mindful-rag ingest --experiment by_type`
 
 - Launch app:
-  - `python scripts/run_app.py --experiment by_type`
+  - `mindful-rag run-app --experiment by_type`
   - Optional retrieval tuning via env:
     - `RETRIEVAL_TOP_K` (default `4`)
     - `RETRIEVAL_FETCH_K` (default `24`)
@@ -56,4 +62,6 @@ data/
     - `RETRIEVAL_MIN_SCORE` (default `0.05`)
 
 - Verify DB:
-  - `python scripts/verify_chroma.py --experiment by_type`
+  - `mindful-rag verify-chroma --experiment by_type`
+
+Legacy wrappers in `scripts/` still work and forward to the new CLI.

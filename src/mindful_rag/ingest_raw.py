@@ -26,7 +26,7 @@ from langchain_chroma import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from thefuzz import fuzz, process
 
-from src.mindful_rag.config import INDEX_CSV, PDF_DIR, ROOT_DIR, get_experiment
+from mindful_rag.config import INDEX_CSV, PDF_DIR, ROOT_DIR, get_experiment
 
 # ============================================================================
 # CONFIGURATION

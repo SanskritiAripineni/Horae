@@ -4,20 +4,17 @@ Quick Demo of Evaluation Metrics
 This demonstrates the evaluators without loading the full RAG system.
 """
 
-import sys
-from pathlib import Path
-
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+from _bootstrap import bootstrap_local_src
 
-from src.mindful_rag.config import ROOT_DIR
+bootstrap_local_src()
+
+from mindful_rag.config import ROOT_DIR
 
 load_dotenv(dotenv_path=ROOT_DIR / ".env")  # Load GOOGLE_API_KEY from .env
 
-from src.mindful_rag.evaluators import correctness, relevance, groundedness, retrieval_relevance
+from mindful_rag.evaluators import correctness, relevance, groundedness, retrieval_relevance
 from langchain.schema import Document
 
 print("=" * 70)

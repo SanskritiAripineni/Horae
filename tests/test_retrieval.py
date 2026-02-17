@@ -3,7 +3,11 @@
 from typing import Optional
 import unittest
 
-from src.mindful_rag.retrieval import RetrievalSettings, production_retrieve
+from _bootstrap import bootstrap_local_src
+
+bootstrap_local_src()
+
+from mindful_rag.retrieval import RetrievalSettings, production_retrieve
 
 
 class _DummyDoc:

@@ -14,8 +14,8 @@ from langchain_chroma import Chroma
 from langchain_core.embeddings import Embeddings
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-from src.mindful_rag.config import ROOT_DIR, get_experiment
-from src.mindful_rag.retrieval import RetrievalSettings, production_retrieve
+from mindful_rag.config import ROOT_DIR, get_experiment
+from mindful_rag.retrieval import RetrievalSettings, production_retrieve
 
 
 # ============================================================================

@@ -18,7 +18,7 @@ from langchain.schema import Document
 from langchain_chroma import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-from src.mindful_rag.config import INDEX_CSV, PDF_DIR, ROOT_DIR, get_experiment
+from mindful_rag.config import INDEX_CSV, PDF_DIR, ROOT_DIR, get_experiment
 
 # Configuration
 EXPERIMENT = get_experiment("intro_concl")

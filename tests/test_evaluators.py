@@ -9,21 +9,19 @@ Usage:
 """
 
 import os
-import sys
-from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
 from langchain_chroma import Chroma
 from langchain_core.embeddings import Embeddings
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+from _bootstrap import bootstrap_local_src
+
+bootstrap_local_src()
 
 # Import your evaluators
-from src.mindful_rag.evaluators import correctness, relevance, groundedness, retrieval_relevance
-from src.mindful_rag.config import ROOT_DIR, get_experiment
+from mindful_rag.evaluators import correctness, relevance, groundedness, retrieval_relevance
+from mindful_rag.config import ROOT_DIR, get_experiment
 
 # Load environment
 load_dotenv(dotenv_path=ROOT_DIR / ".env")
