@@ -11,10 +11,9 @@ import streamlit as st
 from dotenv import load_dotenv
 from google import genai
 from langchain_chroma import Chroma
-from langchain_core.embeddings import Embeddings
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 from mindful_rag.config import ROOT_DIR, get_env_file, get_experiment
+from mindful_rag.embeddings import create_dual_task_embeddings
 from mindful_rag.retrieval import RetrievalSettings, production_retrieve
 
 
@@ -29,7 +28,7 @@ EXPERIMENT_NAME = os.getenv("RAG_EXPERIMENT", "by_type")
 EXPERIMENT = get_experiment(EXPERIMENT_NAME)
 CHROMA_DIR = os.getenv("CHROMA_DIR", str(EXPERIMENT.chroma_dir))
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", EXPERIMENT.collection_name)
-EMBEDDING_MODEL = "models/gemini-embedding-001"
+EMBEDDING_MODEL = "gemini-embedding-001"
 GENERATION_MODEL = "gemini-2.5-flash"
 
 
@@ -60,6 +59,11 @@ RETRIEVAL_SETTINGS = RetrievalSettings(
 )
 GENERATION_MAX_RETRIES = _env_int("GENERATION_MAX_RETRIES", 2, 0, 5)
 GENERATION_RETRY_BASE_SECONDS = _env_float("GENERATION_RETRY_BASE_SECONDS", 1.0, 0.1, 10.0)
+ALLOW_EMBEDDING_FALLBACK = os.getenv("ALLOW_EMBEDDING_FALLBACK", "0").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+}
 
 # System prompt for the LLM
 SYSTEM_PROMPT = """You are an expert academic wellness scheduler. Your goal is to convert research abstracts into a strict, actionable plan.
@@ -88,32 +92,14 @@ Step 4: List sources at the bottom."""
 # CACHED RESOURCES
 # ============================================================================
 
-class GeminiDualTaskEmbeddings(Embeddings):
-    """Use retrieval-optimized task types for document and query embeddings."""
-
-    def __init__(self, api_key: str):
-        self._doc_embedder = GoogleGenerativeAIEmbeddings(
-            model=EMBEDDING_MODEL,
-            google_api_key=api_key,
-            task_type="retrieval_document"
-        )
-        self._query_embedder = GoogleGenerativeAIEmbeddings(
-            model=EMBEDDING_MODEL,
-            google_api_key=api_key,
-            task_type="retrieval_query"
-        )
-
-    def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return self._doc_embedder.embed_documents(texts)
-
-    def embed_query(self, text: str) -> list[float]:
-        return self._query_embedder.embed_query(text)
-
-
 @st.cache_resource
 def load_embedding_model(api_key: str):
     """Load Gemini embedding model wrapper (cached)."""
-    return GeminiDualTaskEmbeddings(api_key)
+    return create_dual_task_embeddings(
+        api_key=api_key,
+        model=EMBEDDING_MODEL,
+        allow_fallback=ALLOW_EMBEDDING_FALLBACK,
+    )
 
 
 @st.cache_resource

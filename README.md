@@ -25,17 +25,18 @@ make install
 From repository root:
 
 ```bash
-python apps/mindful-rag/scripts/ingest.py --experiment by_type
-python apps/mindful-rag/scripts/run_app.py --experiment by_type
-python apps/mindful-rag/scripts/verify_chroma.py --experiment by_type
+make ingest-by-type
+make run-by-type
+make verify-by-type
 ```
 
-Or from `apps/mindful-rag`:
+Other useful targets:
 
 ```bash
-mindful-rag ingest --experiment by_type
-mindful-rag run-app --experiment by_type
-mindful-rag verify-chroma --experiment by_type
+make ingest-intro-concl
+make ingest-raw
+make ingest-all
+make csv-all
 ```
 
 ## Root Tasks

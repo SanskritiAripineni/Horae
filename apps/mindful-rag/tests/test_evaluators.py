@@ -12,8 +12,6 @@ import os
 from dotenv import load_dotenv
 from google import genai
 from langchain_chroma import Chroma
-from langchain_core.embeddings import Embeddings
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 from _bootstrap import bootstrap_local_src
 
@@ -22,6 +20,7 @@ bootstrap_local_src()
 # Import your evaluators
 from mindful_rag.evaluators import correctness, relevance, groundedness, retrieval_relevance
 from mindful_rag.config import get_env_file, get_experiment
+from mindful_rag.embeddings import GeminiDualTaskEmbeddings
 
 # Load environment
 load_dotenv(dotenv_path=get_env_file())
@@ -30,7 +29,7 @@ load_dotenv(dotenv_path=get_env_file())
 EXPERIMENT = get_experiment("by_type")
 CHROMA_DIR = str(EXPERIMENT.chroma_dir)
 COLLECTION_NAME = EXPERIMENT.collection_name
-EMBEDDING_MODEL = "models/gemini-embedding-001"
+EMBEDDING_MODEL = "gemini-embedding-001"
 GENERATION_MODEL = "gemini-2.5-flash"
 SYSTEM_PROMPT = """You are an expert academic wellness scheduler. Your goal is to convert research abstracts into a strict, actionable plan.
 
@@ -54,35 +53,13 @@ Step 3: Provide exactly 4-5 bullet points.
 Step 4: List sources at the bottom."""
 
 
-class GeminiDualTaskEmbeddings(Embeddings):
-    """Use retrieval-optimized task types for document and query embeddings."""
-
-    def __init__(self, api_key: str):
-        self._doc_embedder = GoogleGenerativeAIEmbeddings(
-            model=EMBEDDING_MODEL,
-            google_api_key=api_key,
-            task_type="retrieval_document"
-        )
-        self._query_embedder = GoogleGenerativeAIEmbeddings(
-            model=EMBEDDING_MODEL,
-            google_api_key=api_key,
-            task_type="retrieval_query"
-        )
-
-    def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return self._doc_embedder.embed_documents(texts)
-
-    def embed_query(self, text: str) -> list[float]:
-        return self._query_embedder.embed_query(text)
-
-
 def load_rag_system():
     """Initialize the RAG system components."""
     google_api_key = os.getenv("GOOGLE_API_KEY")
     if not google_api_key:
         raise ValueError("GOOGLE_API_KEY not found in environment.")
 
-    embeddings = GeminiDualTaskEmbeddings(google_api_key)
+    embeddings = GeminiDualTaskEmbeddings(api_key=google_api_key, model=EMBEDDING_MODEL)
     
     vectorstore = Chroma(
         persist_directory=CHROMA_DIR,

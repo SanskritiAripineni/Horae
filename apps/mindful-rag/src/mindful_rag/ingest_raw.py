@@ -21,12 +21,12 @@ import chromadb
 import fitz  # PyMuPDF
 import pandas as pd
 from dotenv import load_dotenv
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from thefuzz import fuzz, process
 
 from mindful_rag.config import INDEX_CSV, PDF_DIR, get_env_file, get_experiment
+from mindful_rag.embeddings import GeminiGenAIEmbeddings
 
 # ============================================================================
 # CONFIGURATION
@@ -49,7 +49,7 @@ MATCH_MIN_GAP = 5
 LOW_CONFIDENCE_MATCH = 80
 
 # Embedding model (same as app.py for consistency)
-EMBEDDING_MODEL = "models/gemini-embedding-001"
+EMBEDDING_MODEL = "gemini-embedding-001"
 
 
 # ============================================================================
@@ -322,10 +322,10 @@ def main(reset_db: bool = False) -> None:
 
     # Step 2: Initialize embeddings
     print(f"\n🤖 Loading embedding model: {EMBEDDING_MODEL}")
-    embeddings = GoogleGenerativeAIEmbeddings(
+    embeddings = GeminiGenAIEmbeddings(
+        api_key=google_api_key,
         model=EMBEDDING_MODEL,
-        google_api_key=google_api_key,
-        task_type="retrieval_document",
+        task_type="RETRIEVAL_DOCUMENT",
     )
     print("✓ Embedding model loaded")
 

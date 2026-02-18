@@ -1,35 +1,65 @@
 APP_DIR := apps/mindful-rag
+APP_VENV_PY := $(APP_DIR)/.venv/bin/python
+PYTHON := $(if $(wildcard $(APP_VENV_PY)),$(APP_VENV_PY),python3)
+APP_CMD := PYTHONPATH=$(APP_DIR)/src $(PYTHON) -m mindful_rag
 
-.PHONY: help install app-install ingest run-app verify test compile check
+.PHONY: help install ingest-help run-help verify-help ingest-by-type ingest-intro-concl ingest-raw ingest-all run-by-type verify-by-type csv-all test compile check
 
 help:
-	@echo "Available targets:"
-	@echo "  make install         Install app dependencies and editable package"
-	@echo "  make ingest          Show ingest CLI help"
-	@echo "  make run-app         Show run-app CLI help"
-	@echo "  make verify          Show verify-chroma CLI help"
-	@echo "  make test            Run retrieval unit tests"
-	@echo "  make compile         Compile-check app Python files"
-	@echo "  make check           Run compile + test"
+	@echo "Simple targets:"
+	@echo "  make install            Install dependencies (uses app venv if present)"
+	@echo "  make ingest-by-type     Run by_type ingestion"
+	@echo "  make ingest-intro-concl Run intro_concl ingestion"
+	@echo "  make ingest-raw         Run raw ingestion (with --reset-db)"
+	@echo "  make ingest-all         Run by_type + intro_concl + raw"
+	@echo "  make run-by-type        Run app with by_type experiment"
+	@echo "  make verify-by-type     Verify by_type vector DB"
+	@echo "  make csv-all            Build one CSV with by_type/intro_concl/raw text columns"
+	@echo "  make ingest-help        Show ingest CLI flags"
+	@echo "  make run-help           Show run-app CLI flags"
+	@echo "  make verify-help        Show verify-chroma CLI flags"
+	@echo "  make test               Run retrieval unit tests"
+	@echo "  make compile            Compile-check app Python files"
+	@echo "  make check              Run compile + test"
 
 install:
-	python3 -m pip install -r $(APP_DIR)/requirements.txt
-	python3 -m pip install -e $(APP_DIR)
+	$(PYTHON) -m pip install -r $(APP_DIR)/requirements.txt
+	$(PYTHON) -m pip install -e $(APP_DIR)
 
-ingest:
-	python3 $(APP_DIR)/scripts/ingest.py --help
+ingest-help:
+	$(APP_CMD) ingest --help
 
-run-app:
-	python3 $(APP_DIR)/scripts/run_app.py --help
+run-help:
+	$(APP_CMD) run-app --help
 
-verify:
-	python3 $(APP_DIR)/scripts/verify_chroma.py --help
+verify-help:
+	$(APP_CMD) verify-chroma --help
+
+ingest-by-type:
+	$(APP_CMD) ingest --experiment by_type
+
+ingest-intro-concl:
+	INTRO_CONCL_INDEX_CSV=$(APP_DIR)/data/index/research_index_clean.csv $(APP_CMD) ingest --experiment intro_concl
+
+ingest-raw:
+	$(APP_CMD) ingest --experiment raw --reset-db
+
+ingest-all: ingest-by-type ingest-intro-concl ingest-raw
+
+run-by-type:
+	$(APP_CMD) run-app --experiment by_type
+
+verify-by-type:
+	$(APP_CMD) verify-chroma --experiment by_type
+
+csv-all:
+	PYTHONPATH=$(APP_DIR)/src $(PYTHON) $(APP_DIR)/scripts/build_ingestion_csv.py
 
 test:
-	python3 $(APP_DIR)/tests/test_retrieval.py
+	PYTHONPATH=$(APP_DIR)/src $(PYTHON) $(APP_DIR)/tests/test_retrieval.py
 
 compile:
-	PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall \
+	PYTHONPYCACHEPREFIX=/tmp/pycache $(PYTHON) -m compileall \
 		$(APP_DIR)/src \
 		$(APP_DIR)/scripts \
 		$(APP_DIR)/tests
