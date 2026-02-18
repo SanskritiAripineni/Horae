@@ -11,13 +11,17 @@ from collections import Counter
 from pathlib import Path
 from typing import Iterable
 
+import fitz  # PyMuPDF
 import pandas as pd
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from mindful_rag.config import INDEX_CSV, get_env_file, get_experiment
+from mindful_rag.config import INDEX_CSV, PDF_DIR, get_env_file, get_experiment
 from mindful_rag.embeddings import create_document_embeddings
+
+# Configuration
+PDF_SOURCE_DIR = str(PDF_DIR)
 
 
 EXPERIMENT = get_experiment("csv_sources")
@@ -50,6 +54,18 @@ SOURCE_TOKEN_ALIASES = {
     "raw": "raw",
     "raw_text": "raw",
 }
+
+
+def extract_full_text(pdf_path: str) -> str:
+    """Extract full PDF text."""
+    try:
+        doc = fitz.open(pdf_path)
+        full_text = "".join(page.get_text() for page in doc)
+        doc.close()
+        return full_text
+    except Exception as exc:
+        print(f"Failed to load PDF {pdf_path}: {exc}")
+        return ""
 
 
 def _default_input_csv_path() -> Path:
@@ -156,7 +172,16 @@ def ingest(source_modes: list[str] | None = None) -> None:
 
         row_indexed = False
         for source in selected_sources:
-            source_text = _clean_text(_pick_text(row, SOURCE_COLUMN_ALIASES[source]))
+            if source == "raw":
+                # Special handling for raw: read from PDF directly
+                pdf_path = os.path.join(PDF_SOURCE_DIR, filename)
+                if not os.path.exists(pdf_path):
+                     stats[f"{source}_pdf_not_found"] += 1
+                     continue
+                source_text = _clean_text(extract_full_text(pdf_path))
+            else:
+                source_text = _clean_text(_pick_text(row, SOURCE_COLUMN_ALIASES[source]))
+            
             if len(source_text) < MIN_SOURCE_TEXT_CHARS:
                 stats[f"{source}_too_short"] += 1
                 continue
@@ -231,11 +256,18 @@ def ingest(source_modes: list[str] | None = None) -> None:
                 collection_name=COLLECTION_NAME,
                 embedding_function=embeddings,
             )
-            vectorstore.add_texts(
-                texts=[item["text"] for item in all_chunks],
-                metadatas=[item["metadata"] for item in all_chunks],
-                ids=[item["id"] for item in all_chunks],
-            )
+            batch_size = 5000
+            total_chunks = len(all_chunks)
+            print(f"  -> Sending {total_chunks} chunks in batches of {batch_size}...")
+            
+            for i in range(0, total_chunks, batch_size):
+                batch = all_chunks[i : i + batch_size]
+                vectorstore.add_texts(
+                    texts=[item["text"] for item in batch],
+                    metadatas=[item["metadata"] for item in batch],
+                    ids=[item["id"] for item in batch],
+                )
+                print(f"     Processed batch {i // batch_size + 1}/{(total_chunks + batch_size - 1) // batch_size}")
             print(f"Embedding backend: {getattr(embeddings, 'backend_name', 'unknown')}")
         else:
             print("No chunks prepared; skipping vector write.")

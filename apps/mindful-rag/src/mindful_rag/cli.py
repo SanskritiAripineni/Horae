@@ -83,8 +83,9 @@ def run_app_command(experiment_name: str) -> int:
     else:
         env["PYTHONPATH"] = src_dir
 
+    import sys
     subprocess.run(
-        ["streamlit", "run", str(ROOT_DIR / "src" / "mindful_rag" / "app.py")],
+        [sys.executable, "-m", "streamlit", "run", str(ROOT_DIR / "src" / "mindful_rag" / "app.py")],
         check=True,
         env=env,
     )
