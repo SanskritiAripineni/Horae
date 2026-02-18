@@ -4,7 +4,7 @@ Repository root now uses an app-scoped layout.
 
 ## Demo
 
-![Demo of Mindful RAG](demo.mov)
+![Demo of Mindful RAG](demo_compressed.mov)
 
 ## Purpose & Features
 
