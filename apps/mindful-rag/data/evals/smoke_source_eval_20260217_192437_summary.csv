@@ -1,0 +1,2 @@
+source_filter,queries,queries_with_results,avg_retrieved_count,mean_avg_chunk_score,mean_top_chunk_score,mean_query_overlap,mean_unique_sources,mean_source_concentration,keyword_hit_rate,category_hit_rate,queries_with_errors
+all,1,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1

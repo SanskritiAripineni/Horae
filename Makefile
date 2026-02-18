@@ -3,7 +3,7 @@ APP_VENV_PY := $(APP_DIR)/.venv/bin/python
 PYTHON := $(if $(wildcard $(APP_VENV_PY)),$(APP_VENV_PY),python3)
 APP_CMD := PYTHONPATH=$(APP_DIR)/src $(PYTHON) -m mindful_rag
 
-.PHONY: help install ingest-help run-help verify-help ingest-by-type ingest-intro-concl ingest-raw ingest-csv-sources ingest-all run-by-type run-csv-sources verify-by-type verify-csv-sources csv-all test compile check
+.PHONY: help install ingest-help run-help verify-help ingest-by-type ingest-intro-concl ingest-raw ingest-csv-sources ingest-all run-by-type run-csv-sources verify-by-type verify-csv-sources csv-all eval-csv-sources test compile check
 
 help:
 	@echo "Simple targets:"
@@ -18,6 +18,7 @@ help:
 	@echo "  make verify-by-type     Verify by_type vector DB"
 	@echo "  make verify-csv-sources Verify csv_sources vector DB"
 	@echo "  make csv-all            Build one CSV with by_type/intro_concl/raw text columns"
+	@echo "  make eval-csv-sources   Evaluate retrieval quality across source filters"
 	@echo "  make ingest-help        Show ingest CLI flags"
 	@echo "  make run-help           Show run-app CLI flags"
 	@echo "  make verify-help        Show verify-chroma CLI flags"
@@ -48,7 +49,7 @@ ingest-raw:
 	$(APP_CMD) ingest --experiment raw --reset-db
 
 ingest-csv-sources:
-	$(APP_CMD) ingest --experiment csv_sources --sources relevant_info,intro_concl
+	CSV_SOURCES_ALLOW_EMBEDDING_FALLBACK="$${CSV_SOURCES_ALLOW_EMBEDDING_FALLBACK:-1}" $(APP_CMD) ingest --experiment csv_sources --sources relevant_info,intro_concl
 
 ingest-all: ingest-by-type ingest-intro-concl ingest-raw
 
@@ -66,6 +67,9 @@ verify-csv-sources:
 
 csv-all:
 	PYTHONPATH=$(APP_DIR)/src $(PYTHON) $(APP_DIR)/scripts/build_ingestion_csv.py
+
+eval-csv-sources:
+	EVAL_SOURCE_FILTERS="$${EVAL_SOURCE_FILTERS:-all,relevant_info,intro_concl}" EVAL_ALLOW_EMBEDDING_FALLBACK="$${EVAL_ALLOW_EMBEDDING_FALLBACK:-1}" PYTHONPATH=$(APP_DIR)/src $(PYTHON) $(APP_DIR)/scripts/evaluate_source_filters.py --experiment csv_sources --source-filters "$$EVAL_SOURCE_FILTERS" --allow-embedding-fallback
 
 test:
 	PYTHONPATH=$(APP_DIR)/src $(PYTHON) $(APP_DIR)/tests/test_retrieval.py

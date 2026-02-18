@@ -71,4 +71,14 @@ pyproject.toml
   - `mindful-rag verify-chroma --experiment by_type`
   - `mindful-rag verify-chroma --experiment csv_sources`
 
+- Evaluate source-filter quality:
+  - `PYTHONPATH=src python scripts/evaluate_source_filters.py --experiment csv_sources`
+  - Optional filters: `--source-filters all,relevant_info,intro_concl,raw`
+  - Optional query set: `--query-file configs/evaluation/source_filter_queries.json`
+  - Offline fallback mode: add `--allow-embedding-fallback` (or set `EVAL_ALLOW_EMBEDDING_FALLBACK=1`)
+  - Writes:
+    - `data/evals/source_filter_eval_<timestamp>_details.csv`
+    - `data/evals/source_filter_eval_<timestamp>_summary.csv`
+    - `data/evals/source_filter_eval_<timestamp>_summary.json`
+
 Legacy wrappers in `scripts/` still work and forward to the new CLI.

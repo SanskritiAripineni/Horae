@@ -30,6 +30,7 @@ make run-by-type
 make verify-by-type
 make ingest-csv-sources
 make run-csv-sources
+make eval-csv-sources
 ```
 
 `ingest-csv-sources` uses the latest `apps/mindful-rag/data/index/research_index_ingestions_*.csv` snapshot by default (create/update with `make csv-all`).
@@ -42,6 +43,8 @@ make ingest-raw
 make ingest-all
 make csv-all
 ```
+
+`eval-csv-sources` writes detailed and summary metrics under `apps/mindful-rag/data/evals/`.
 
 ## Root Tasks
 

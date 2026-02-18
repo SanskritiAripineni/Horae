@@ -1,0 +1,68 @@
+{
+  "experiment": "csv_sources",
+  "collection_name": "research_csv_sources",
+  "chroma_dir": "/Users/rishisim/Documents/StudioProjects/Multi-Agent-LLM/apps/mindful-rag/data/chroma/csv_sources",
+  "source_filters": [
+    "all",
+    "relevant_info",
+    "intro_concl"
+  ],
+  "query_file": "/Users/rishisim/Documents/StudioProjects/Multi-Agent-LLM/apps/mindful-rag/configs/evaluation/source_filter_queries.json",
+  "query_count": 12,
+  "retrieval_settings": {
+    "top_k": 4,
+    "fetch_k": 24,
+    "mmr_lambda": 0.5,
+    "max_per_source": 2,
+    "min_hybrid_score": 0.05
+  },
+  "embedding_backend": "hashing",
+  "outputs": {
+    "details_csv": "/Users/rishisim/Documents/StudioProjects/Multi-Agent-LLM/apps/mindful-rag/data/evals/source_filter_eval_20260217_192619_details.csv",
+    "summary_csv": "/Users/rishisim/Documents/StudioProjects/Multi-Agent-LLM/apps/mindful-rag/data/evals/source_filter_eval_20260217_192619_summary.csv"
+  },
+  "summary_rows": [
+    {
+      "source_filter": "all",
+      "queries": 12,
+      "queries_with_results": 12,
+      "avg_retrieved_count": 4.0,
+      "mean_avg_chunk_score": 0.5121,
+      "mean_top_chunk_score": 0.6265,
+      "mean_query_overlap": 0.3714,
+      "mean_unique_sources": 3.1667,
+      "mean_source_concentration": 0.4583,
+      "keyword_hit_rate": 0.425,
+      "category_hit_rate": 0.5833,
+      "queries_with_errors": 0
+    },
+    {
+      "source_filter": "relevant_info",
+      "queries": 12,
+      "queries_with_results": 12,
+      "avg_retrieved_count": 4.0,
+      "mean_avg_chunk_score": 0.6445,
+      "mean_top_chunk_score": 0.7436,
+      "mean_query_overlap": 0.2821,
+      "mean_unique_sources": 3.4167,
+      "mean_source_concentration": 0.3958,
+      "keyword_hit_rate": 0.4,
+      "category_hit_rate": 0.5833,
+      "queries_with_errors": 0
+    },
+    {
+      "source_filter": "intro_concl",
+      "queries": 12,
+      "queries_with_results": 12,
+      "avg_retrieved_count": 4.0,
+      "mean_avg_chunk_score": 0.5477,
+      "mean_top_chunk_score": 0.668,
+      "mean_query_overlap": 0.3669,
+      "mean_unique_sources": 3.0,
+      "mean_source_concentration": 0.4792,
+      "keyword_hit_rate": 0.3583,
+      "category_hit_rate": 0.6667,
+      "queries_with_errors": 0
+    }
+  ]
+}

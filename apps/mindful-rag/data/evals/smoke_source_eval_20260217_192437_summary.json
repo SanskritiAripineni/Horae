@@ -1,0 +1,37 @@
+{
+  "experiment": "csv_sources",
+  "collection_name": "research_csv_sources",
+  "chroma_dir": "/Users/rishisim/Documents/StudioProjects/Multi-Agent-LLM/apps/mindful-rag/data/chroma/csv_sources",
+  "source_filters": [
+    "all"
+  ],
+  "query_file": "/private/tmp/source_eval_smoke.json",
+  "query_count": 1,
+  "retrieval_settings": {
+    "top_k": 4,
+    "fetch_k": 24,
+    "mmr_lambda": 0.5,
+    "max_per_source": 2,
+    "min_hybrid_score": 0.05
+  },
+  "outputs": {
+    "details_csv": "/Users/rishisim/Documents/StudioProjects/Multi-Agent-LLM/apps/mindful-rag/data/evals/smoke_source_eval_20260217_192437_details.csv",
+    "summary_csv": "/Users/rishisim/Documents/StudioProjects/Multi-Agent-LLM/apps/mindful-rag/data/evals/smoke_source_eval_20260217_192437_summary.csv"
+  },
+  "summary_rows": [
+    {
+      "source_filter": "all",
+      "queries": 1,
+      "queries_with_results": 0,
+      "avg_retrieved_count": 0.0,
+      "mean_avg_chunk_score": 0.0,
+      "mean_top_chunk_score": 0.0,
+      "mean_query_overlap": 0.0,
+      "mean_unique_sources": 0.0,
+      "mean_source_concentration": 0.0,
+      "keyword_hit_rate": 0.0,
+      "category_hit_rate": 0.0,
+      "queries_with_errors": 1
+    }
+  ]
+}

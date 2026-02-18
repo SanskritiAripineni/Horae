@@ -1,0 +1,74 @@
+[
+  {
+    "id": "sleep_schedule",
+    "query": "My bedtime keeps shifting and I feel exhausted in morning lectures. What should I change?",
+    "expected_categories": ["Sleep Hygiene"],
+    "expected_keywords": ["sleep", "bedtime", "wake", "schedule", "light"]
+  },
+  {
+    "id": "stress_deadlines",
+    "query": "I get overwhelmed before exams and deadlines. What evidence-based steps can reduce academic stress?",
+    "expected_categories": ["Academic/Work Stress"],
+    "expected_keywords": ["stress", "exam", "deadline", "coping", "anxiety"]
+  },
+  {
+    "id": "mindfulness_focus",
+    "query": "I want a simple mindfulness routine to reduce rumination and improve focus.",
+    "expected_categories": ["Mindfulness/Meditation"],
+    "expected_keywords": ["mindfulness", "meditation", "breathing", "attention"]
+  },
+  {
+    "id": "exercise_mood",
+    "query": "How can I use exercise to improve mood and energy during the week?",
+    "expected_categories": ["Physical Activity"],
+    "expected_keywords": ["exercise", "physical", "activity", "mood"]
+  },
+  {
+    "id": "social_isolation",
+    "query": "I feel isolated at school and it is affecting my mental health. What helps with loneliness?",
+    "expected_categories": ["Loneliness"],
+    "expected_keywords": ["loneliness", "social", "connection", "support"]
+  },
+  {
+    "id": "cbt_reframing",
+    "query": "I keep getting negative thought spirals. Are there cognitive strategies that actually work?",
+    "expected_categories": ["Cognitive Behavioral Therapy"],
+    "expected_keywords": ["cognitive", "behavioral", "thought", "reframing"]
+  },
+  {
+    "id": "biofeedback_stress",
+    "query": "Can biofeedback or breathing sensors help me manage stress responses?",
+    "expected_categories": ["Biofeedback"],
+    "expected_keywords": ["biofeedback", "heart rate", "breathing", "stress"]
+  },
+  {
+    "id": "diet_sleep_mood",
+    "query": "Does diet timing affect sleep and mood, and what should I adjust first?",
+    "expected_categories": ["Dietary habits"],
+    "expected_keywords": ["diet", "nutrition", "meal", "sleep", "mood"]
+  },
+  {
+    "id": "motivation_habits",
+    "query": "I lose motivation after a few days. What habit design strategies are supported by research?",
+    "expected_categories": ["Motivation"],
+    "expected_keywords": ["motivation", "habit", "goal", "adherence"]
+  },
+  {
+    "id": "gamification_adherence",
+    "query": "Would gamification make wellness routines more consistent for students?",
+    "expected_categories": ["Gamification"],
+    "expected_keywords": ["gamification", "engagement", "adherence", "reward"]
+  },
+  {
+    "id": "prosocial_wellbeing",
+    "query": "Can doing kind acts for others improve my own wellbeing and stress levels?",
+    "expected_categories": ["Kindness/Prosocial Behavior"],
+    "expected_keywords": ["kindness", "prosocial", "wellbeing", "stress"]
+  },
+  {
+    "id": "mixed_stress_lonely",
+    "query": "I feel both stressed and disconnected lately. What combined plan should I follow?",
+    "expected_categories": ["Academic/Work Stress", "Loneliness"],
+    "expected_keywords": ["stress", "connection", "social", "support", "coping"]
+  }
+]
