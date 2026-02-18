@@ -22,11 +22,23 @@ def _experiment_choices() -> list[str]:
     return choices
 
 
-def run_ingest_command(experiment_name: str, reset_db: bool = False) -> int:
+def _parse_sources_arg(sources: str | None) -> list[str]:
+    if not sources:
+        return []
+    return [item.strip() for item in str(sources).split(",") if item.strip()]
+
+
+def run_ingest_command(
+    experiment_name: str,
+    reset_db: bool = False,
+    sources: str | None = None,
+) -> int:
     """Run an ingestion strategy by experiment name."""
     if experiment_name == "raw":
         from mindful_rag.ingest_raw import main as ingest_raw
 
+        if sources:
+            print("Warning: --sources is only used by 'csv_sources'; ignoring flag.")
         ingest_raw(reset_db=reset_db)
         return 0
 
@@ -35,13 +47,25 @@ def run_ingest_command(experiment_name: str, reset_db: bool = False) -> int:
 
         if reset_db:
             print("Warning: --reset-db is only used by 'raw'; ignoring flag.")
+        if sources:
+            print("Warning: --sources is only used by 'csv_sources'; ignoring flag.")
         ingest_intro_concl()
+        return 0
+
+    if experiment_name == "csv_sources":
+        from mindful_rag.ingest_csv_sources import ingest as ingest_csv_sources
+
+        if reset_db:
+            print("Warning: --reset-db is only used by 'raw'; ignoring flag.")
+        ingest_csv_sources(source_modes=_parse_sources_arg(sources))
         return 0
 
     from mindful_rag.ingest_by_type import ingest as ingest_by_type
 
     if reset_db:
         print("Warning: --reset-db is only used by 'raw'; ignoring flag.")
+    if sources:
+        print("Warning: --sources is only used by 'csv_sources'; ignoring flag.")
     ingest_by_type()
     return 0
 
@@ -92,7 +116,11 @@ def verify_chroma_command(experiment_name: str) -> int:
 
 
 def _handle_ingest(args: argparse.Namespace) -> int:
-    return run_ingest_command(experiment_name=args.experiment, reset_db=args.reset_db)
+    return run_ingest_command(
+        experiment_name=args.experiment,
+        reset_db=args.reset_db,
+        sources=args.sources,
+    )
 
 
 def _handle_run_app(args: argparse.Namespace) -> int:
@@ -120,6 +148,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--reset-db",
         action="store_true",
         help="Only for raw experiment: delete existing DB before ingest.",
+    )
+    ingest_parser.add_argument(
+        "--sources",
+        default="",
+        help="Only for csv_sources experiment: comma-separated sources (relevant_info,intro_concl,raw).",
     )
     ingest_parser.set_defaults(handler=_handle_ingest)
 

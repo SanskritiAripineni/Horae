@@ -1,0 +1,4 @@
+name: csv_sources
+collection_name: research_csv_sources
+chroma_dir: data/chroma/csv_sources
+description: Index CSV text columns and tag chunks with retrieval_source for source-filter experiments.

@@ -64,6 +64,12 @@ ALLOW_EMBEDDING_FALLBACK = os.getenv("ALLOW_EMBEDDING_FALLBACK", "0").strip().lo
     "false",
     "no",
 }
+SOURCE_FILTER_LABELS = {
+    "all": "All indexed sources",
+    "relevant_info": "relevant_info only",
+    "intro_concl": "intro_concl only",
+    "raw": "raw only",
+}
 
 # System prompt for the LLM
 SYSTEM_PROMPT = """You are an expert academic wellness scheduler. Your goal is to convert research abstracts into a strict, actionable plan.
@@ -121,11 +127,21 @@ def get_llm(api_key: str):
 # RETRIEVAL LOGIC
 # ============================================================================
 
-def retrieve_relevant_chunks(query: str, vectorstore) -> tuple[list[dict], dict]:
+def retrieve_relevant_chunks(
+    query: str,
+    vectorstore,
+    source_filter: str = "all",
+) -> tuple[list[dict], dict]:
     """
     Retrieve chunks with hybrid ranking + fallback behavior.
     """
-    result = production_retrieve(query=query, vectorstore=vectorstore, settings=RETRIEVAL_SETTINGS)
+    metadata_filter = None if source_filter == "all" else {"retrieval_source": source_filter}
+    result = production_retrieve(
+        query=query,
+        vectorstore=vectorstore,
+        settings=RETRIEVAL_SETTINGS,
+        metadata_filter=metadata_filter,
+    )
     return result.chunks, result.stats
 
 
@@ -144,7 +160,10 @@ def generate_response_with_llm(user_query: str, chunks: list[dict], client) -> s
     # Build context from retrieved chunks
     context_parts = []
     for i, chunk in enumerate(chunks, 1):
-        context_parts.append(f"Source {i} ({chunk['filename']}):\n{chunk['content']}")
+        retrieval_source = chunk.get("retrieval_source", "unknown")
+        context_parts.append(
+            f"Source {i} ({chunk['filename']} | source={retrieval_source}):\n{chunk['content']}"
+        )
     
     context = "\n\n".join(context_parts)
     
@@ -242,6 +261,16 @@ def main():
         f"fetch_k={RETRIEVAL_SETTINGS.fetch_k}, "
         f"max_per_source={RETRIEVAL_SETTINGS.max_per_source}"
     )
+    selected_source_filter = "all"
+    if EXPERIMENT.name == "csv_sources":
+        selected_source_filter = st.selectbox(
+            "Retrieval source",
+            options=list(SOURCE_FILTER_LABELS.keys()),
+            format_func=lambda key: SOURCE_FILTER_LABELS.get(key, key),
+            index=0,
+            help="Filter retrieval to a specific CSV source column for A/B testing.",
+        )
+        st.caption(f"Active filter: `{selected_source_filter}`")
     
     # =========================================================================
     # API KEY VALIDATION
@@ -285,7 +314,12 @@ def main():
         with st.chat_message("assistant"):
             with st.spinner("Generating your personalized plan..."):
                 # Step 1: Retrieve relevant chunks
-                chunks, retrieval_stats = retrieve_relevant_chunks(query=prompt, vectorstore=vectorstore)
+                chunks, retrieval_stats = retrieve_relevant_chunks(
+                    query=prompt,
+                    vectorstore=vectorstore,
+                    source_filter=selected_source_filter,
+                )
+                retrieval_stats["selected_source_filter"] = selected_source_filter
                 
                 # Step 2: Generate response with LLM
                 response = generate_response_with_llm(prompt, chunks, client)

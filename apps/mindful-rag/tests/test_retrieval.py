@@ -34,18 +34,22 @@ class _DummyVectorStore:
         self._similarity_results = similarity_results or []
         self._mmr_results = mmr_results or []
         self._similarity_error = similarity_error
+        self.last_similarity_filter = None
+        self.last_mmr_search_kwargs = {}
 
-    def similarity_search_with_relevance_scores(self, _query: str, k: int):
+    def similarity_search_with_relevance_scores(self, _query: str, k: int, filter=None):
         if self._similarity_error:
             raise self._similarity_error
+        self.last_similarity_filter = filter
         return list(self._similarity_results)[:k]
 
-    def similarity_search(self, _query: str, k: int):
+    def similarity_search(self, _query: str, k: int, filter=None):
+        self.last_similarity_filter = filter
         return [doc for doc, _ in list(self._similarity_results)[:k]]
 
     def as_retriever(self, search_type: str, search_kwargs: dict):
         _ = search_type
-        _ = search_kwargs
+        self.last_mmr_search_kwargs = dict(search_kwargs)
         return _DummyRetriever(self._mmr_results)
 
 
@@ -102,6 +106,28 @@ class RetrievalPipelineTests(unittest.TestCase):
         self.assertTrue(result.stats["used_mmr"])
         self.assertFalse(result.stats["used_similarity"])
         self.assertTrue(result.stats["errors"])
+
+    def test_forwards_metadata_filter_to_vectorstore(self):
+        doc = _DummyDoc(
+            "Use a short evening journaling habit.",
+            {"filename": "journal.pdf", "chunk_index": 0, "retrieval_source": "intro_concl"},
+        )
+        vectorstore = _DummyVectorStore(
+            similarity_results=[(doc, 0.87)],
+            mmr_results=[doc],
+        )
+        settings = RetrievalSettings(top_k=2, fetch_k=8, max_per_source=2, min_hybrid_score=0.0)
+        metadata_filter = {"retrieval_source": "intro_concl"}
+
+        _ = production_retrieve(
+            "help me wind down at night",
+            vectorstore,
+            settings,
+            metadata_filter=metadata_filter,
+        )
+
+        self.assertEqual(vectorstore.last_similarity_filter, metadata_filter)
+        self.assertEqual(vectorstore.last_mmr_search_kwargs.get("filter"), metadata_filter)
 
 
 if __name__ == "__main__":

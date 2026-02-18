@@ -52,9 +52,14 @@ pyproject.toml
   - `mindful-rag ingest --experiment raw --reset-db` (optional clean rebuild)
   - `mindful-rag ingest --experiment intro_concl`
   - `mindful-rag ingest --experiment by_type`
+  - `mindful-rag ingest --experiment csv_sources --sources relevant_info,intro_concl`
+    - Optional source list: `--sources relevant_info` or `--sources intro_concl` or `--sources raw`
+    - Default CSV input is latest `data/index/research_index_ingestions_*.csv` snapshot (falls back to `research_index_clean.csv`).
+    - Override input with env var: `CSV_SOURCES_INPUT_CSV=/path/to/file.csv`
 
 - Launch app:
   - `mindful-rag run-app --experiment by_type`
+  - `mindful-rag run-app --experiment csv_sources` (adds retrieval-source filter in UI)
   - Optional retrieval tuning via env:
     - `RETRIEVAL_TOP_K` (default `4`)
     - `RETRIEVAL_FETCH_K` (default `24`)
@@ -64,5 +69,6 @@ pyproject.toml
 
 - Verify DB:
   - `mindful-rag verify-chroma --experiment by_type`
+  - `mindful-rag verify-chroma --experiment csv_sources`
 
 Legacy wrappers in `scripts/` still work and forward to the new CLI.

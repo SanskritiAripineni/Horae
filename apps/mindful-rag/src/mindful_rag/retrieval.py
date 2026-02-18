@@ -41,6 +41,7 @@ class _CandidateChunk:
     source_key: str
     filename: str
     category: str
+    retrieval_source: str
     semantic_score: float = 0.0
     lexical_score: float = 0.0
     similarity_rank: int = -1
@@ -84,7 +85,7 @@ def _reciprocal_rank(rank: int) -> float:
     return 1.0 / (rank + 1)
 
 
-def _extract_doc_payload(doc: Any) -> tuple[str, dict[str, Any], str, str, str]:
+def _extract_doc_payload(doc: Any) -> tuple[str, dict[str, Any], str, str, str, str]:
     content = _normalize_text(str(getattr(doc, "page_content", "")))
     metadata = getattr(doc, "metadata", {}) or {}
     metadata = metadata if isinstance(metadata, dict) else {}
@@ -93,7 +94,8 @@ def _extract_doc_payload(doc: Any) -> tuple[str, dict[str, Any], str, str, str]:
     source_key = source.lower().strip()
     filename = source.replace(".pdf", "")
     category = str(metadata.get("category", "Unknown"))
-    return content, metadata, source_key, filename, category
+    retrieval_source = str(metadata.get("retrieval_source", "unknown"))
+    return content, metadata, source_key, filename, category, retrieval_source
 
 
 def _candidate_key(content: str, metadata: dict[str, Any], source_key: str) -> str:
@@ -118,7 +120,7 @@ def _upsert_candidate(
     similarity_rank: int = -1,
     mmr_rank: int = -1,
 ) -> None:
-    content, metadata, source_key, filename, category = _extract_doc_payload(doc)
+    content, metadata, source_key, filename, category, retrieval_source = _extract_doc_payload(doc)
     if not content:
         return
 
@@ -131,6 +133,7 @@ def _upsert_candidate(
             source_key=source_key,
             filename=filename,
             category=category,
+            retrieval_source=retrieval_source,
             lexical_score=_lexical_overlap(query_tokens, content),
         )
 
@@ -230,14 +233,37 @@ def _safe_similarity_search(
     vectorstore: Any,
     fetch_k: int,
     errors: list[str],
+    metadata_filter: dict[str, Any] | None = None,
 ) -> list[tuple[Any, Any]]:
     try:
+        if metadata_filter:
+            return list(
+                vectorstore.similarity_search_with_relevance_scores(
+                    query,
+                    k=fetch_k,
+                    filter=metadata_filter,
+                )
+            )
         return list(vectorstore.similarity_search_with_relevance_scores(query, k=fetch_k))
+    except TypeError:
+        try:
+            return list(vectorstore.similarity_search_with_relevance_scores(query, k=fetch_k))
+        except Exception as exc:
+            errors.append(f"similarity_search_with_relevance_scores failed: {exc}")
     except Exception as exc:
         errors.append(f"similarity_search_with_relevance_scores failed: {exc}")
     try:
-        docs = list(vectorstore.similarity_search(query, k=fetch_k))
+        if metadata_filter:
+            docs = list(vectorstore.similarity_search(query, k=fetch_k, filter=metadata_filter))
+        else:
+            docs = list(vectorstore.similarity_search(query, k=fetch_k))
         return [(doc, None) for doc in docs]
+    except TypeError:
+        try:
+            docs = list(vectorstore.similarity_search(query, k=fetch_k))
+            return [(doc, None) for doc in docs]
+        except Exception as exc:
+            errors.append(f"similarity_search fallback failed: {exc}")
     except Exception as exc:
         errors.append(f"similarity_search fallback failed: {exc}")
     return []
@@ -250,17 +276,35 @@ def _safe_mmr_search(
     fetch_k: int,
     mmr_lambda: float,
     errors: list[str],
+    metadata_filter: dict[str, Any] | None = None,
 ) -> list[Any]:
     try:
+        search_kwargs: dict[str, Any] = {
+            "k": top_k,
+            "fetch_k": max(fetch_k, top_k),
+            "lambda_mult": mmr_lambda,
+        }
+        if metadata_filter:
+            search_kwargs["filter"] = metadata_filter
         retriever = vectorstore.as_retriever(
             search_type="mmr",
-            search_kwargs={
-                "k": top_k,
-                "fetch_k": max(fetch_k, top_k),
-                "lambda_mult": mmr_lambda,
-            },
+            search_kwargs=search_kwargs,
         )
         return list(retriever.invoke(query))
+    except TypeError:
+        try:
+            retriever = vectorstore.as_retriever(
+                search_type="mmr",
+                search_kwargs={
+                    "k": top_k,
+                    "fetch_k": max(fetch_k, top_k),
+                    "lambda_mult": mmr_lambda,
+                },
+            )
+            return list(retriever.invoke(query))
+        except Exception as exc:
+            errors.append(f"mmr retriever failed: {exc}")
+            return []
     except Exception as exc:
         errors.append(f"mmr retriever failed: {exc}")
         return []
@@ -270,6 +314,7 @@ def production_retrieve(
     query: str,
     vectorstore: Any,
     settings: RetrievalSettings,
+    metadata_filter: dict[str, Any] | None = None,
 ) -> RetrievalResult:
     """
     Hybrid production retrieval:
@@ -289,7 +334,13 @@ def production_retrieve(
     fetch_k = max(int(settings.fetch_k), int(settings.top_k), 1)
     top_k = max(int(settings.top_k), 1)
 
-    similarity_docs = _safe_similarity_search(normalized_query, vectorstore, fetch_k, errors)
+    similarity_docs = _safe_similarity_search(
+        normalized_query,
+        vectorstore,
+        fetch_k,
+        errors,
+        metadata_filter=metadata_filter,
+    )
     mmr_docs = _safe_mmr_search(
         normalized_query,
         vectorstore,
@@ -297,6 +348,7 @@ def production_retrieve(
         fetch_k=fetch_k,
         mmr_lambda=float(settings.mmr_lambda),
         errors=errors,
+        metadata_filter=metadata_filter,
     )
 
     ranked = _rank_candidates(
@@ -311,6 +363,7 @@ def production_retrieve(
             "content": cand.content,
             "filename": cand.filename,
             "category": cand.category,
+            "retrieval_source": cand.retrieval_source,
             "score": round(cand.hybrid_score, 4),
             "source": cand.source_key,
         }
@@ -323,6 +376,7 @@ def production_retrieve(
         "similarity_candidates": len(similarity_docs),
         "mmr_candidates": len(mmr_docs),
         "final_chunks": len(chunks),
+        "metadata_filter": metadata_filter or {},
         "errors": errors,
     }
     return RetrievalResult(chunks=chunks, stats=stats)

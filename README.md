@@ -28,7 +28,11 @@ From repository root:
 make ingest-by-type
 make run-by-type
 make verify-by-type
+make ingest-csv-sources
+make run-csv-sources
 ```
+
+`ingest-csv-sources` uses the latest `apps/mindful-rag/data/index/research_index_ingestions_*.csv` snapshot by default (create/update with `make csv-all`).
 
 Other useful targets:
 
