@@ -110,19 +110,46 @@ class GeminiGenAIEmbeddings(Embeddings):
         if not texts:
             return []
         config = types.EmbedContentConfig(task_type=_normalize_task_type(task_type))
-        result = self._client.models.embed_content(
-            model=self.model,
-            contents=texts,
-            config=config,
-        )
-        return _extract_vectors(result)
+        
+        # Retry logic for rate limits
+        max_retries = 5
+        base_delay = 2.0
+        
+        for attempt in range(max_retries + 1):
+            try:
+                result = self._client.models.embed_content(
+                    model=self.model,
+                    contents=texts,
+                    config=config,
+                )
+                return _extract_vectors(result)
+            except Exception as e:
+                # Check for 429 using string matching as provided in the error log
+                is_rate_limit = "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e)
+                if is_rate_limit and attempt < max_retries:
+                    sleep_time = base_delay * (2 ** attempt)
+                    print(f"Gemini embedding rate limited. Retrying in {sleep_time}s...")
+                    import time
+                    time.sleep(sleep_time)
+                    continue
+                if attempt == max_retries:
+                    raise e
+        return []
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         normalized_texts = ["" if text is None else str(text) for text in texts]
         vectors: list[list[float]] = []
+        
+        import time
+        # Add a small delay between batches to be polite to the API
+        inter_batch_delay = 0.5 
+        
         for start in range(0, len(normalized_texts), self.batch_size):
             chunk = normalized_texts[start : start + self.batch_size]
             vectors.extend(self._embed_batch(chunk, self.task_type))
+            if start + self.batch_size < len(normalized_texts):
+                time.sleep(inter_batch_delay)
+                
         return vectors
 
     def embed_query(self, text: str) -> list[float]:
@@ -172,7 +199,8 @@ class FallbackEmbeddings(Embeddings):
             return self.fallback.embed_documents(texts)
         try:
             return self.primary.embed_documents(texts)
-        except Exception:
+        except Exception as e:
+            print(f"FallbackEmbeddings: Primary failed with error: {e}")
             self._activate_fallback()
             return self.fallback.embed_documents(texts)
 

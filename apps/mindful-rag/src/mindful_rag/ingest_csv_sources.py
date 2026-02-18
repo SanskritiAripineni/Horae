@@ -132,6 +132,11 @@ def _build_chunk_id(row_id: str, retrieval_source: str, chunk_index: int, chunk_
 def ingest(source_modes: list[str] | None = None) -> None:
     load_dotenv(dotenv_path=get_env_file())
     google_api_key = os.getenv("GOOGLE_API_KEY")
+    if google_api_key:
+        print(f"Loaded GOOGLE_API_KEY: {google_api_key[:4]}... (present)")
+    else:
+        print("Error: GOOGLE_API_KEY is missing/empty!")
+
     if WRITE_VECTORS and not google_api_key and not ALLOW_EMBEDDING_FALLBACK:
         print("Error: GOOGLE_API_KEY not found in environment.")
         print("Add GOOGLE_API_KEY to your .env or set CSV_SOURCES_ALLOW_EMBEDDING_FALLBACK=1.")

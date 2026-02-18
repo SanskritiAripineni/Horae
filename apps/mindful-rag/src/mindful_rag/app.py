@@ -7,16 +7,16 @@ API Key loaded securely from .env file.
 
 import os
 import time
+import uuid
 import streamlit as st
 from dotenv import load_dotenv
 from google import genai
 from langchain_chroma import Chroma
-import pandas as pd
 
 from mindful_rag.config import ROOT_DIR, get_env_file, get_experiment
 from mindful_rag.embeddings import create_dual_task_embeddings
 from mindful_rag.retrieval import RetrievalSettings, production_retrieve
-from mindful_rag.evaluators import relevance, groundedness, retrieval_relevance
+from mindful_rag.evaluators import evaluate_all_sources
 
 
 # ============================================================================
@@ -74,7 +74,6 @@ SOURCE_FILTER_LABELS = {
 }
 
 # System prompt for the LLM
-# System prompt for the LLM
 SYSTEM_PROMPT = """You are a supportive and knowledgeable wellness counselor for university students. Your goal is to provide evidence-based, actionable advice based *strictly* on the provided research context.
 
 GUIDELINES:
@@ -86,8 +85,8 @@ GUIDELINES:
 OUTPUT FORMAT:
 1. **Understanding:** A single sentence acknowledging the user's goal.
 2. **Evidence-Based Plan:** 3-5 specific, actionable steps found in the research.
-   - Format: "**[Action]**: [Details/Timing] ([Source])"
-3. **Key Insight:** One brief sentence summarizing *why* this works based on the studies.
+   - Format: "**[Action]**: [Details/Timing] (Source N)"
+3. > **Key Insight:** One brief sentence summarizing *why* this works based on the studies. (Use blockquote `>` for this line)
 
 If the context does not contain relevant information, politely state that you cannot answer based on the available research."""
 
@@ -147,10 +146,32 @@ def retrieve_relevant_chunks(
 # LLM GENERATION LOGIC
 # ============================================================================
 
+def _build_source_references(chunks: list[dict]) -> str:
+    """
+    Build a references section mapping Source N → actual paper filename.
+    Returns a markdown string to append after the LLM response.
+    """
+    if not chunks:
+        return ""
+
+    lines = ["\n---\n**References:**"]
+    for i, chunk in enumerate(chunks, 1):
+        filename = chunk.get("filename", "Unknown")
+        retrieval_source = chunk.get("retrieval_source", "unknown")
+        category = chunk.get("category", "")
+        ref_parts = [f"- **Source {i}:** {filename}"]
+        if category:
+            ref_parts[0] += f" — *{category}*"
+        ref_parts[0] += f" (via {retrieval_source})"
+        lines.append(ref_parts[0])
+    return "\n".join(lines)
+
+
 def generate_response_with_llm(user_query: str, chunks: list[dict], client) -> str:
     """
     Generate a tailored response using Gemini LLM.
     Passes retrieved context + user query to the model.
+    Appends a references section mapping Source N to actual filenames.
     """
     if not chunks:
         return "No relevant research found for your query. Please try rephrasing your question."
@@ -182,7 +203,9 @@ Based on the above research context, provide an actionable wellness plan."""
                 contents=prompt,
             )
             if getattr(response, "text", None):
-                return response.text
+                # Append source references
+                references = _build_source_references(chunks)
+                return response.text + references
             return "No response generated."
         except Exception as exc:
             last_error = exc
@@ -194,7 +217,6 @@ Based on the above research context, provide an actionable wellness plan."""
         "I could not generate a response right now due to a temporary model error. "
         f"Please try again. ({last_error})"
     )
-
 
 
 def generate_example_prompts(client, count: int = 3) -> list[str]:
@@ -216,204 +238,109 @@ def generate_example_prompts(client, count: int = 3) -> list[str]:
     return ["How can I manage exam stress?", "Tips for better sleep?", "How to make friends on campus?"]
 
 
-def evaluate_response(query: str, response: str, chunks: list[dict]) -> pd.DataFrame:
-    """Run evaluations on the response with robust error handling."""
-    inputs = {"question": query}
-    
-    # Adapt outputs to match evaluator expectations
-    class MockDoc:
-        def __init__(self, content):
-            self.page_content = str(content) # Ensure string
-            
-    try:
-        docs = [MockDoc(c.get("content", "")) for c in chunks]
-    except Exception:
-        docs = []
-        
-    outputs = {"answer": str(response), "documents": docs}
-    
-    results = {}
-    
-    # Metric 1: Relevance
-    try:
-        results["Relevance"] = relevance(inputs, outputs)
-    except Exception as e:
-        # print(f"Relevance Eval Failed: {e}") # Debug log
-        results["Relevance"] = None
-        
-    # Metric 2: Groundedness
-    try:
-        if not docs:
-            results["Groundedness"] = False # No docs = not grounded
-        else:
-            results["Groundedness"] = groundedness(inputs, outputs)
-    except Exception as e:
-        results["Groundedness"] = None
-        
-    # Metric 3: Retrieval Quality
-    try:
-        if not docs:
-             results["Retrieval Quality"] = False
-        else:
-            results["Retrieval Quality"] = retrieval_relevance(inputs, outputs)
-    except Exception as e:
-        results["Retrieval Quality"] = None
-        
-    return pd.DataFrame([results])
-
-
 # ============================================================================
-# CACHED RESOURCES
+# EVALUATION ANALYTICS RENDERING
 # ============================================================================
 
-@st.cache_resource
-def load_embedding_model(api_key: str):
-    """Load Gemini embedding model wrapper (cached)."""
-    return create_dual_task_embeddings(
-        api_key=api_key,
-        model=EMBEDDING_MODEL,
-        allow_fallback=ALLOW_EMBEDDING_FALLBACK,
-    )
+def _score_bar(score: float) -> str:
+    """Return a colored bar representation of a 0-1 score."""
+    if score >= 0.8:
+        color = "#2ea043"   # green
+    elif score >= 0.6:
+        color = "#d29922"   # yellow
+    elif score >= 0.4:
+        color = "#da3633"   # orange-red
+    else:
+        color = "#f85149"   # red
+    pct = int(score * 100)
+    return f'<div style="background:#30363d;border-radius:4px;overflow:hidden;height:20px;width:100%"><div style="background:{color};height:100%;width:{pct}%;border-radius:4px;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;font-weight:600">{pct}%</div></div>'
 
 
-@st.cache_resource
-def load_vectorstore(_embeddings):
-    """Load ChromaDB vector store (cached)."""
-    return Chroma(
-        persist_directory=CHROMA_DIR,
-        embedding_function=_embeddings,
-        collection_name=COLLECTION_NAME
-    )
+def render_evaluation_dashboard(eval_results: dict):
+    """Render the full evaluation analytics dashboard."""
+    per_source = eval_results["per_source"]
+    overview = eval_results["overview"]
+    sources = list(per_source.keys())
+    metric_labels = {
+        "faithfulness": "Faithfulness",
+        "context_relevance": "Context Relevance",
+        "answer_relevance": "Answer Relevance",
+        "completeness": "Completeness",
+    }
 
+    st.markdown("---")
+    st.markdown("## Evaluation Analytics")
+    st.caption("Research-backed metrics: RAGAS (Faithfulness), ARES (Context Relevance), G-Eval (Answer Relevance), RGB (Completeness)")
 
-def get_llm(api_key: str):
-    """Initialize Google GenAI client with the provided API key."""
-    return genai.Client(api_key=api_key)
-
-
-# ============================================================================
-# RETRIEVAL LOGIC
-# ============================================================================
-
-def retrieve_relevant_chunks(
-    query: str,
-    vectorstore,
-    source_filter: str = "all",
-) -> tuple[list[dict], dict]:
-    """
-    Retrieve chunks with hybrid ranking + fallback behavior.
-    """
-    metadata_filter = None if source_filter == "all" else {"retrieval_source": source_filter}
-    result = production_retrieve(
-        query=query,
-        vectorstore=vectorstore,
-        settings=RETRIEVAL_SETTINGS,
-        metadata_filter=metadata_filter,
-    )
-    return result.chunks, result.stats
-
-
-# ============================================================================
-# LLM GENERATION LOGIC
-# ============================================================================
-
-def generate_response_with_llm(user_query: str, chunks: list[dict], client) -> str:
-    """
-    Generate a tailored response using Gemini LLM.
-    Passes retrieved context + user query to the model.
-    """
-    if not chunks:
-        return "No relevant research found for your query. Please try rephrasing your question."
+    # ---- OVERVIEW COMPARISON TABLE ----
+    st.markdown("### Overview — Source Comparison")
     
-    # Build context from retrieved chunks
-    context_parts = []
-    for i, chunk in enumerate(chunks, 1):
-        retrieval_source = chunk.get("retrieval_source", "unknown")
-        context_parts.append(
-            f"Source {i} ({chunk['filename']} | source={retrieval_source}):\n{chunk['content']}"
-        )
+    # Build comparison table
+    header_cols = st.columns([2] + [1] * len(sources))
+    header_cols[0].markdown("**Metric**")
+    for i, src in enumerate(sources):
+        is_winner = (src == overview["winner"])
+        label = f"**`{src}`** 🏆" if is_winner else f"**`{src}`**"
+        header_cols[i + 1].markdown(label)
     
-    context = "\n\n".join(context_parts)
-    
-    prompt = f"""{SYSTEM_PROMPT}
-
-CONTEXT (Research Abstracts):
-{context}
-
-USER QUERY: {user_query}
-
-Based on the above research context, provide an actionable wellness plan following the exact output format specified."""
-
-    last_error = None
-    for attempt in range(GENERATION_MAX_RETRIES + 1):
-        try:
-            response = client.models.generate_content(
-                model=GENERATION_MODEL,
-                contents=prompt,
+    for m_key, m_label in metric_labels.items():
+        row_cols = st.columns([2] + [1] * len(sources))
+        winner_source = overview["metric_winners"].get(m_key)
+        row_cols[0].markdown(f"**{m_label}**")
+        for i, src in enumerate(sources):
+            score = per_source[src][m_key]["score"]
+            is_metric_winner = (src == winner_source) and len(sources) > 1
+            icon = " 🏆" if is_metric_winner else ""
+            row_cols[i + 1].markdown(
+                _score_bar(score) + f"{icon}",
+                unsafe_allow_html=True,
             )
-            if getattr(response, "text", None):
-                return response.text
-            return "No response generated."
-        except Exception as exc:
-            last_error = exc
-            if attempt < GENERATION_MAX_RETRIES:
-                backoff = GENERATION_RETRY_BASE_SECONDS * (2 ** attempt)
-                time.sleep(backoff)
-
-    return (
-        "I could not generate a response right now due to a temporary model error. "
-        f"Please try again. ({last_error})"
-    )
-
-
-
-def generate_example_prompts(client, count: int = 3) -> list[str]:
-    """Generate diverse example prompts using a lightweight model."""
-    prompt = f"""Generate {count} distinct, specific questions a university student might ask a wellness counselor about sleep, stress, or social connection.
-    Return ONLY a JSON array of strings. Example: ["How can I sleep better?", "I feel lonely."]"""
     
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash", 
-            contents=prompt,
-            config={"response_mime_type": "application/json"}
+    # Aggregate row
+    agg_cols = st.columns([2] + [1] * len(sources))
+    agg_cols[0].markdown("**Overall**")
+    for i, src in enumerate(sources):
+        agg_score = per_source[src]["aggregate"]
+        is_winner = (src == overview["winner"]) and len(sources) > 1
+        icon = " 🏆" if is_winner else ""
+        agg_cols[i + 1].markdown(
+            _score_bar(agg_score) + f"{icon}",
+            unsafe_allow_html=True,
         )
-        if response.text:
-            import json
-            return json.loads(response.text)
-    except Exception:
-        pass
-    return ["How can I manage exam stress?", "Tips for better sleep?", "How to make friends on campus?"]
-
-
-def evaluate_response(query: str, response: str, chunks: list[dict]) -> pd.DataFrame:
-    """Run evaluations on the response."""
-    inputs = {"question": query}
-    # Adapt outputs to match evaluator expectations
-    class MockDoc:
-        def __init__(self, content):
-            self.page_content = content
-            
-    docs = [MockDoc(c["content"]) for c in chunks]
-    outputs = {"answer": response, "documents": docs}
     
-    results = {}
-    try:
-        results["Relevance"] = relevance(inputs, outputs)
-    except Exception:
-        results["Relevance"] = None
-        
-    try:
-        results["Groundedness"] = groundedness(inputs, outputs)
-    except Exception:
-        results["Groundedness"] = None
-        
-    try:
-        results["Retrieval Quality"] = retrieval_relevance(inputs, outputs)
-    except Exception:
-        results["Retrieval Quality"] = None
-        
-    return pd.DataFrame([results])
+    # Verdict
+    if len(sources) > 1:
+        winner = overview["winner"]
+        winner_score = overview["source_scores"][winner]
+        st.success(
+            f"**Best Source: `{winner}`** with an aggregate score of **{int(winner_score * 100)}%**. "
+            f"This source produced the most faithful, relevant, and complete response."
+        )
+
+    # ---- PER-SOURCE DETAIL ----
+    st.markdown("### Detailed Analysis per Source")
+    
+    tabs = st.tabs([f"Source: {src}" for src in sources])
+    for tab, src in zip(tabs, sources):
+        with tab:
+            data = per_source[src]
+            for m_key, m_label in metric_labels.items():
+                metric_data = data[m_key]
+                score = metric_data["score"]
+                explanation = metric_data.get("explanation", "")
+                
+                with st.expander(f"{m_label} — **{int(score * 100)}%**", expanded=False):
+                    st.markdown(_score_bar(score), unsafe_allow_html=True)
+                    st.markdown(f"**Explanation:** {explanation}")
+                    
+                    # Show chunk-level detail for context relevance
+                    if m_key == "context_relevance" and "chunk_scores" in metric_data:
+                        st.markdown("**Per-chunk scores:**")
+                        for cs in metric_data["chunk_scores"]:
+                            st.caption(
+                                f"Chunk {cs['chunk_index']} (`{cs['filename']}`): "
+                                f"**{cs['score']}/5** — {cs['reason']}"
+                            )
 
 
 # ============================================================================
@@ -519,15 +446,19 @@ def main():
             comparison_mode = st.toggle("Compare Sources", value=False)
             if comparison_mode:
                 options = list(SOURCE_FILTER_LABELS.keys())
-                # specific behavior: remove 'all' from comparison options to force specific source selection if desired, 
-                # but 'all' is also a valid "source" (no filter). Let's keep it.
-                default_sources = ["relevant_info", "intro_concl"]
-                selected_sources = st.multiselect(
-                    "Select sources to compare",
-                    options=options,
-                    default=[s for s in default_sources if s in options],
-                    format_func=lambda key: SOURCE_FILTER_LABELS.get(key, key)
-                )
+                # Filter out "all" for comparison mode usually, but kept for flexibility
+                available_sources = [s for s in options if s != "all"]
+                
+                selected_sources = []
+                st.markdown("Select sources to compare:")
+                for src in available_sources:
+                    # Default relevant_info and intro_concl to True
+                    default_checked = src in ["relevant_info", "intro_concl"]
+                    if st.checkbox(SOURCE_FILTER_LABELS.get(src, src), value=default_checked, key=f"chk_{src}"):
+                        selected_sources.append(src)
+                
+                if not selected_sources:
+                    st.warning("Please select at least one source.")
             else:
                 selected_sources = [st.selectbox(
                     "Retrieval source",
@@ -535,6 +466,11 @@ def main():
                     format_func=lambda key: SOURCE_FILTER_LABELS.get(key, key),
                     index=0
                 )]
+
+        if st.sidebar.button("🗑️ Clear Chat", type="primary"):
+            st.session_state.messages = []
+            st.session_state.evaluations = {}
+            st.rerun()
 
     # =========================================================================
     # CHAT LOGIC
@@ -550,79 +486,173 @@ def main():
         user_input = st.session_state.example_clicked
         del st.session_state.example_clicked  # Consumption
 
-    # Display chat history (only for non-comparison mode or unified history? 
-    # Comparison mode makes history tricky. Let's show history normally, 
-    # and if comparison runs, we append a special block or just show it ephemeral.)
-    # Decision: In comparison mode, we won't strictly enforce linear chat history 
-    # because it gets wide. We'll just show the result. 
-    # OR: We append the "User" message, then show the comparison block.
-    
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    # Initialize session state for data persistence
+    if "evaluations" not in st.session_state:
+        st.session_state.evaluations = {}
+    if "trace_logs" not in st.session_state:
+        st.session_state.trace_logs = {}
 
+    # =========================================================================
+    # DISPLAY CHAT HISTORY
+    # =========================================================================
+    last_evaluable_group_id = None
+
+    for i, message in enumerate(st.session_state.messages):
+        role = message["role"]
+        
+        # Special handling for comparison rows
+        if message.get("type") == "comparison":
+            results = message.get("comparison_data", [])
+            group_id = message.get("group_id")
+            cols = st.columns(len(results))
+            for idx, res in enumerate(results):
+                with cols[idx]:
+                    st.markdown(f"### Source: `{res['source']}`")
+                    st.markdown(res['content'])
+                    
+                    # Diagnostics
+                    if res.get("stats"):
+                        with st.expander("Diagnostics (Copyable)", expanded=False):
+                            st.caption("Hover top-right of code block to copy")
+                            st.code(str(res["stats"]), language="json")
+            
+            last_evaluable_group_id = group_id
+            
+            # Render evaluation if it exists for this group
+            eval_key = f"eval_{group_id}"
+            if eval_key in st.session_state.evaluations:
+                render_evaluation_dashboard(st.session_state.evaluations[eval_key])
+                        
+        else:
+            # Standard message rendering
+            with st.chat_message(role):
+                st.markdown(message["content"])
+                
+                # Render interactive elements for assistant messages
+                if role == "assistant" and not message.get("type"):
+                    stats = message.get("stats")
+                    group_id = message.get("group_id")
+                    
+                    if stats:
+                        with st.expander("Diagnostics (Copyable)", expanded=False):
+                            st.caption("Hover top-right of code block to copy")
+                            st.code(str(stats), language="json")
+                    
+                    if group_id:
+                        last_evaluable_group_id = group_id
+            
+            # Render evaluation if it exists (outside chat_message for better layout)
+            if role == "assistant" and not message.get("type"):
+                group_id = message.get("group_id")
+                if group_id:
+                    eval_key = f"eval_{group_id}"
+                    if eval_key in st.session_state.evaluations:
+                        render_evaluation_dashboard(st.session_state.evaluations[eval_key])
+
+    # =========================================================================
+    # EVALUATE ALL BUTTON — appears once after all messages
+    # =========================================================================
+    if last_evaluable_group_id:
+        eval_key = f"eval_{last_evaluable_group_id}"
+        if eval_key not in st.session_state.evaluations:
+            if st.button("📊 Evaluate All Responses", key=f"eval_all_{last_evaluable_group_id}", type="primary"):
+                # Gather all source results for the latest query group
+                latest_msg = None
+                for msg in reversed(st.session_state.messages):
+                    if msg.get("group_id") == last_evaluable_group_id:
+                        latest_msg = msg
+                        break
+                
+                if latest_msg:
+                    query_text = latest_msg.get("query_text", "")
+                    source_results = []
+                    
+                    if latest_msg.get("type") == "comparison":
+                        # Comparison mode: multiple sources
+                        for res in latest_msg.get("comparison_data", []):
+                            source_results.append({
+                                "source": res["source"],
+                                "response": res["content"],
+                                "chunks": res.get("chunks", []),
+                            })
+                    else:
+                        # Standard mode: single source
+                        source_label = latest_msg.get("source_filter", "all")
+                        source_results.append({
+                            "source": source_label,
+                            "response": latest_msg["content"],
+                            "chunks": latest_msg.get("chunks", []),
+                        })
+                    
+                    with st.spinner("Running evaluation across all sources... (this may take 30-60 seconds)"):
+                        eval_data = evaluate_all_sources(query_text, source_results)
+                        st.session_state.evaluations[eval_key] = eval_data
+                        st.rerun()
+
+    # =========================================================================
+    # PROCESS NEW USER INPUT
+    # =========================================================================
     if user_input:
         # Add user message
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
         
-        # Process
+        group_id = str(uuid.uuid4())[:8]
+        
         if comparison_mode and len(selected_sources) > 1:
-            cols = st.columns(len(selected_sources))
+            # Prepare comparison data container
+            comparison_results = []
             
-            # We won't append the huge comparison block to session_state history 
-            # as it's hard to render layout there. We'll just render it ephemeral.
+            cols = st.columns(len(selected_sources))
             
             for idx, source in enumerate(selected_sources):
                 with cols[idx]:
                     st.markdown(f"### Source: `{source}`")
                     with st.spinner("Retrieving & Generating..."):
-                        chunks, stats = retrieve_relevant_chunks(
-                            query=user_input,
-                            vectorstore=vectorstore,
-                            source_filter=source,
-                        )
+                        chunks, stats = retrieve_relevant_chunks(user_input, vectorstore, source)
                         response = generate_response_with_llm(user_input, chunks, client)
                         st.markdown(response)
                         
-                        # Diagnostics
-                        with st.expander("Diagnostics"):
-                            st.json(stats)
-                            
-                        # Evaluation
-                        key = f"eval_{source}_{hash(user_input)}"
-                        if st.button("Evaluate Result", key=key):
-                            with st.spinner("Grading..."):
-                                df_eval = evaluate_response(user_input, response, chunks)
-                                st.dataframe(df_eval)
+                        comparison_results.append({
+                            "source": source,
+                            "content": response,
+                            "chunks": chunks,
+                            "stats": stats,
+                        })
+            
+            # Save the composite message
+            st.session_state.messages.append({
+                "role": "assistant",
+                "type": "comparison",
+                "content": "",  # Placeholder
+                "comparison_data": comparison_results,
+                "query_text": user_input,
+                "group_id": group_id,
+            })
+            st.rerun()
 
         else:
             # Standard Mode (Single Source)
             source = selected_sources[0]
             with st.chat_message("assistant"):
-                with st.spinner("Generating your personalized plan..."):
-                    chunks, stats = retrieve_relevant_chunks(
-                        query=user_input,
-                        vectorstore=vectorstore,
-                        source_filter=source,
-                    )
+                with st.spinner("Generating..."):
+                    chunks, stats = retrieve_relevant_chunks(user_input, vectorstore, source)
                     stats["selected_source_filter"] = source
                     response = generate_response_with_llm(user_input, chunks, client)
                     st.markdown(response)
-                    
-                    with st.expander("Retrieval Diagnostics", expanded=False):
-                        st.json(stats)
-                        
-                    # Evaluation
-                    key = f"eval_single_{hash(user_input)}"
-                    if st.button("Evaluate Result", key=key):
-                        with st.spinner("Grading..."):
-                            df_eval = evaluate_response(user_input, response, chunks)
-                            st.dataframe(df_eval)
-
-            # Save to history (only in single mode to keep it clean)
-            st.session_state.messages.append({"role": "assistant", "content": response})
+            
+            # Save rich message to history
+            st.session_state.messages.append({
+                "role": "assistant", 
+                "content": response,
+                "chunks": chunks,
+                "stats": stats,
+                "query_text": user_input,
+                "group_id": group_id,
+                "source_filter": source,
+            })
+            st.rerun()
 
 if __name__ == "__main__":
     main()
