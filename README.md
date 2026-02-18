@@ -4,7 +4,8 @@ Repository root now uses an app-scoped layout.
 
 ## Demo
 
-![Demo of Mindful RAG](demo_compressed.mov)
+https://github.com/user-attachments/assets/6e4fb998-6bf5-4f7e-8d6c-dcf8d97b5177
+
 
 ## Purpose & Features
 
