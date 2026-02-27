@@ -123,7 +123,7 @@ fun DashboardScreen(
                     )
                     TabRow(selectedTabIndex = selectedTab) {
                         Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Live Logs") })
-                        Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Journals") })
+                        Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Insights") })
                     }
                 }
             }
@@ -132,9 +132,7 @@ fun DashboardScreen(
                 if (selectedTab == 0) {
                     LogsList(logs)
                 } else {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Journal Generation Coming Soon")
-                    }
+                    InsightsScreen()
                 }
             }
         }

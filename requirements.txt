@@ -22,3 +22,8 @@ scipy>=1.11.0
 python-dotenv>=1.0.0
 pyyaml>=6.0
 requests>=2.31.0
+
+# Backend API Wrapper
+fastapi>=0.100.0
+uvicorn>=0.23.0
+pydantic>=2.0.0
