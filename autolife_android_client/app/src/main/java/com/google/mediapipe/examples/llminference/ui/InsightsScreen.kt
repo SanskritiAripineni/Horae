@@ -14,6 +14,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.mediapipe.examples.llminference.AutoLifeApp
+import com.google.mediapipe.examples.llminference.data.*
 import com.google.mediapipe.examples.llminference.network.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
