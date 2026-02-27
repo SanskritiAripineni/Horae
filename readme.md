@@ -3,161 +3,76 @@
 ## Overview
 Multi-agent LLM framework integrating AutoLife data collection with I-HOPE mental health prediction and calendar integration.
 
-## IMPORTANT NOTE: ALL CODE (EXCEPT within android_client) placeholder code. Not indicative of how we will particularly implement the project.
+Note: most Python-side framework files are placeholders. The Android client under `autolife_android_client/` contains the concrete AutoLife implementation work.
 
 ## Project Structure
 
-```
+![Framework Architecture Diagram](docs/architecture_diagram.png)
+
+```text
 framework_rishi/
-├── android_client/           # Android App for AutoLife Data Collection
-├── tools/                    # Core agent tools
-│   ├── autolife_reader.py    # Parses generated journals
-│   ├── ihope_model.py        # PHQ-4 prediction model
-│   ├── vectordb_client.py    # Fetches Top K Concepts
-│   └── calendar_api.py       # Calendar integration
-├── data/                     # Storage for logs and models
-│   ├── ihope_weights/        # Model weights
-│   └── raw_logs/             # Sensor logs
-├── main.py                   # Entry point
-└── agent.py                  # Core Agent logic (Conductor)
+├── autolife_android_client/   # Android app for AutoLife data collection/journaling
+├── tools/                     # Core agent tools
+│   ├── autolife_reader.py     # Parses generated journals
+│   ├── ihope_model.py         # PHQ-4 prediction model
+│   ├── vectordb_client.py     # Fetches Top K concepts
+│   └── calendar_api.py        # Calendar integration
+├── data/                      # Storage for logs and models
+├── main.py                    # Entry point
+└── agent.py                   # Core agent logic (conductor)
 ```
+
+## Android Client Status
+
+The Android client in `autolife_android_client/` is not missing. It is already present and substantially implemented.
+
+Implemented:
+- Motion sensing and classification using accelerometer, step counter, pressure (altitude), and GPS speed (`MotionDetector.kt`).
+- Wi-Fi + map-based location context inference (`WifiScanner.kt`, `LocationAnalyzer.kt`, `MapImageProvider.kt`).
+- Gemini-based text and vision prompting (`GeminiClient.kt`).
+- Background duty-cycled collection and periodic journaling (`AutoLifeService.kt`, `JournalGenerator.kt`).
+- Room persistence for logs and journal entries (`data/AppDatabase.kt`).
+
+Current behavior:
+- Analysis loop interval: 1 minute (`LOG_INTERVAL = 60_000ms`).
+- Motion collection window per cycle: 15 seconds (`MOTION_DURATION = 15_000ms`).
+- Journal generation interval: 15 minutes (2 minutes in demo mode).
+
+Notes:
+- `ContextFusionAnalyzer.kt` exists and is wired in the sequential analyzer, but the background service path currently finishes after motion+location logging for efficiency.
+- Journal generation uses stored logs over a time window and prompts Gemini for concise, objective summaries.
+
+## Branch Alignment Note
+
+Comparison against `autolife_rishi` shows:
+- `autolife_rishi/app/...` and `framework_rishi/autolife_android_client/app/...` were migrated with matching source modules.
+- This branch includes one service-loop fix: removed a duplicated `startAnalysisCycle()` call in `AutoLifeService.kt`.
+- No full client replacement from `autolife_rishi` is required.
+- Main differences are Gradle wrapper artifacts/scripts and repository layout (root Android project vs nested `autolife_android_client/`).
 
 ## Setup
 
-1. Install Python dependencies:
+### Python Framework
+
+1. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Configure API keys and credentials as needed
+2. Configure credentials as needed.
 
-3. Run the scheduler:
+3. Run:
 ```bash
 python main.py
 ```
 
-## Components
+### Android Client (`autolife_android_client`)
 
-- **Android Client**: Collects sensor data and user journals
-- **Agent**: Orchestrates the workflow between tools
-- **Tools**: Modular components for data processing, prediction, and integration
-
----
-
-## Android Client Implementation Analysis
-
-### Method B: WiFi SSID Analysis - IMPLEMENTED
-
-**Evidence from logs:**
+1. Open `autolife_android_client/` in Android Studio.
+2. Add API keys to `local.properties`:
+```properties
+GEMINI_API_KEY=your_gemini_key
+MAPS_API_KEY=your_maps_key
 ```
-WifiScanner: Filtered networks: [MyResNet, RHS CLASSROOM, ...]
-LocationAnalyzer: Sending prompt to LLM
-LocationAnalyzer: Location, Received response from LLM: likely a college campus
-```
-
-**Relevant Files:**
-- `WifiScanner.java` - SSID collection
-- `LocationAnalyzer.java` - LLM inference from WiFi names
-- `LLMInterface.java` - Gemma model integration
-
-### ❌ Method A: Visual Map Analysis - NOT IMPLEMENTED
-- No Google Maps API integration
-- No image fetching from GPS coordinates
-- No Vision-Language Model (VLM) processing
-- GPS coordinates are collected but not used for map queries
-
----
-
-## **4. Context Fusion & Calibration**
-
-### Partially Implemented:
-
-**What EXISTS:**
-```java
-// From SequentialMotionLocationAnalyzer.java
-private void fuseContexts(String motionContext, String locationContext) {
-    String fusedContext = motionContext + " at " + locationContext;
-    // Simple string concatenation
-}
-```
-
-**Relevant Files:**
-- `SequentialMotionLocationAnalyzer.java` - Has fusion method
-
-### MISSING:
-- **Step A (Location Fusion):** No Map + WiFi comparison (because no Map data exists)
-- **Step B (Motion Calibration):** No LLM-based motion disambiguation
-  - No logic to select between ambiguous motions using location
-  - No examples like "Vehicle + Ocean = Ferry"
-- **Sophisticated Fusion:** Just concatenates strings, doesn't use LLM to merge intelligently
-
----
-
-## **5. Context Refinement (Temporal Aggregation) - NOT IMPLEMENTED**
-
-### Missing Entirely:
-- No 15-minute windowing
-- No temporal aggregation of multiple context logs
-- No LLM-based selection of "best" or "most specific" location across time windows
-- No timeline format: `[time-1](map_loc, wifi_loc)...[time-n](map_loc, wifi_loc)`
-
-**Current Behavior:** Each 2-second cycle generates independent context, no aggregation.
-
----
-
-## **6. Final Journal Generation**
-
-### Partially Implemented:
-
-**What EXISTS:**
-```java
-private void generateJournalEntry(String motionContext, String locationContext) {
-    String prompt = "Based on this context: " + fusedContext + 
-                   ", generate a natural journal entry...";
-    llmInterface.generateResponse(prompt, ...);
-}
-```
-
-**Relevant Files:**
-- `SequentialMotionLocationAnalyzer.java` - Has `generateJournalEntry()` method
-- `FileStorage.java` - Saves journal entries
-
-### MISSING:
-- **Input Format:** No refined timeline (should aggregate 15-min windows, not single events)
-- **Few-Shot Prompting:** No examples in prompt to guide style
-- **Subjectivity Removal:** No second LLM pass to remove subjective language
-- **Commonsense Inference:** Uses basic prompt, not leveraging time-of-day or activity patterns
-
----
-
-# Summary Table
-
-| Component | Status | Files | Missing |
-|-----------|--------|-------|---------|
-| **Sensor Collection** | ✅ Partial | `MotionAnalyzer.java`, `WifiScanner.java` | Duty cycle (15s/45s) |
-| **Motion Detection** | ⚠️ Partial | `MotionAnalyzer.java` | Altitude, GPS speed, complex rules, multi-motion output |
-| **WiFi Location** | ✅ Full | `LocationAnalyzer.java`, `LLMInterface.java` | None |
-| **Visual Map Location** | ❌ None | N/A | Entire module (Maps API, VLM) |
-| **Context Fusion** | ⚠️ Basic | `SequentialMotionLocationAnalyzer.java` | LLM-based fusion, motion calibration |
-| **Temporal Aggregation** | ❌ None | N/A | 15-min windows, timeline format |
-| **Journal Generation** | ⚠️ Basic | `SequentialMotionLocationAnalyzer.java` | Few-shot prompts, subjectivity filter |
-
----
-
-# What Works End-to-End Right Now:
-
-1. Collect accelerometer + gyroscope + WiFi every 2 seconds
-2. Classify motion using basic rules (stationary/walking/running)
-3. Infer location from WiFi SSIDs using on-device LLM
-4. Concatenate motion + location strings
-5. Generate simple journal entry using LLM
-6. Save to file storage
-
-# What's Missing to Match Paper:
-
-1. **Duty cycle optimization** (battery savings)
-2. **Complete motion algorithm** (altitude, speed, complex activities)
-3. **Visual map analysis** (entire VLM pipeline)
-4. **Intelligent context fusion** (LLM-based disambiguation)
-5. **Temporal aggregation** (15-min windows)
-6. **Refined journal synthesis** (few-shot, subjectivity removal)
+3. Build and run on a physical Android device.
+4. Grant permissions for location, activity recognition, and notifications.

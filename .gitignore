@@ -74,3 +74,5 @@ credentials.json
 
 # Project Specific
 memory/data/
+apps/mindful-rag/data/chroma/
+apps/mindful-rag/data/tokens/*.json

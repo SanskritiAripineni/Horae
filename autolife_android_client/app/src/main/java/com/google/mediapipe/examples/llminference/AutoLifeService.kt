@@ -79,8 +79,6 @@ class AutoLifeService : Service() {
                 // logDao.insertLog(SensorLog(timestamp = timestamp, type = "SYSTEM", content = "Starting periodic analysis"))
                 
                 startAnalysisCycle()
-
-                startAnalysisCycle()
                 
                 // Dynamic Interval for Demo Mode
                 val isDemo = com.google.mediapipe.examples.llminference.data.DebugRepository.isDemoMode.value
