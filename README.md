@@ -12,3 +12,31 @@ This research aims to make three key contributions:
 1.  **Bridge Sensing and Intervention:** It connects passive monitoring of mental states with active, personalized interventions, which current systems fail to do.
 2.  **Contextual LLM Reasoning:** It demonstrates how LLMs can reason about complex personal contexts to generate actionable recommendations grounded in behavioral psychology.
 3.  **Closed-Loop Learning:** The system tracks mental health trends over time and adapts its scheduling strategies, creating iterative improvement rather than static recommendations.
+
+## LLM Scheduler RIDE Architecture
+
+```mermaid
+flowchart LR
+    subgraph MEMORY[MEMORY]
+        direction TB
+        UP[User Prefs]
+        MHT[Mental Health Tracking]
+        UP ~~~ MHT
+    end
+
+    Agent[LLM Scheduler Agent]
+
+    subgraph TOOLS[TOOLS]
+        direction TB
+        AL["AutoLife\nMotion & Loc Context\n(e.g. GPS, Gyro., Accel.)"] --> DJ[Daily Journal]
+        KE["K-Emo Phone\nMental State Context\n(e.g. screen time, calls, etc.)"] --> PS[PHQ Score]
+        VD[VectorDB] --> TK[Top K Concept]
+        CA["Calendar API Info\n(e.g. events, todos)"] --> SCH[Schedule]
+    end
+
+    ScheduleOut["Schedule Output\n(Monday, Tuesday, Thursday.... Sunday)"]
+
+    MEMORY --> Agent
+    TOOLS -->|"dynamic sensor data"| Agent
+    Agent --> ScheduleOut
+```
