@@ -5,9 +5,38 @@ Multi-agent LLM framework integrating AutoLife data collection with I-HOPE menta
 
 Note: most Python-side framework files are placeholders. The Android client under `autolife_android_client/` contains the concrete AutoLife implementation work.
 
+## LLM Scheduler RIDE Architecture
+
+```mermaid
+flowchart LR
+    subgraph MEMORY[MEMORY]
+        direction TB
+        UP[User Prefs]
+        MHT[Mental Health Tracking]
+        UP ~~~ MHT
+    end
+
+    Agent[LLM Scheduler Agent]
+
+    subgraph TOOLS[TOOLS]
+        direction TB
+        AL["AutoLife\nMotion & Loc Context\n(e.g. GPS, Gyro., Accel.)"] --> DJ[Daily Journal]
+        KE["K-Emo Phone\nMental State Context\n(e.g. screen time, calls, etc.)"] --> PS[PHQ Score]
+        VD[VectorDB] --> TK[Top K Concept]
+        CA["Calendar API Info\n(e.g. events, todos)"] --> SCH[Schedule]
+    end
+
+    ScheduleOut["Schedule Output\n(Monday, Tuesday, Thursday.... Sunday)"]
+
+    MEMORY --> Agent
+    TOOLS -->|"dynamic sensor data"| Agent
+    Agent --> ScheduleOut
+```
+
 ## Project Structure
 
 ![Framework Architecture Diagram](docs/architecture_diagram.png)
+
 
 ```text
 framework_rishi/
