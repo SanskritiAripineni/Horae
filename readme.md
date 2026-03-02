@@ -7,31 +7,7 @@ Note: most Python-side framework files are placeholders. The Android client unde
 
 ## LLM Scheduler RIDE Architecture
 
-```mermaid
-flowchart LR
-    subgraph MEMORY[MEMORY]
-        direction TB
-        UP[User Prefs]
-        MHT[Mental Health Tracking]
-        UP ~~~ MHT
-    end
-
-    Agent[LLM Scheduler Agent]
-
-    subgraph TOOLS[TOOLS]
-        direction TB
-        AL["AutoLife\nMotion & Loc Context\n(e.g. GPS, Gyro., Accel.)"] --> DJ[Daily Journal]
-        KE["K-Emo Phone\nMental State Context\n(e.g. screen time, calls, etc.)"] --> PS[PHQ Score]
-        VD[VectorDB] --> TK[Top K Concept]
-        CA["Calendar API Info\n(e.g. events, todos)"] --> SCH[Schedule]
-    end
-
-    ScheduleOut["Schedule Output\n(Monday, Tuesday, Thursday.... Sunday)"]
-
-    MEMORY --> Agent
-    TOOLS -->|"dynamic sensor data"| Agent
-    Agent --> ScheduleOut
-```
+![LLM Scheduler RIDE Architecture](docs/excalidraw_framework.png)
 
 ## Project Structure
 
