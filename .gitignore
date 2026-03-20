@@ -1,2 +1,5 @@
 Sensor/
-SubjData/.DS_Store
+SubjData/
+.DS_Store
+SupplementalCodes/catboost_info/
+SupplementalCodes/intermediate/
