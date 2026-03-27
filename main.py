@@ -16,6 +16,7 @@ if sys.version_info < (3, 10):
 import logging
 import argparse
 import json
+from datetime import datetime
 from agent import LLMSchedulerAgent
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(name)s:%(message)s')
@@ -221,11 +222,11 @@ def interactive_mode(agent: LLMSchedulerAgent, results: dict):
                     user_preferences.append(preference)
                     
                     # Save to memory
-                    agent.memory.storage.save('user_preferences', 'wellness', {
+                    agent.memory.storage.save('user_feedback', f'cli_{datetime.now().strftime("%Y%m%d_%H%M%S")}', {
                         'preference': preference,
                         'dislikes': parsed.get('dislikes', []),
                         'prefers': parsed.get('prefers', []),
-                        'timestamp': results['timestamp']
+                        'timestamp': results.get('timestamp', '')
                     })
                     print(f"\n  Saved to memory: \"{preference}\"")
                     

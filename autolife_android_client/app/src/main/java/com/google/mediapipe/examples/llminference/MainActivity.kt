@@ -15,6 +15,8 @@ import com.google.mediapipe.examples.llminference.ui.DashboardScreen
 
 class MainActivity : ComponentActivity() {
 
+    private var frameCallback: Choreographer.FrameCallback? = null
+
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
@@ -24,7 +26,12 @@ class MainActivity : ComponentActivity() {
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { }
+    ) { permissions ->
+        val denied = permissions.filterValues { !it }.keys
+        if (denied.isNotEmpty()) {
+            Log.w("MainActivity", "Permissions denied: $denied — some features may not work")
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,7 +76,7 @@ class MainActivity : ComponentActivity() {
 
     private fun setupFrameMonitor() {
         val choreographer = Choreographer.getInstance()
-        val frameCallback = object : Choreographer.FrameCallback {
+        frameCallback = object : Choreographer.FrameCallback {
             private var lastFrameTimeNanos: Long = 0L
             override fun doFrame(frameTimeNanos: Long) {
                 if (lastFrameTimeNanos != 0L) {
@@ -82,6 +89,12 @@ class MainActivity : ComponentActivity() {
                 choreographer.postFrameCallback(this)
             }
         }
-        choreographer.postFrameCallback(frameCallback)
+        choreographer.postFrameCallback(frameCallback!!)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        frameCallback?.let { Choreographer.getInstance().removeFrameCallback(it) }
+        frameCallback = null
     }
 }
