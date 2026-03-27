@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import com.google.mediapipe.examples.llminference.data.LogDao
 import com.google.mediapipe.examples.llminference.data.SensorLog
-import com.google.mediapipe.examples.llminference.data.JournalEntry
 import kotlinx.coroutines.*
 import java.io.Closeable
 import java.lang.ref.WeakReference
@@ -153,19 +152,7 @@ class SequentialMotionLocationAnalyzer(
             try {
                 val locationSuccess = runLocationAnalysis(context, callback)
                 if (locationSuccess) {
-                     // We skip Fusion for the Service loop usually, but here we can just finish or do Fusion.
-                     // For AutoLife, we collect logs continuously, and fusion usually happens periodically or on-demand.
-                     // The original flow did Fusion immediately. I will keep it but maybe we only want to LOG separately?
-                     // Actually let's keep the flow: Motion -> Location -> (Done). Fusion can be a separate Dashboard action or periodic.
-                     // For now, let's just finish after Location to satisfy "Data Collection".
-                    // startFusionPhase(callback) 
-                    // CHANGE: Just finish after location for background data collection efficiency?
-                    // The paper says "Context Fusion" cleans up stream.
-                    // But typically verification means we see RAW logs first.
-                    // Let's keep the chain but maybe skip heavy LLM fusion in the background loop every minute?
-                    // Since I set interval to 1 min, doing LLM fusion every min is expensive.
-                    // Let's just finishAnalysis here.
-                    finishAnalysis(callback)
+                    startFusionPhase(callback)
                 } else {
                     cleanup()
                     callback("Location analysis failed", AnalysisPhase.LOCATION)
@@ -220,55 +207,6 @@ class SequentialMotionLocationAnalyzer(
     }
 
 
-    // ------------- ORIGINAL CODE ------------
-//    private suspend fun runLocationAnalysis(context: Context, callback: (String, AnalysisPhase) -> Unit): Boolean {
-////        return try {
-//////            withContext(Dispatchers.IO) {
-//////                locationAnalyzer = LocationAnalyzer(context)
-//////                val wifiScanner = WifiScanner(context)
-//////                val networks = wifiScanner.getWifiNetworks()
-//////                val response = locationAnalyzer?.analyzeLocation(networks)
-//////                callback("Location analysis complete: $response", AnalysisPhase.LOCATION)
-//////                true
-//////            }
-////        } catch (e: Exception) {
-////            Log.e(TAG, "Location analysis error", e)
-////            false
-////        } finally {
-////            locationAnalyzer?.close()
-////            locationAnalyzer = null
-////            System.gc()
-////        }
-//        try {
-//            // 1) Try to get a usable location (fresh fix with timeout, else cached)
-//            val loc = getBestLocation(context)
-//            if (loc == null) {
-//                callback("Location unavailable. Turn on Location or step outside.", AnalysisPhase.COMPLETE)
-//                return
-//            }
-//
-//            // 2) Wi-Fi SSIDs (don’t crash if empty on some devices)
-//            val ssids: List<String> = try {
-//                WifiScanner(context).scanNetworks()              // your existing call
-//            } catch (e: Exception) {
-//                emptyList()
-//            }
-//
-//            // 3) If there are no SSIDs, still proceed with a minimal prompt
-//            val locationAnalyzer = LocationAnalyzer(context)
-//            val result = if (ssids.isNotEmpty()) {
-//                locationAnalyzer.analyzeLocation(ssids)
-//            } else {
-//                // Minimal prompt when Wi-Fi is empty
-//                locationAnalyzer.analyzeLocation(listOf("No visible Wi-Fi SSIDs"))
-//            }
-//
-//            callback(result, AnalysisPhase.COMPLETE)
-//        } catch (e: Exception) {
-//            callback("Location analysis failed: ${e.message}", AnalysisPhase.COMPLETE)
-//        }
-//    }
-
     private fun startFusionPhase(callback: (String, AnalysisPhase) -> Unit) {
         currentPhase = AnalysisPhase.FUSION
         callback("Starting context fusion...", AnalysisPhase.FUSION)
@@ -308,13 +246,11 @@ class SequentialMotionLocationAnalyzer(
         val locationContext = lastLocationContext ?: "Unknown Location"
         
         val result = contextFusionAnalyzer.performFusion(motionHistory, locationContext)
-        
-        // Save to DB as a "Journal" entry if it's a high-level fusion
-        logDao.insertJournal(
-            JournalEntry(
-                createdTimestamp = System.currentTimeMillis(),
-                periodStart = System.currentTimeMillis() - 60000, // Roughly last minute
-                periodEnd = System.currentTimeMillis(),
+
+        logDao.insertLog(
+            SensorLog(
+                timestamp = System.currentTimeMillis(),
+                type = "FUSION",
                 content = result
             )
         )
