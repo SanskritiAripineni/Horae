@@ -22,7 +22,8 @@ class MemoryStorage:
             with open(file_path, 'w') as f:
                 json.dump({'data': data}, f, indent=2)
             return True
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to save {category}/{key}: {e}")
             return False
 
     def load(self, category: str, key: str) -> Optional[Any]:
@@ -32,5 +33,6 @@ class MemoryStorage:
         try:
             with open(file_path, 'r') as f:
                 return json.load(f).get('data')
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to load {category}/{key}: {e}")
             return None
