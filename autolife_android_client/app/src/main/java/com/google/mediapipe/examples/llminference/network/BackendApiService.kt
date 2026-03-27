@@ -1,5 +1,6 @@
 package com.google.mediapipe.examples.llminference.network
 
+import com.google.mediapipe.examples.llminference.BuildConfig
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
@@ -71,9 +72,6 @@ interface BackendApiService {
 }
 
 object BackendApiClient {
-    // 10.0.2.2 is the special IP alias to your host loopback interface (127.0.0.1) on Android Emulator
-    private const val BASE_URL = "http://10.0.2.2:8000"
-
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
     }
@@ -86,7 +84,7 @@ object BackendApiClient {
         .build()
 
     val retrofit: Retrofit = Retrofit.Builder()
-        .baseUrl(BASE_URL)
+        .baseUrl(BuildConfig.BACKEND_URL)
         .client(okHttpClient)
         .addConverterFactory(GsonConverterFactory.create())
         .build()

@@ -29,6 +29,10 @@ android {
         buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
         val mapsApiKey = localProperties.getProperty("MAPS_API_KEY") ?: ""
         buildConfigField("String", "MAPS_API_KEY", "\"$mapsApiKey\"")
+        // Default: Android emulator loopback. Override in local.properties for physical devices.
+        // e.g. BACKEND_URL=http://192.168.1.42:8000
+        val backendUrl = localProperties.getProperty("BACKEND_URL") ?: "http://10.0.2.2:8000"
+        buildConfigField("String", "BACKEND_URL", "\"$backendUrl\"")
     }
 
     buildFeatures {

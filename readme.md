@@ -78,6 +78,8 @@ python main.py
 ```properties
 GEMINI_API_KEY=your_gemini_key
 MAPS_API_KEY=your_maps_key
+# Optional: override backend URL for physical devices (default targets Android emulator loopback)
+# BACKEND_URL=http://192.168.x.x:8000
 ```
 3. Build and run on a physical Android device.
 4. Grant permissions for location, activity recognition, and notifications.
