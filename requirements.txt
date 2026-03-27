@@ -23,6 +23,10 @@ python-dotenv>=1.0.0
 pyyaml>=6.0
 requests>=2.31.0
 
+# Native PDF embedding
+google-genai>=1.0.0
+PyMuPDF>=1.24.0
+
 # Backend API Wrapper
 fastapi>=0.100.0
 uvicorn>=0.23.0

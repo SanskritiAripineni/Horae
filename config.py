@@ -54,6 +54,10 @@ class Config:
     WORK_HOURS_START: int = 9
     WORK_HOURS_END: int = 17
     
+    # Embedding / VectorDB settings
+    EMBEDDING_MODEL: str = "gemini-embedding-2-preview"
+    VECTORDB_COLLECTION: str = "wellness_papers_gemini"
+
     # LLM settings
     LLM_MODEL: str = "gemini-2.5-flash"
     LLM_MAX_TOKENS: int = 1024
