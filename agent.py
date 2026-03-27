@@ -37,16 +37,13 @@ class LLMSchedulerAgent:
         
         logger.info("LLMSchedulerAgent initialized")
 
-    def run(self, mode: str = "daily") -> Dict[str, Any]:
-        """Run the full agent workflow."""
-        logger.info(f"Running agent in {mode} mode")
+    def run_from_journals(self, journals: List[Dict[str, Any]], user_id: str = None) -> Dict[str, Any]:
+        """Run the analysis pipeline with pre-loaded journal entries."""
         start_time = datetime.now()
-        
+
         results = {
             'status': 'running',
-            'user_id': self.user_id,
-            'mode': mode,
-            'timestamp': start_time.isoformat(),
+            'user_id': user_id or self.user_id,
             'journal_summary': None,
             'mental_health': None,
             'recommendations': [],
@@ -54,22 +51,17 @@ class LLMSchedulerAgent:
             'proposed_changes': [],
             'errors': []
         }
-        
+
         try:
-            # Step 1: Read journals
-            logger.info("Step 1: Reading journals...")
-            journals = self.autolife_reader.read_journals(limit=10)
-            
             if not journals:
-                results['errors'].append("No journal entries found")
+                results['errors'].append("No journal entries provided")
                 results['status'] = 'completed_with_warnings'
                 return results
-            
+
             journal_text = self.autolife_reader.get_context_for_prompt(journals)
             results['journal_count'] = len(journals)
-            
-            # Step 2: Analyze mental health with Gemini
-            logger.info("Step 2: Analyzing mental health...")
+
+            logger.info("Analyzing mental health...")
             analysis = self.llm_client.analyze_mental_health(journal_text)
             results['journal_summary'] = analysis.get('summary', '')
             results['mental_health'] = {
@@ -78,16 +70,13 @@ class LLMSchedulerAgent:
                 'key_concerns': analysis.get('concerns', []),
                 'positive_indicators': analysis.get('positives', [])
             }
-            
-            # Step 3: Get calendar info
-            logger.info("Step 3: Getting calendar information...")
+
+            logger.info("Getting calendar information...")
             calendar_summary = self.calendar_api.get_schedule_summary(days=7)
             results['calendar_summary'] = calendar_summary
-            
-            # Step 4: Get research-backed interventions from VectorDB
-            logger.info("Step 4: Querying VectorDB for interventions...")
+
+            logger.info("Querying VectorDB for interventions...")
             phq4 = results['mental_health']['estimated_phq4']
-            
             if self.vectordb.initialize():
                 research_suggestions = self.vectordb.get_intervention_suggestions(
                     phq4_score=phq4,
@@ -96,9 +85,8 @@ class LLMSchedulerAgent:
             else:
                 research_suggestions = []
                 results['errors'].append("VectorDB not available")
-            
-            # Step 5: Generate recommendations
-            logger.info("Step 5: Generating recommendations...")
+
+            logger.info("Generating recommendations...")
             recommendations = self.llm_client.generate_recommendations(
                 journal_summary=results['journal_summary'],
                 risk_level=results['mental_health']['risk_level'],
@@ -106,24 +94,36 @@ class LLMSchedulerAgent:
                 research_context=research_suggestions
             )
             results['recommendations'] = recommendations
-            
-            # Step 6: Generate calendar optimization proposals
-            logger.info("Step 6: Generating calendar optimization proposals...")
+
+            logger.info("Generating calendar optimization proposals...")
             proposed_changes = self.llm_client.generate_calendar_changes(
                 recommendations=recommendations,
                 calendar_summary=calendar_summary,
                 mental_health=results['mental_health']
             )
             results['proposed_changes'] = proposed_changes
-            
+
             results['status'] = 'completed'
-            
+
         except Exception as e:
-            logger.error(f"Agent workflow failed: {e}")
+            logger.error(f"Pipeline failed: {e}")
             results['errors'].append(str(e))
             results['status'] = 'failed'
-        
+
         results['duration_seconds'] = (datetime.now() - start_time).total_seconds()
+        return results
+
+    def run(self, mode: str = "daily") -> Dict[str, Any]:
+        """Run the full agent workflow, reading journals from the filesystem."""
+        logger.info(f"Running agent in {mode} mode")
+        start_time = datetime.now()
+
+        logger.info("Reading journals...")
+        journals = self.autolife_reader.read_journals(limit=10)
+
+        results = self.run_from_journals(journals)
+        results['mode'] = mode
+        results['timestamp'] = start_time.isoformat()
         return results
 
     def apply_calendar_changes(self, changes: List[Dict[str, Any]], user_comments: str = "") -> Dict[str, Any]:
