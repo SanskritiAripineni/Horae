@@ -1,0 +1,158 @@
+[
+  {
+    "query_id": "sleep_schedule",
+    "query": "My bedtime keeps shifting and I feel exhausted in morning lectures. What should I change?",
+    "retrieved_count": 4,
+    "top_retrieved_files": [
+      "Sleep physiology, pathophysiology, and sleep hygiene.pdf",
+      "Sleep physiology, pathophysiology, and sleep hygiene.pdf",
+      "Circadian rhythm disruption and mental health.pdf",
+      "Circadian rhythm disruption and mental health.pdf"
+    ],
+    "best_distance": 0.5886927247047424,
+    "avg_distance": 0.5964997261762619
+  },
+  {
+    "query_id": "stress_deadlines",
+    "query": "I get overwhelmed before exams and deadlines. What evidence-based steps can reduce academic stress?",
+    "retrieved_count": 4,
+    "top_retrieved_files": [
+      "The associations between resilience, self-care, and burnout among medical students.pdf",
+      "The associations between resilience, self-care, and burnout among medical students.pdf",
+      "The associations between resilience, self-care, and burnout among medical students.pdf",
+      "Effectiveness of Mobile App-Based Psychological Interventions for College Students A Systematic Review of the Literature.pdf"
+    ],
+    "best_distance": 0.5700862407684326,
+    "avg_distance": 0.5783978849649429
+  },
+  {
+    "query_id": "mindfulness_focus",
+    "query": "I want a simple mindfulness routine to reduce rumination and improve focus.",
+    "retrieved_count": 4,
+    "top_retrieved_files": [
+      "The Effect of Mindfulness-based Programs on Cognitive Function in Adults.pdf",
+      "Mindfulness Enhances Cognitive Functioning A Meta-Analysis of 111 Randomized Controlled Trials.pdf",
+      "Mindfulness Enhances Cognitive Functioning A Meta-Analysis of 111 Randomized Controlled Trials.pdf",
+      "Effortless training of attention and self-control- Mechanisms and applications.pdf"
+    ],
+    "best_distance": 0.5837767720222473,
+    "avg_distance": 0.5869250744581223
+  },
+  {
+    "query_id": "exercise_mood",
+    "query": "How can I use exercise to improve mood and energy during the week?",
+    "retrieved_count": 4,
+    "top_retrieved_files": [
+      "Exercise as medicine for depressive symptoms? A systematic review and meta-analysis.pdf",
+      "Exercise as medicine for depressive symptoms? A systematic review and meta-analysis.pdf",
+      "EPA guidance on physical activity as a treatment for severe mental illness.pdf",
+      "EPA guidance on physical activity as a treatment for severe mental illness.pdf"
+    ],
+    "best_distance": 0.6057971715927124,
+    "avg_distance": 0.6113424599170685
+  },
+  {
+    "query_id": "social_isolation",
+    "query": "I feel isolated at school and it is affecting my mental health. What helps with loneliness?",
+    "retrieved_count": 4,
+    "top_retrieved_files": [
+      "A meta-analysis of interventions to reduce loneliness.pdf",
+      "The effectiveness of psychological interventions for loneliness- A systematic review and meta-analysis.pdf",
+      "A meta-analysis of interventions to reduce loneliness.pdf",
+      "The effectiveness of psychological interventions for loneliness- A systematic review and meta-analysis.pdf"
+    ],
+    "best_distance": 0.5413073301315308,
+    "avg_distance": 0.5480475276708603
+  },
+  {
+    "query_id": "cbt_reframing",
+    "query": "I keep getting negative thought spirals. Are there cognitive strategies that actually work?",
+    "retrieved_count": 4,
+    "top_retrieved_files": [
+      "A T H E R A P I S T \u2019 S G U I D E T O BRIEF COGNITIVE BEHAVIORAL THERAPY.pdf",
+      "A T H E R A P I S T \u2019 S G U I D E T O BRIEF COGNITIVE BEHAVIORAL THERAPY.pdf",
+      "A T H E R A P I S T \u2019 S G U I D E T O BRIEF COGNITIVE BEHAVIORAL THERAPY.pdf",
+      "A T H E R A P I S T \u2019 S G U I D E T O BRIEF COGNITIVE BEHAVIORAL THERAPY.pdf"
+    ],
+    "best_distance": 0.5591026544570923,
+    "avg_distance": 0.5681745857000351
+  },
+  {
+    "query_id": "biofeedback_stress",
+    "query": "Can biofeedback or breathing sensors help me manage stress responses?",
+    "retrieved_count": 4,
+    "top_retrieved_files": [
+      "Heart Rate Variability Biofeedback Improves Emotional and Physical Health and Performance- A Systematic Review and Meta Analysis.pdf",
+      "Heart Rate Variability Biofeedback Improves Emotional and Physical Health and Performance- A Systematic Review and Meta Analysis.pdf",
+      "Heart Rate Variability Biofeedback Improves Emotional and Physical Health and Performance- A Systematic Review and Meta Analysis.pdf",
+      "Heart Rate Variability Biofeedback Improves Emotional and Physical Health and Performance- A Systematic Review and Meta Analysis.pdf"
+    ],
+    "best_distance": 0.5206063985824585,
+    "avg_distance": 0.5310974270105362
+  },
+  {
+    "query_id": "diet_sleep_mood",
+    "query": "Does diet timing affect sleep and mood, and what should I adjust first?",
+    "retrieved_count": 4,
+    "top_retrieved_files": [
+      "Circadian rhythm disruption and mental health.pdf",
+      "Circadian rhythm disruption and mental health.pdf",
+      "The Effects of Dietary Improvement on Symptoms of Depression and Anxiety- A Meta-Analysis of Randomized Controlled Trials.pdf",
+      "Feed your microbes to deal with stress- a psychobiotic diet impacts microbial stability and perceived stress in a healthy adult population.pdf"
+    ],
+    "best_distance": 0.5603860020637512,
+    "avg_distance": 0.5667963474988937
+  },
+  {
+    "query_id": "motivation_habits",
+    "query": "I lose motivation after a few days. What habit design strategies are supported by research?",
+    "retrieved_count": 4,
+    "top_retrieved_files": [
+      "Time to Form a Habit A Systematic Review and Meta-Analysis of Health Behaviour Habit Formation and Its Determinants.pdf",
+      "Time to Form a Habit A Systematic Review and Meta-Analysis of Health Behaviour Habit Formation and Its Determinants.pdf",
+      "Time to Form a Habit A Systematic Review and Meta-Analysis of Health Behaviour Habit Formation and Its Determinants.pdf",
+      "A meta-analysis of self-determination theory-informed intervention studies in the health domain- effects on motivation, health behavior, physical, and psychological health.pdf"
+    ],
+    "best_distance": 0.5160365700721741,
+    "avg_distance": 0.5389809608459473
+  },
+  {
+    "query_id": "gamification_adherence",
+    "query": "Would gamification make wellness routines more consistent for students?",
+    "retrieved_count": 4,
+    "top_retrieved_files": [
+      "Gamification as an approach to improve resilience and reduce attrition in mobile mental health interventions- A randomized controlled trial.pdf",
+      "Gamification as an approach to improve resilience and reduce attrition in mobile mental health interventions- A randomized controlled trial.pdf",
+      "Gamification for health and wellbeing- A systematic review of the literature.pdf",
+      "Gamification as an approach to improve resilience and reduce attrition in mobile mental health interventions- A randomized controlled trial.pdf"
+    ],
+    "best_distance": 0.5239591002464294,
+    "avg_distance": 0.5262099802494049
+  },
+  {
+    "query_id": "prosocial_wellbeing",
+    "query": "Can doing kind acts for others improve my own wellbeing and stress levels?",
+    "retrieved_count": 4,
+    "top_retrieved_files": [
+      "To whom should I be kind? A randomized trial about kindness for strong and weak social ties on mental wellbeing and its specific mechanisms of change.pdf",
+      "Happy to help? A systematic review and meta-analysis of the effects of performing acts of kindness on the well-being of the actor.pdf",
+      "Practicing Other-Focused Kindness and Self-Focused Kindness Among Those at Risk for Mental Illness- Results of a Randomized Controlled Trial.pdf",
+      "To whom should I be kind? A randomized trial about kindness for strong and weak social ties on mental wellbeing and its specific mechanisms of change.pdf"
+    ],
+    "best_distance": 0.49044138193130493,
+    "avg_distance": 0.4988847076892853
+  },
+  {
+    "query_id": "mixed_stress_lonely",
+    "query": "I feel both stressed and disconnected lately. What combined plan should I follow?",
+    "retrieved_count": 4,
+    "top_retrieved_files": [
+      "Meditation Programs for Psychological Stress and Well-Being- A Systematic Review and Meta-analysis.pdf",
+      "Treatment of Major Depressive Disorder with Iyengar Yoga and Coherent Breathing.pdf",
+      "The associations between resilience, self-care, and burnout among medical students.pdf",
+      "The Effect of Lifestyle Interventions on Anxiety, Depression and Stress- A Systematic Review and Meta-Analysis of Randomized Clinical Trials.pdf"
+    ],
+    "best_distance": 0.6046980619430542,
+    "avg_distance": 0.60733662545681
+  }
+]

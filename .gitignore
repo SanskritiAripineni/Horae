@@ -74,7 +74,10 @@ credentials.json
 
 # Project Specific
 memory/data/
+apps/mindful-rag/.venv/
 apps/mindful-rag/data/chroma/
+apps/mindful-rag/data/evals/chroma_gemini_native/
+apps/mindful-rag/data/evals/chroma_gemini_text/
 apps/mindful-rag/data/tokens/*.json
 
 # ChromaDB binary collection data (regeneratable via ingest_simple.py)

@@ -1,0 +1,563 @@
+{
+  "timestamp": "20260313_054412",
+  "model": "gemini-embedding-2-preview",
+  "generator_model": "gemini-2.5-flash",
+  "query_count": 12,
+  "top_k": 4,
+  "ir_results": [
+    {
+      "query_id": "sleep_schedule",
+      "method": "extracted_text",
+      "precision_at_k": 0.5,
+      "mrr": 1.0,
+      "avg_similarity": 0.6229,
+      "unique_sources": 4,
+      "retrieved_categories": [
+        "sleep hygiene",
+        "sleep hygiene",
+        "kindness/prosocial behavior",
+        "academic/work stress"
+      ]
+    },
+    {
+      "query_id": "sleep_schedule",
+      "method": "native_pdf",
+      "precision_at_k": 1.0,
+      "mrr": 1.0,
+      "avg_similarity": 0.4035,
+      "unique_sources": 2,
+      "retrieved_categories": [
+        "sleep hygiene",
+        "sleep hygiene",
+        "sleep hygiene",
+        "sleep hygiene"
+      ]
+    },
+    {
+      "query_id": "stress_deadlines",
+      "method": "extracted_text",
+      "precision_at_k": 0.25,
+      "mrr": 1.0,
+      "avg_similarity": 0.668,
+      "unique_sources": 4,
+      "retrieved_categories": [
+        "academic/work stress",
+        "kindness/prosocial behavior",
+        "dietary habits",
+        "gamification"
+      ]
+    },
+    {
+      "query_id": "stress_deadlines",
+      "method": "native_pdf",
+      "precision_at_k": 1.0,
+      "mrr": 1.0,
+      "avg_similarity": 0.4216,
+      "unique_sources": 2,
+      "retrieved_categories": [
+        "academic/work stress",
+        "academic/work stress",
+        "academic/work stress",
+        "academic/work stress"
+      ]
+    },
+    {
+      "query_id": "mindfulness_focus",
+      "method": "extracted_text",
+      "precision_at_k": 0.5,
+      "mrr": 0.5,
+      "avg_similarity": 0.6431,
+      "unique_sources": 4,
+      "retrieved_categories": [
+        "physical activity",
+        "mindfulness/meditation",
+        "physical activity",
+        "mindfulness/meditation"
+      ]
+    },
+    {
+      "query_id": "mindfulness_focus",
+      "method": "native_pdf",
+      "precision_at_k": 0.75,
+      "mrr": 0.5,
+      "avg_similarity": 0.4131,
+      "unique_sources": 3,
+      "retrieved_categories": [
+        "physical activity",
+        "mindfulness/meditation",
+        "mindfulness/meditation",
+        "mindfulness/meditation"
+      ]
+    },
+    {
+      "query_id": "exercise_mood",
+      "method": "extracted_text",
+      "precision_at_k": 0.25,
+      "mrr": 1.0,
+      "avg_similarity": 0.6354,
+      "unique_sources": 4,
+      "retrieved_categories": [
+        "physical activity",
+        "kindness/prosocial behavior",
+        "gamification",
+        "motivation"
+      ]
+    },
+    {
+      "query_id": "exercise_mood",
+      "method": "native_pdf",
+      "precision_at_k": 1.0,
+      "mrr": 1.0,
+      "avg_similarity": 0.3887,
+      "unique_sources": 2,
+      "retrieved_categories": [
+        "physical activity",
+        "physical activity",
+        "physical activity",
+        "physical activity"
+      ]
+    },
+    {
+      "query_id": "social_isolation",
+      "method": "extracted_text",
+      "precision_at_k": 0.75,
+      "mrr": 1.0,
+      "avg_similarity": 0.6946,
+      "unique_sources": 4,
+      "retrieved_categories": [
+        "loneliness",
+        "loneliness",
+        "kindness/prosocial behavior",
+        "loneliness"
+      ]
+    },
+    {
+      "query_id": "social_isolation",
+      "method": "native_pdf",
+      "precision_at_k": 1.0,
+      "mrr": 1.0,
+      "avg_similarity": 0.452,
+      "unique_sources": 2,
+      "retrieved_categories": [
+        "loneliness",
+        "loneliness",
+        "loneliness",
+        "loneliness"
+      ]
+    },
+    {
+      "query_id": "cbt_reframing",
+      "method": "extracted_text",
+      "precision_at_k": 0.0,
+      "mrr": 0.0,
+      "avg_similarity": 0.694,
+      "unique_sources": 4,
+      "retrieved_categories": [
+        "gamification",
+        "motivation",
+        "physical activity",
+        "loneliness"
+      ]
+    },
+    {
+      "query_id": "cbt_reframing",
+      "method": "native_pdf",
+      "precision_at_k": 1.0,
+      "mrr": 1.0,
+      "avg_similarity": 0.4318,
+      "unique_sources": 1,
+      "retrieved_categories": [
+        "cognitive behavioral therapy",
+        "cognitive behavioral therapy",
+        "cognitive behavioral therapy",
+        "cognitive behavioral therapy"
+      ]
+    },
+    {
+      "query_id": "biofeedback_stress",
+      "method": "extracted_text",
+      "precision_at_k": 0.75,
+      "mrr": 1.0,
+      "avg_similarity": 0.6971,
+      "unique_sources": 4,
+      "retrieved_categories": [
+        "biofeedback",
+        "biofeedback",
+        "biofeedback",
+        "physical activity"
+      ]
+    },
+    {
+      "query_id": "biofeedback_stress",
+      "method": "native_pdf",
+      "precision_at_k": 1.0,
+      "mrr": 1.0,
+      "avg_similarity": 0.4689,
+      "unique_sources": 1,
+      "retrieved_categories": [
+        "biofeedback",
+        "biofeedback",
+        "biofeedback",
+        "biofeedback"
+      ]
+    },
+    {
+      "query_id": "diet_sleep_mood",
+      "method": "extracted_text",
+      "precision_at_k": 0.75,
+      "mrr": 0.5,
+      "avg_similarity": 0.6759,
+      "unique_sources": 4,
+      "retrieved_categories": [
+        "sleep hygiene",
+        "dietary habits",
+        "dietary habits",
+        "dietary habits"
+      ]
+    },
+    {
+      "query_id": "diet_sleep_mood",
+      "method": "native_pdf",
+      "precision_at_k": 0.5,
+      "mrr": 0.3333,
+      "avg_similarity": 0.4332,
+      "unique_sources": 3,
+      "retrieved_categories": [
+        "sleep hygiene",
+        "sleep hygiene",
+        "dietary habits",
+        "dietary habits"
+      ]
+    },
+    {
+      "query_id": "motivation_habits",
+      "method": "extracted_text",
+      "precision_at_k": 0.25,
+      "mrr": 0.3333,
+      "avg_similarity": 0.6934,
+      "unique_sources": 4,
+      "retrieved_categories": [
+        "gamification",
+        "gamification",
+        "motivation",
+        "kindness/prosocial behavior"
+      ]
+    },
+    {
+      "query_id": "motivation_habits",
+      "method": "native_pdf",
+      "precision_at_k": 0.25,
+      "mrr": 0.25,
+      "avg_similarity": 0.461,
+      "unique_sources": 2,
+      "retrieved_categories": [
+        "gamification",
+        "gamification",
+        "gamification",
+        "motivation"
+      ]
+    },
+    {
+      "query_id": "gamification_adherence",
+      "method": "extracted_text",
+      "precision_at_k": 0.5,
+      "mrr": 0.3333,
+      "avg_similarity": 0.7084,
+      "unique_sources": 4,
+      "retrieved_categories": [
+        "kindness/prosocial behavior",
+        "academic/work stress",
+        "gamification",
+        "gamification"
+      ]
+    },
+    {
+      "query_id": "gamification_adherence",
+      "method": "native_pdf",
+      "precision_at_k": 1.0,
+      "mrr": 1.0,
+      "avg_similarity": 0.4738,
+      "unique_sources": 2,
+      "retrieved_categories": [
+        "gamification",
+        "gamification",
+        "gamification",
+        "gamification"
+      ]
+    },
+    {
+      "query_id": "prosocial_wellbeing",
+      "method": "extracted_text",
+      "precision_at_k": 0.75,
+      "mrr": 1.0,
+      "avg_similarity": 0.7537,
+      "unique_sources": 4,
+      "retrieved_categories": [
+        "kindness/prosocial behavior",
+        "kindness/prosocial behavior",
+        "kindness/prosocial behavior",
+        "academic/work stress"
+      ]
+    },
+    {
+      "query_id": "prosocial_wellbeing",
+      "method": "native_pdf",
+      "precision_at_k": 1.0,
+      "mrr": 1.0,
+      "avg_similarity": 0.5011,
+      "unique_sources": 3,
+      "retrieved_categories": [
+        "kindness/prosocial behavior",
+        "kindness/prosocial behavior",
+        "kindness/prosocial behavior",
+        "kindness/prosocial behavior"
+      ]
+    },
+    {
+      "query_id": "mixed_stress_lonely",
+      "method": "extracted_text",
+      "precision_at_k": 0.5,
+      "mrr": 0.5,
+      "avg_similarity": 0.6363,
+      "unique_sources": 4,
+      "retrieved_categories": [
+        "physical activity",
+        "loneliness",
+        "academic/work stress",
+        "dietary habits"
+      ]
+    },
+    {
+      "query_id": "mixed_stress_lonely",
+      "method": "native_pdf",
+      "precision_at_k": 0.25,
+      "mrr": 0.3333,
+      "avg_similarity": 0.3927,
+      "unique_sources": 4,
+      "retrieved_categories": [
+        "mindfulness/meditation",
+        "physical activity",
+        "academic/work stress",
+        "sleep hygiene"
+      ]
+    }
+  ],
+  "rag_results": [
+    {
+      "query_id": "sleep_schedule",
+      "method": "extracted_text",
+      "faithfulness": 0.9333,
+      "context_relevance": 0.6,
+      "answer_relevance": 1.0,
+      "completeness": 1.0,
+      "aggregate": 0.8833
+    },
+    {
+      "query_id": "sleep_schedule",
+      "method": "native_pdf",
+      "faithfulness": 1.0,
+      "context_relevance": 1.0,
+      "answer_relevance": 1.0,
+      "completeness": 1.0,
+      "aggregate": 1.0
+    },
+    {
+      "query_id": "stress_deadlines",
+      "method": "extracted_text",
+      "faithfulness": 0.75,
+      "context_relevance": 0.7,
+      "answer_relevance": 0.8,
+      "completeness": 1.0,
+      "aggregate": 0.8125
+    },
+    {
+      "query_id": "stress_deadlines",
+      "method": "native_pdf",
+      "faithfulness": 0.6667,
+      "context_relevance": 0.85,
+      "answer_relevance": 0.2,
+      "completeness": 0.2,
+      "aggregate": 0.4792
+    },
+    {
+      "query_id": "mindfulness_focus",
+      "method": "extracted_text",
+      "faithfulness": 0.7647,
+      "context_relevance": 0.55,
+      "answer_relevance": 0.6,
+      "completeness": 0.6,
+      "aggregate": 0.6287
+    },
+    {
+      "query_id": "mindfulness_focus",
+      "method": "native_pdf",
+      "faithfulness": 0.3333,
+      "context_relevance": 0.85,
+      "answer_relevance": 0.8,
+      "completeness": 1.0,
+      "aggregate": 0.7458
+    },
+    {
+      "query_id": "exercise_mood",
+      "method": "extracted_text",
+      "faithfulness": 1.0,
+      "context_relevance": 0.35,
+      "answer_relevance": 0.6,
+      "completeness": 0.4,
+      "aggregate": 0.5875
+    },
+    {
+      "query_id": "exercise_mood",
+      "method": "native_pdf",
+      "faithfulness": 1.0,
+      "context_relevance": 0.7,
+      "answer_relevance": 0.8,
+      "completeness": 1.0,
+      "aggregate": 0.875
+    },
+    {
+      "query_id": "social_isolation",
+      "method": "extracted_text",
+      "faithfulness": 0.8837,
+      "context_relevance": 0.9,
+      "answer_relevance": 1.0,
+      "completeness": 1.0,
+      "aggregate": 0.9459
+    },
+    {
+      "query_id": "social_isolation",
+      "method": "native_pdf",
+      "faithfulness": 0.8125,
+      "context_relevance": 0.8,
+      "answer_relevance": 1.0,
+      "completeness": 1.0,
+      "aggregate": 0.9031
+    },
+    {
+      "query_id": "cbt_reframing",
+      "method": "extracted_text",
+      "faithfulness": 1.0,
+      "context_relevance": 0.85,
+      "answer_relevance": 0.8,
+      "completeness": 1.0,
+      "aggregate": 0.9125
+    },
+    {
+      "query_id": "cbt_reframing",
+      "method": "native_pdf",
+      "faithfulness": 1.0,
+      "context_relevance": 0.8,
+      "answer_relevance": 1.0,
+      "completeness": 0.6,
+      "aggregate": 0.85
+    },
+    {
+      "query_id": "biofeedback_stress",
+      "method": "extracted_text",
+      "faithfulness": 0.8,
+      "context_relevance": 0.75,
+      "answer_relevance": 1.0,
+      "completeness": 1.0,
+      "aggregate": 0.8875
+    },
+    {
+      "query_id": "biofeedback_stress",
+      "method": "native_pdf",
+      "faithfulness": 0.9583,
+      "context_relevance": 0.8,
+      "answer_relevance": 1.0,
+      "completeness": 1.0,
+      "aggregate": 0.9396
+    },
+    {
+      "query_id": "diet_sleep_mood",
+      "method": "extracted_text",
+      "faithfulness": 0.9286,
+      "context_relevance": 0.5,
+      "answer_relevance": 1.0,
+      "completeness": 1.0,
+      "aggregate": 0.8571
+    },
+    {
+      "query_id": "diet_sleep_mood",
+      "method": "native_pdf",
+      "faithfulness": 0.5,
+      "context_relevance": 0.6,
+      "answer_relevance": 1.0,
+      "completeness": 0.2,
+      "aggregate": 0.575
+    },
+    {
+      "query_id": "motivation_habits",
+      "method": "extracted_text",
+      "faithfulness": 1.0,
+      "context_relevance": 0.8,
+      "answer_relevance": 0.8,
+      "completeness": 1.0,
+      "aggregate": 0.9
+    },
+    {
+      "query_id": "motivation_habits",
+      "method": "native_pdf",
+      "faithfulness": 0.9722,
+      "context_relevance": 1.0,
+      "answer_relevance": 1.0,
+      "completeness": 1.0,
+      "aggregate": 0.993
+    },
+    {
+      "query_id": "gamification_adherence",
+      "method": "extracted_text",
+      "faithfulness": 1.0,
+      "context_relevance": 0.65,
+      "answer_relevance": 0.8,
+      "completeness": 1.0,
+      "aggregate": 0.8625
+    },
+    {
+      "query_id": "gamification_adherence",
+      "method": "native_pdf",
+      "faithfulness": 1.0,
+      "context_relevance": 0.85,
+      "answer_relevance": 0.6,
+      "completeness": 1.0,
+      "aggregate": 0.8625
+    },
+    {
+      "query_id": "prosocial_wellbeing",
+      "method": "extracted_text",
+      "faithfulness": 0.9,
+      "context_relevance": 0.65,
+      "answer_relevance": 1.0,
+      "completeness": 1.0,
+      "aggregate": 0.8875
+    },
+    {
+      "query_id": "prosocial_wellbeing",
+      "method": "native_pdf",
+      "faithfulness": 1.0,
+      "context_relevance": 0.85,
+      "answer_relevance": 1.0,
+      "completeness": 1.0,
+      "aggregate": 0.9625
+    },
+    {
+      "query_id": "mixed_stress_lonely",
+      "method": "extracted_text",
+      "faithfulness": 0.6,
+      "context_relevance": 0.75,
+      "answer_relevance": 0.6,
+      "completeness": 0.8,
+      "aggregate": 0.6875
+    },
+    {
+      "query_id": "mixed_stress_lonely",
+      "method": "native_pdf",
+      "faithfulness": 0.9048,
+      "context_relevance": 0.8,
+      "answer_relevance": 0.8,
+      "completeness": 1.0,
+      "aggregate": 0.8762
+    }
+  ]
+}
