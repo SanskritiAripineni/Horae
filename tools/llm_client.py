@@ -24,7 +24,7 @@ except ImportError:
 class LLMClient:
     """Wrapper for Gemini API calls with mental health and calendar optimization prompts."""
     
-    def __init__(self, api_key: Optional[str] = None, model_name: str = "gemini-2.5-flash"):
+    def __init__(self, api_key: Optional[str] = None, model_name: str = "gemini-3-flash-preview"):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self.model_name = model_name
         self.client = None
@@ -106,8 +106,8 @@ Base your assessment on:
     ) -> List[Dict[str, Any]]:
         """Generate personalized recommendations based on analysis and research."""
         research_text = ""
-        for i, r in enumerate(research_context[:4], 1):
-            research_text += f"{i}. [{r.get('category', 'General')}] {r.get('content', '')[:300]}...\n"
+        for i, r in enumerate(research_context[:6], 1):
+            research_text += f"{i}. [{r.get('category', 'General')}] {r.get('content', '')[:500]}...\n"
             research_text += f"   Source: {r.get('source', 'Unknown')}\n\n"
         
         prompt = f'''Generate 3-4 personalized wellness recommendations.
@@ -160,44 +160,47 @@ Rules:
         user_preferences: List[str] = None
     ) -> List[Dict[str, Any]]:
         """Generate proposed calendar changes based on recommendations, schedule, tasks, and user preferences."""
-        tomorrow = datetime.now() + timedelta(days=1)
-        dates = [(tomorrow + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(5)]
-        
+        now = datetime.now()
+        tomorrow = now + timedelta(days=1)
+        dates = [(tomorrow + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+
         # Format user preferences
         pref_text = ""
         if user_preferences:
             pref_text = "\nUSER PREFERENCES (MUST RESPECT):\n"
             for p in user_preferences:
                 pref_text += f"- {p}\n"
-        
-        # Format events
+
+        # Format events — include full start+end so model can see occupied slots
         events_text = ""
         if calendar_summary.get('events'):
-            for e in calendar_summary['events'][:12]:
-                events_text += f"- {e['start']}: {e['title']} ({e['duration_hours']:.1f}h)\n"
+            for e in calendar_summary['events'][:20]:
+                events_text += f"- {e['start']} → {e['end']}: {e['title']} ({e['duration_hours']:.1f}h)\n"
         else:
             events_text = "No events scheduled.\n"
-        
+
         # Format tasks
         tasks_text = ""
         if calendar_summary.get('tasks'):
-            for t in calendar_summary['tasks'][:8]:
+            for t in calendar_summary['tasks'][:10]:
                 due = f" (due: {t['due']})" if t['due'] != 'No due date' else ""
                 tasks_text += f"- {t['title']}{due}\n"
         else:
             tasks_text = "No pending tasks.\n"
-        
-        recs_text = "\n".join([f"- [{r['category']}] {r['action']} ({r['when']})" 
+
+        recs_text = "\n".join([f"- [{r['category']}] {r['action']} ({r['when']})"
                                for r in recommendations[:4]])
-        
+
         prompt = f'''Based on the user's mental health, schedule, and tasks, suggest calendar optimizations.
+
+TODAY: {now.strftime('%A, %Y-%m-%d %H:%M')} (timezone: America/Chicago)
 
 MENTAL STATE:
 - Risk Level: {mental_health.get('risk_level', 'unknown')}
 - PHQ-4 Estimate: {mental_health.get('estimated_phq4', '?')}/12
 - Concerns: {', '.join(mental_health.get('key_concerns', [])[:3])}
 
-CURRENT CALENDAR (Next 7 days):
+CURRENT CALENDAR (this week + next 7 days) — DO NOT schedule on top of these:
 {events_text}
 Total: {calendar_summary.get('total_hours', 0)} hours across {calendar_summary.get('event_count', 0)} events
 
@@ -207,7 +210,7 @@ PENDING TASKS:
 WELLNESS RECOMMENDATIONS:
 {recs_text}
 {pref_text}
-AVAILABLE DATES: {', '.join(dates)}
+AVAILABLE DATES (schedule only within these): {', '.join(dates)}
 
 Respond in JSON format (no markdown):
 {{
@@ -225,15 +228,16 @@ Respond in JSON format (no markdown):
 }}
 
 Rules:
-1. Suggest 3-5 calendar additions
-2. Schedule wellness breaks between existing events
-3. Find optimal times for pending tasks based on workload
-4. Avoid conflicts with existing events
+1. Suggest 3-5 calendar additions spread across different days
+2. NEVER place a suggestion at the same time as an existing event — check each slot carefully
+3. Schedule wellness breaks in gaps between existing events
+4. Find optimal times for pending tasks based on workload
 5. Set appropriate durations: wellness activities 15-30 min, study/work tasks 1-2 hours
-6. Use realistic times - mornings (9am), afternoons (2-4pm), evenings (6-8pm)
+6. Use realistic times - mornings (8-10am), afternoons (12-4pm), evenings (6-8pm)
 7. No emojis in titles
 8. STRICTLY respect user preferences - do NOT suggest activities the user dislikes
-9. ALWAYS set end_time after start_time with proper duration'''
+9. ALWAYS set end_time after start_time with correct duration
+10. Only use dates from AVAILABLE DATES — never suggest events in the past'''
 
         response = self.generate(prompt)
         

@@ -59,7 +59,7 @@ class Config:
     VECTORDB_COLLECTION: str = "wellness_papers_gemini"
 
     # LLM settings
-    LLM_MODEL: str = "gemini-2.5-flash"
+    LLM_MODEL: str = "gemini-3-flash-preview"
     LLM_MAX_TOKENS: int = 1024
     LLM_TEMPERATURE: float = 0.7
     

@@ -1,15 +1,19 @@
 package com.google.mediapipe.examples.llminference.ui
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,222 +21,333 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.google.mediapipe.examples.llminference.data.DebugRepository
-import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import android.widget.Toast
-import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.mediapipe.examples.llminference.JournalGenerator
 import com.google.mediapipe.examples.llminference.data.DataExporter
+import com.google.mediapipe.examples.llminference.data.DebugRepository
+import com.google.mediapipe.examples.llminference.ui.theme.*
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DevDashboardScreen(
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit  // handled by RideAppNavHost's global back arrow
 ) {
-    val motionStats by DebugRepository.motionStats.collectAsStateWithLifecycle()
-    val locationInfo by DebugRepository.locationInfo.collectAsStateWithLifecycle()
-    val lastJournal by DebugRepository.lastJournal.collectAsStateWithLifecycle()
-    val isDemoMode by DebugRepository.isDemoMode.collectAsStateWithLifecycle()
+    val motionStats             by DebugRepository.motionStats.collectAsStateWithLifecycle()
+    val locationInfo            by DebugRepository.locationInfo.collectAsStateWithLifecycle()
+    val lastJournal             by DebugRepository.lastJournal.collectAsStateWithLifecycle()
+    val isDemoMode              by DebugRepository.isDemoMode.collectAsStateWithLifecycle()
     val isPermanentMotionEnabled by DebugRepository.isPermanentMotionEnabled.collectAsStateWithLifecycle()
-    
+
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    
-    var showFullMap by remember { mutableStateOf(false) }
-    
+    val scope   = rememberCoroutineScope()
+    var showFullMap    by remember { mutableStateOf(false) }
+    var isGenerating   by remember { mutableStateOf(false) }
+
     if (showFullMap && locationInfo.mapImage != null) {
-        FullMapDialog(
-            bitmap = locationInfo.mapImage!!,
-            onDismiss = { showFullMap = false }
-        )
+        FullMapDialog(bitmap = locationInfo.mapImage!!, onDismiss = { showFullMap = false })
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("AutoLife Developer Dashboard") },
-                navigationIcon = {
-                    Button(onClick = onBackClick) { Text("Back") }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(DarkBackground)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // ── Controls ─────────────────────────────────────────
+        SectionHeader("CONTROLS")
+
+        ToggleRow(
+            accentColor = TerminalCyan,
+            title       = "demo_mode",
+            description = "journal interval: 2 min",
+            checked     = isDemoMode,
+            onChecked   = { DebugRepository.setDemoMode(it) }
+        )
+
+        ToggleRow(
+            accentColor = TerminalAmber,
+            title       = "keep_motion_active",
+            description = "sensor update: 2s",
+            checked     = isPermanentMotionEnabled,
+            onChecked   = { DebugRepository.setPermanentMotionEnabled(it) }
+        )
+
+        OutlinedButton(
+            onClick = {
+                scope.launch {
+                    val ok = DataExporter.exportJournals(context)
+                    Toast.makeText(
+                        context,
+                        if (ok) "exported → Downloads/AutoLife" else "export failed",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            shape    = RoundedCornerShape(2.dp),
+            colors   = ButtonDefaults.outlinedButtonColors(contentColor = TerminalGreen),
+            border   = BorderStroke(1.dp, TerminalGreen)
         ) {
-            // Control Panel
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            Text("▶  EXPORT ALL JOURNALS", style = MaterialTheme.typography.labelLarge)
+        }
+
+        if (isDemoMode) {
+            OutlinedButton(
+                onClick = {
+                    scope.launch {
+                        isGenerating = true
+                        val ok = JournalGenerator(context).tryGenerateJournal(
+                            endTime          = System.currentTimeMillis(),
+                            periodDurationMs = 2 * 60_000L
+                        )
+                        isGenerating = false
+                        Toast.makeText(
+                            context,
+                            if (ok) "journal generated" else "no logs in last 2 min — start service first",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                },
+                enabled  = !isGenerating,
+                modifier = Modifier.fillMaxWidth(),
+                shape    = RoundedCornerShape(2.dp),
+                colors   = ButtonDefaults.outlinedButtonColors(contentColor = TerminalCyan),
+                border   = BorderStroke(1.dp, if (isGenerating) DarkBorder else TerminalCyan)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Demo Mode", fontWeight = FontWeight.Bold)
-                        Text(
-                            "2-min journal interval",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                    Switch(
-                        checked = isDemoMode,
-                        onCheckedChange = { DebugRepository.setDemoMode(it) }
-                    )
-                }
-                HorizontalDivider()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Keep Motion Active", fontWeight = FontWeight.Bold)
-                        Text(
-                            "Live updates every 2s",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                    Switch(
-                        checked = isPermanentMotionEnabled,
-                        onCheckedChange = { DebugRepository.setPermanentMotionEnabled(it) }
-                    )
-                }
-                HorizontalDivider()
-                Button(
-                    onClick = {
-                        scope.launch {
-                            val success = DataExporter.exportJournals(context)
-                            val message = if (success) "Data exported to Downloads/AutoLife" else "Export failed"
-                            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Text("Export Data (All Journals)")
-                }
+                Text(
+                    if (isGenerating) "█  GENERATING..." else "▶  GENERATE JOURNAL NOW",
+                    style = MaterialTheme.typography.labelLarge
+                )
             }
-
-            // Motion Context
-            Card {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Motion Context (Real-time)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    DebugRow("Acceleration", "${"%.2f".format(motionStats.acceleration)} m/s²")
-                    DebugRow("Steps (Session)", "${motionStats.stepCount}")
-                    DebugRow("Speed (GPS)", "${"%.2f".format(motionStats.speed)} m/s")
-                    DebugRow("Altitude", "${"%.1f".format(motionStats.altitude)} m")
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    Text("Inferred Class: ${motionStats.detectedClass}", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                }
+            if (isGenerating) {
+                LinearProgressIndicator(
+                    modifier   = Modifier.fillMaxWidth(),
+                    color      = TerminalCyan,
+                    trackColor = DarkBorder
+                )
             }
+        }
 
-            // Location Context
-            Card {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Location Context (15s Interval)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
+        // ── Motion context ────────────────────────────────────
+        SectionHeader("MOTION CONTEXT")
+        TerminalCard(accentColor = ToolAutoLife) {
+            Text(
+                "inferred_class: ${motionStats.detectedClass}",
+                style = MaterialTheme.typography.labelLarge,
+                color = ToolAutoLife,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            MonoRow("acceleration", "${"%.2f".format(motionStats.acceleration)} m/s²")
+            MonoRow("steps_session", "${motionStats.stepCount}")
+            MonoRow("speed_gps",    "${"%.2f".format(motionStats.speed)} m/s")
+            MonoRow("altitude",     "${"%.1f".format(motionStats.altitude)} m")
+        }
+
+        // ── Location context ──────────────────────────────────
+        SectionHeader("LOCATION CONTEXT")
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape  = RoundedCornerShape(2.dp),
+            colors = CardDefaults.cardColors(containerColor = DarkSurface),
+            border = BorderStroke(1.dp, DarkBorder)
+        ) {
+            Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                Box(
+                    modifier = Modifier
+                        .width(3.dp)
+                        .fillMaxHeight()
+                        .background(ToolCalendar)
+                )
+                Column(modifier = Modifier.padding(12.dp)) {
+                    // Map image
                     if (locationInfo.mapImage != null) {
+                        val mapBitmap = remember(locationInfo.mapImage) {
+                            locationInfo.mapImage!!.asImageBitmap()
+                        }
                         Image(
-                            bitmap = locationInfo.mapImage!!.asImageBitmap(),
+                            bitmap           = mapBitmap,
                             contentDescription = "Satellite Map",
-                            modifier = Modifier
+                            modifier         = Modifier
                                 .fillMaxWidth()
-                                .height(200.dp)
-                                .background(Color.Gray, RoundedCornerShape(8.dp))
+                                .height(180.dp)
+                                .background(Color(0xFF111111), RoundedCornerShape(2.dp))
                                 .clickable { showFullMap = true },
-                            contentScale = ContentScale.Crop
+                            contentScale     = ContentScale.Crop
+                        )
+                        Text(
+                            "tap to zoom",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = DarkOnSurfaceDim,
+                            modifier = Modifier.padding(top = 2.dp)
                         )
                     } else {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(100.dp)
-                                .background(Color.LightGray, RoundedCornerShape(8.dp)),
+                                .height(80.dp)
+                                .background(Color(0xFF111111), RoundedCornerShape(2.dp)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("No Map Image Captured Yet")
+                            Text(
+                                "no_map_captured_yet",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = DarkOnSurfaceDim
+                            )
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("SSIDs (${locationInfo.ssids.size}):", fontWeight = FontWeight.SemiBold)
+                    // SSIDs
+                    MonoRow("ssids_detected", "${locationInfo.ssids.size}")
                     locationInfo.ssids.take(5).forEach { ssid ->
-                        Text("• $ssid", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "  • $ssid",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = DarkOnSurfaceDim
+                        )
                     }
-                    if (locationInfo.ssids.size > 5) Text("...and ${locationInfo.ssids.size - 5} more", style = MaterialTheme.typography.bodySmall)
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Gemini Inference:", fontWeight = FontWeight.SemiBold)
-                    Text(locationInfo.lastInference, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
+                    if (locationInfo.ssids.size > 5) {
+                        Text(
+                            "  … +${locationInfo.ssids.size - 5} more",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = DarkOnSurfaceDim
+                        )
+                    }
+                    // Gemini inference
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        "gemini_inference:",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = DarkOnSurfaceDim
+                    )
+                    Text(
+                        locationInfo.lastInference,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TerminalCyan
+                    )
                 }
             }
+        }
 
-            // Journal
-            Card {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Latest Journal Entry", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    if (lastJournal != null) {
-                        Text(lastJournal!!, style = MaterialTheme.typography.bodyMedium)
-                    } else {
-                        Text("No journal generated yet. Enable Demo Mode to speed up.", style = MaterialTheme.typography.bodySmall, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
-                    }
+        // ── Latest journal ────────────────────────────────────
+        SectionHeader("LATEST JOURNAL ENTRY")
+        TerminalCard(accentColor = ToolKEmo) {
+            if (lastJournal != null) {
+                Text(
+                    lastJournal!!,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = DarkOnSurface
+                )
+            } else {
+                Text(
+                    "no_journal_yet  →  enable demo_mode to accelerate generation",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = DarkOnSurfaceDim,
+                    fontStyle = FontStyle.Italic
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+    }
+}
+
+// ── Toggle row ────────────────────────────────────────────────
+
+@Composable
+private fun ToggleRow(
+    accentColor: Color,
+    title: String,
+    description: String,
+    checked: Boolean,
+    onChecked: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape  = RoundedCornerShape(2.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        border = BorderStroke(1.dp, DarkBorder)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment     = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .width(3.dp)
+                        .height(32.dp)
+                        .background(accentColor)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (checked) accentColor else DarkOnSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        description,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = DarkOnSurfaceDim
+                    )
                 }
             }
+            Switch(
+                checked       = checked,
+                onCheckedChange = onChecked,
+                colors        = SwitchDefaults.colors(
+                    checkedThumbColor   = accentColor,
+                    checkedTrackColor   = accentColor.copy(alpha = 0.3f),
+                    uncheckedThumbColor = DarkOnSurfaceDim,
+                    uncheckedTrackColor = DarkBorder
+                )
+            )
         }
     }
 }
 
+// ── Full-screen map dialog (unchanged layout, dark bg) ────────
+
 @Composable
-fun FullMapDialog(
-    bitmap: Bitmap,
-    onDismiss: () -> Unit
-) {
+fun FullMapDialog(bitmap: Bitmap, onDismiss: () -> Unit) {
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties       = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            // Transformable State for simple pinch-to-zoom
-            var scale by remember { mutableStateOf(1f) }
+            var scale  by remember { mutableStateOf(1f) }
             var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
-            val state = rememberTransformableState { zoomChange, offsetChange, _ ->
-                scale *= zoomChange
+            val state  = rememberTransformableState { zoomChange, offsetChange, _ ->
+                scale  *= zoomChange
                 offset += offsetChange
             }
 
             Image(
-                bitmap = bitmap.asImageBitmap(),
+                bitmap             = bitmap.asImageBitmap(),
                 contentDescription = "Full Map View",
-                modifier = Modifier
+                modifier           = Modifier
                     .fillMaxSize()
                     .graphicsLayer(
-                        scaleX = scale.coerceIn(1f, 5f),
-                        scaleY = scale.coerceIn(1f, 5f),
+                        scaleX       = scale.coerceIn(1f, 5f),
+                        scaleY       = scale.coerceIn(1f, 5f),
                         translationX = offset.x,
                         translationY = offset.y
                     )
@@ -240,40 +355,28 @@ fun FullMapDialog(
                 contentScale = ContentScale.Fit
             )
 
-            // Close Button
             IconButton(
-                onClick = onDismiss,
+                onClick  = onDismiss,
                 modifier = Modifier
                     .padding(16.dp)
                     .align(Alignment.TopStart)
-                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
+                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(24.dp))
             ) {
                 Icon(
-                    imageVector = Icons.Default.Close,
+                    imageVector        = Icons.Default.Close,
                     contentDescription = "Close",
-                    tint = Color.White
+                    tint               = Color.White
                 )
             }
-            
+
             Text(
-                "Pinch to zoom / Drag to move",
-                color = Color.White.copy(alpha = 0.7f),
-                style = MaterialTheme.typography.labelSmall,
+                "pinch to zoom  ·  drag to pan",
+                color    = Color.White.copy(alpha = 0.5f),
+                style    = MaterialTheme.typography.labelSmall,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 24.dp)
             )
         }
-    }
-}
-
-@Composable
-fun DebugRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label)
-        Text(value, fontWeight = FontWeight.Bold)
     }
 }

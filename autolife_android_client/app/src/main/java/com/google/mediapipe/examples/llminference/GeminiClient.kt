@@ -9,7 +9,7 @@ object GeminiClient {
     private val apiKey = BuildConfig.GEMINI_API_KEY
     
     private val model = GenerativeModel(
-        modelName = "gemini-2.5-flash-lite",
+        modelName = "gemini-3.1-flash-lite-preview",
         apiKey = apiKey,
         generationConfig = generationConfig {
             temperature = 0.7f

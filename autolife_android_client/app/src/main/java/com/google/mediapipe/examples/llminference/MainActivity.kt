@@ -10,8 +10,8 @@ import android.view.Choreographer
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.MaterialTheme
-import com.google.mediapipe.examples.llminference.ui.DashboardScreen
+import com.google.mediapipe.examples.llminference.ui.RideAppNavHost
+import com.google.mediapipe.examples.llminference.ui.theme.Autolife_projTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -68,8 +68,8 @@ class MainActivity : ComponentActivity() {
         requestPermissionLauncher.launch(perms.toTypedArray())
 
         setContent {
-            MaterialTheme {
-                DashboardScreen()
+            Autolife_projTheme {
+                RideAppNavHost()
             }
         }
     }

@@ -22,7 +22,7 @@ def _client() -> genai.Client:
     return genai.Client(api_key=api_key)
 
 
-_JUDGE_MODEL = "gemini-2.5-flash"
+_JUDGE_MODEL = "gemini-3-flash-preview"
 
 
 def _parse_score(text: str) -> tuple[float, str]:

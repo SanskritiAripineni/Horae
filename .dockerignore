@@ -1,0 +1,12 @@
+.env
+.git
+data/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+venv_new/
+apps/
+autolife_android_client/
+docs/

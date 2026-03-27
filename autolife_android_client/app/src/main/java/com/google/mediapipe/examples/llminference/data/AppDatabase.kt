@@ -53,6 +53,9 @@ interface LogDao {
 
     @Query("DELETE FROM sensor_logs")
     suspend fun deleteAllLogs()
+
+    @Query("DELETE FROM journal_entries")
+    suspend fun deleteAllJournals()
 }
 
 @Database(entities = [SensorLog::class, JournalEntry::class], version = 1, exportSchema = false)

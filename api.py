@@ -62,5 +62,21 @@ async def apply_calendar(request: ApplyCalendarRequest):
     results = agent_instance.apply_calendar_changes(request.changes, request.user_comments)
     return results
 
+@app.get("/api/memory")
+async def get_memory(user_id: str = "default"):
+    """
+    Returns user preferences and mental health history from the memory module.
+    Used by the Android Memory screen to display stored context.
+    """
+    if not agent_instance:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+    ctx = agent_instance.memory.get_user_context(user_id)
+    ctx["mental_health"]["history"] = agent_instance.memory.health_tracker._get_history(user_id)
+    return ctx
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
 if __name__ == "__main__":
     uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)

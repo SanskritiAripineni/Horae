@@ -4,7 +4,9 @@ import com.google.mediapipe.examples.llminference.BuildConfig
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Query
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
@@ -63,12 +65,42 @@ data class ApplyCalendarResponse(
     val skipped: List<Map<String, Any>>
 )
 
+// Memory response models (GET /api/memory)
+data class UserMemoryData(
+    val user_id: String,
+    val preferences: UserPrefs,
+    val mental_health: MemoryHealthSummary
+)
+
+data class UserPrefs(
+    val goals: List<String> = emptyList(),
+    val work_hours: List<Int> = listOf(9, 17),
+    val preferred_interventions: List<String> = emptyList(),
+    val max_daily_hours: Double = 8.0
+)
+
+data class MemoryHealthSummary(
+    val latest_phq4: Int? = null,
+    val risk_level: String = "unknown",
+    val trend: String = "stable",
+    val history: List<HealthHistoryEntry> = emptyList()
+)
+
+data class HealthHistoryEntry(
+    val total: Int,
+    val risk_level: String,
+    val timestamp: String
+)
+
 interface BackendApiService {
     @POST("/api/process_journals")
     suspend fun processJournals(@Body request: ProcessJournalsRequest): ProcessJournalsResponse
 
     @POST("/api/apply_calendar")
     suspend fun applyCalendar(@Body request: ApplyCalendarRequest): ApplyCalendarResponse
+
+    @GET("/api/memory")
+    suspend fun getMemory(@Query("user_id") userId: String = "default"): UserMemoryData
 }
 
 object BackendApiClient {

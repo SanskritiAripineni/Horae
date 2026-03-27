@@ -159,28 +159,52 @@ class CalendarAPI:
             return 'primary'
     
     def get_events(self, days: int = 7, max_results: int = 50) -> List[CalendarEvent]:
-        """Get upcoming calendar events."""
+        """Get calendar events from the start of the current week through the next `days` days.
+        Merges events from both the primary calendar and the RIDE Agent calendar, deduplicated by id."""
         if not self.calendar_service:
             if not self.authenticate():
                 return []
-        
+
         try:
-            now = datetime.utcnow().isoformat() + 'Z'
-            end_time = (datetime.utcnow() + timedelta(days=days)).isoformat() + 'Z'
-            
-            events_result = self.calendar_service.events().list(
-                calendarId='primary',
-                timeMin=now,
-                timeMax=end_time,
-                maxResults=max_results,
-                singleEvents=True,
-                orderBy='startTime'
-            ).execute()
-            
-            events = events_result.get('items', [])
-            logger.info(f"Retrieved {len(events)} calendar events")
-            return [CalendarEvent.from_google_format(e) for e in events]
-            
+            # Start from the Monday of the current week so the full week is always visible
+            today = datetime.utcnow()
+            days_since_monday = today.weekday()  # 0 = Monday
+            week_start = (today - timedelta(days=days_since_monday)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            time_min = week_start.isoformat() + 'Z'
+            time_max = (today + timedelta(days=days)).isoformat() + 'Z'
+
+            target_cal_id = self.get_target_calendar_id()
+            calendar_ids = list(dict.fromkeys(['primary', target_cal_id]))  # deduplicate
+
+            seen_ids: set = set()
+            all_events: List[CalendarEvent] = []
+
+            for cal_id in calendar_ids:
+                try:
+                    events_result = self.calendar_service.events().list(
+                        calendarId=cal_id,
+                        timeMin=time_min,
+                        timeMax=time_max,
+                        maxResults=max_results,
+                        singleEvents=True,
+                        orderBy='startTime'
+                    ).execute()
+                    for item in events_result.get('items', []):
+                        event_id = item.get('id')
+                        if event_id and event_id in seen_ids:
+                            continue
+                        if event_id:
+                            seen_ids.add(event_id)
+                        all_events.append(CalendarEvent.from_google_format(item))
+                except Exception as e:
+                    logger.warning(f"Failed to fetch events from calendar '{cal_id}': {e}")
+
+            all_events.sort(key=lambda ev: ev.start_time)
+            logger.info(f"Retrieved {len(all_events)} calendar events (merged {len(calendar_ids)} calendars)")
+            return all_events
+
         except Exception as e:
             logger.error(f"Failed to get events: {e}")
             return []
