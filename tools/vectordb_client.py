@@ -5,10 +5,15 @@ Uses native PDF embeddings via gemini-embedding-2-preview for superior retrieval
 
 import os
 import logging
+import time
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Retry configuration
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 1.0  # seconds, doubles each attempt
 
 WELLNESS_CATEGORIES = [
     "Sleep Hygiene",
@@ -70,35 +75,75 @@ class VectorDBClient:
             self._genai_client = genai.Client(api_key=api_key)
         return self._genai_client
 
+    def _is_retryable(self, error: Exception) -> bool:
+        """Check if an error is transient and worth retrying."""
+        error_str = str(error).lower()
+        if any(kw in error_str for kw in [
+            "429", "rate", "quota", "500", "502", "503", "504",
+            "timeout", "connection", "network", "unavailable",
+            "reset", "broken pipe", "eof",
+        ]):
+            return True
+        error_type = type(error).__name__
+        if "ServiceUnavailable" in error_type or "ResourceExhausted" in error_type:
+            return True
+        return False
+
     def _embed_query(self, text: str) -> List[float]:
-        """Embed a text query using Gemini Embedding 2."""
+        """Embed a text query using Gemini Embedding 2 with retry."""
         self._load_config()
         client = self._get_genai_client()
-        result = client.models.embed_content(
-            model=self._embedding_model,
-            contents=text,
-        )
-        return result.embeddings[0].values
+
+        last_error: Optional[Exception] = None
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                result = client.models.embed_content(
+                    model=self._embedding_model,
+                    contents=text,
+                )
+                return result.embeddings[0].values
+            except Exception as e:
+                last_error = e
+                if attempt < MAX_RETRIES and self._is_retryable(e):
+                    delay = RETRY_BASE_DELAY * (2 ** attempt)
+                    logger.warning(
+                        f"Embedding API call failed (attempt {attempt + 1}/{MAX_RETRIES + 1}), "
+                        f"retrying in {delay:.1f}s: {e}"
+                    )
+                    time.sleep(delay)
+                else:
+                    break
+
+        logger.error(f"Embedding failed after {MAX_RETRIES + 1} attempts: {last_error}")
+        raise last_error  # Let caller handle (retrieve() already catches exceptions)
 
     def initialize(self) -> bool:
-        """Initialize ChromaDB connection."""
-        try:
-            import chromadb
-            self._load_config()
+        """Initialize ChromaDB connection with retry for transient I/O errors."""
+        self._load_config()
 
-            if not self.chroma_dir.exists():
-                logger.warning(f"ChromaDB not found at {self.chroma_dir}. Run vectordb/ingest_simple.py first.")
-                return False
-
-            client = chromadb.PersistentClient(path=str(self.chroma_dir))
-            self.collection = client.get_collection(self._collection_name)
-            self._initialized = True
-            logger.info(f"VectorDB initialized with {self.collection.count()} documents")
-            return True
-
-        except Exception as e:
-            logger.error(f"Failed to initialize VectorDB: {e}")
+        if not self.chroma_dir.exists():
+            logger.warning(f"ChromaDB not found at {self.chroma_dir}. Run vectordb/ingest_simple.py first.")
             return False
+
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                import chromadb
+                client = chromadb.PersistentClient(path=str(self.chroma_dir))
+                self.collection = client.get_collection(self._collection_name)
+                self._initialized = True
+                logger.info(f"VectorDB initialized with {self.collection.count()} documents")
+                return True
+            except Exception as e:
+                if attempt < MAX_RETRIES:
+                    delay = RETRY_BASE_DELAY * (2 ** attempt)
+                    logger.warning(
+                        f"ChromaDB init failed (attempt {attempt + 1}/{MAX_RETRIES + 1}), "
+                        f"retrying in {delay:.1f}s: {e}"
+                    )
+                    time.sleep(delay)
+                else:
+                    logger.error(f"Failed to initialize VectorDB after {MAX_RETRIES + 1} attempts: {e}")
+                    return False
 
     def retrieve(self, query: str, category: Optional[str] = None, top_k: int = 3) -> List[Dict[str, Any]]:
         """

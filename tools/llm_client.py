@@ -7,10 +7,15 @@ import logging
 import os
 import json
 import re
+import time
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+# Retry configuration
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 1.0  # seconds, doubles each attempt
 
 try:
     from google import genai
@@ -38,22 +43,57 @@ class LLMClient:
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini: {e}")
     
+    def _is_retryable(self, error: Exception) -> bool:
+        """Check if an error is transient and worth retrying."""
+        error_str = str(error).lower()
+        # Rate limit errors (HTTP 429)
+        if "429" in error_str or "rate" in error_str or "quota" in error_str:
+            return True
+        # Server errors (5xx)
+        if any(code in error_str for code in ["500", "502", "503", "504"]):
+            return True
+        # Network / connection errors
+        if any(kw in error_str for kw in [
+            "timeout", "connection", "network", "unavailable",
+            "reset", "broken pipe", "eof",
+        ]):
+            return True
+        # google-genai may raise specific API errors with retryable status
+        error_type = type(error).__name__
+        if "ServiceUnavailable" in error_type or "ResourceExhausted" in error_type:
+            return True
+        return False
+
     def generate(self, prompt: str, max_tokens: int = 8192) -> str:
-        """Generate text from a prompt."""
+        """Generate text from a prompt with exponential-backoff retry."""
         if not self.client:
             return ""
-        try:
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    max_output_tokens=max_tokens
+
+        last_error: Optional[Exception] = None
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        max_output_tokens=max_tokens
+                    )
                 )
-            )
-            return response.text
-        except Exception as e:
-            logger.error(f"Generation failed: {e}")
-            return ""
+                return response.text
+            except Exception as e:
+                last_error = e
+                if attempt < MAX_RETRIES and self._is_retryable(e):
+                    delay = RETRY_BASE_DELAY * (2 ** attempt)
+                    logger.warning(
+                        f"Gemini API call failed (attempt {attempt + 1}/{MAX_RETRIES + 1}), "
+                        f"retrying in {delay:.1f}s: {e}"
+                    )
+                    time.sleep(delay)
+                else:
+                    break
+
+        logger.error(f"Generation failed after {MAX_RETRIES + 1} attempts: {last_error}")
+        return ""
 
     def analyze_mental_health(self, journal_text: str) -> Dict[str, Any]:
         """Analyze journal entries to estimate mental health state."""
@@ -88,7 +128,7 @@ Base your assessment on:
         try:
             cleaned = re.sub(r'```json\s*|\s*```', '', response).strip()
             return json.loads(cleaned)
-        except:
+        except (json.JSONDecodeError, ValueError, KeyError):
             return {
                 "summary": "Unable to analyze journals",
                 "phq4_estimate": 3,
@@ -144,7 +184,7 @@ Rules:
             cleaned = re.sub(r'```json\s*|\s*```', '', response).strip()
             data = json.loads(cleaned)
             return data.get('recommendations', [])
-        except:
+        except (json.JSONDecodeError, ValueError, KeyError):
             return [{
                 "category": "General",
                 "action": "Consider taking a short break for self-care",
@@ -171,13 +211,26 @@ Rules:
             for p in user_preferences:
                 pref_text += f"- {p}\n"
 
-        # Format events — include full start+end so model can see occupied slots
-        events_text = ""
-        if calendar_summary.get('events'):
-            for e in calendar_summary['events'][:20]:
-                events_text += f"- {e['start']} → {e['end']}: {e['title']} ({e['duration_hours']:.1f}h)\n"
-        else:
-            events_text = "No events scheduled.\n"
+        # Group existing events by date so the model can see per-day busy windows
+        events_by_date: Dict[str, list] = {d: [] for d in dates}
+        for e in (calendar_summary.get('events') or []):
+            date_key = e['start'][:10]
+            if date_key in events_by_date:
+                events_by_date[date_key].append(e)
+
+        day_schedule_text = ""
+        for d in dates:
+            dt = datetime.strptime(d, '%Y-%m-%d')
+            day_name = f"{dt.strftime('%A')}, {dt.strftime('%b')} {dt.day}"
+            day_events = events_by_date[d]
+            if day_events:
+                busy_slots = "  |  ".join(
+                    f"{e['start'][11:16]}–{e['end'][11:16]} [{e['title']}]"
+                    for e in sorted(day_events, key=lambda x: x['start'])
+                )
+                day_schedule_text += f"  {d} ({day_name}): {busy_slots}\n"
+            else:
+                day_schedule_text += f"  {d} ({day_name}): (no events — fully free)\n"
 
         # Format tasks
         tasks_text = ""
@@ -191,7 +244,7 @@ Rules:
         recs_text = "\n".join([f"- [{r['category']}] {r['action']} ({r['when']})"
                                for r in recommendations[:4]])
 
-        prompt = f'''Based on the user's mental health, schedule, and tasks, suggest calendar optimizations.
+        prompt = f'''Based on the user's mental health, schedule, and tasks, suggest wellness calendar events.
 
 TODAY: {now.strftime('%A, %Y-%m-%d %H:%M')} (timezone: America/Chicago)
 
@@ -200,18 +253,13 @@ MENTAL STATE:
 - PHQ-4 Estimate: {mental_health.get('estimated_phq4', '?')}/12
 - Concerns: {', '.join(mental_health.get('key_concerns', [])[:3])}
 
-CURRENT CALENDAR (this week + next 7 days) — DO NOT schedule on top of these:
-{events_text}
-Total: {calendar_summary.get('total_hours', 0)} hours across {calendar_summary.get('event_count', 0)} events
-
+SCHEDULE FOR THE NEXT 7 DAYS (busy slots listed per day — DO NOT overlap these):
+{day_schedule_text}
 PENDING TASKS:
 {tasks_text}
-
 WELLNESS RECOMMENDATIONS:
 {recs_text}
 {pref_text}
-AVAILABLE DATES (schedule only within these): {', '.join(dates)}
-
 Respond in JSON format (no markdown):
 {{
     "proposed_changes": [
@@ -227,17 +275,17 @@ Respond in JSON format (no markdown):
     ]
 }}
 
-Rules:
-1. Suggest 3-5 calendar additions spread across different days
-2. NEVER place a suggestion at the same time as an existing event — check each slot carefully
-3. Schedule wellness breaks in gaps between existing events
-4. Find optimal times for pending tasks based on workload
-5. Set appropriate durations: wellness activities 15-30 min, study/work tasks 1-2 hours
-6. Use realistic times - mornings (8-10am), afternoons (12-4pm), evenings (6-8pm)
+STRICT RULES — follow every one exactly:
+1. Spread proposals across the full 7-day window — aim for coverage on most days, not clustering on 2-3 days
+2. For each proposal, look at that day's busy slots above and pick a time that does NOT overlap ANY of them
+3. A conflict means your proposed start_time or end_time falls inside an existing [start–end] range — avoid this completely
+4. Prefer morning gaps (7–9 AM), lunch gaps (12–1 PM), or evening gaps (7–9 PM) when a day is busy
+5. On fully free days, pick a realistic time between 8 AM and 9 PM
+6. Durations: wellness/mindfulness 15–30 min, physical activity 30–45 min, study/work tasks 60–90 min
 7. No emojis in titles
-8. STRICTLY respect user preferences - do NOT suggest activities the user dislikes
-9. ALWAYS set end_time after start_time with correct duration
-10. Only use dates from AVAILABLE DATES — never suggest events in the past'''
+8. STRICTLY respect user preferences — do NOT suggest activities the user dislikes
+9. ALWAYS set end_time strictly after start_time
+10. Base the number and type of proposals on the wellness recommendations and research context — quality over quantity'''
 
         response = self.generate(prompt)
         
@@ -270,7 +318,7 @@ Keep the preference statement professional and actionable for future recommendat
         try:
             cleaned = re.sub(r'```json\s*|\s*```', '', response).strip()
             return json.loads(cleaned)
-        except:
+        except (json.JSONDecodeError, ValueError, KeyError):
             return {
                 "preference": raw_feedback,
                 "dislikes": [],

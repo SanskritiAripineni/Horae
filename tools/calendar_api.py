@@ -5,7 +5,7 @@ Full OAuth 2.0 authentication with event and task management.
 
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
@@ -48,8 +48,9 @@ class CalendarEvent:
             start_time = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
             end_time = datetime.fromisoformat(end_str.replace('Z', '+00:00'))
         else:
-            start_time = datetime.strptime(start_str, '%Y-%m-%d')
-            end_time = datetime.strptime(end_str, '%Y-%m-%d')
+            # All-day events — make timezone-aware so they can be sorted with timed events
+            start_time = datetime.strptime(start_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            end_time = datetime.strptime(end_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
         
         return cls(
             id=event.get('id'),
