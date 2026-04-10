@@ -20,5 +20,6 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "autolife_proj"
-include(":app")
- 
+include(":androidApp")
+include(":shared")
+include(":composeApp")

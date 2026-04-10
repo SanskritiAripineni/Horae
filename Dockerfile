@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY api.py agent.py config.py ./
+COPY api.py agent.py config.py db.py ./
 COPY tools/ tools/
 COPY memory/ memory/
 COPY vectordb/ vectordb/

@@ -4,6 +4,7 @@ Orchestrates journal analysis, mental health assessment, and calendar optimizati
 """
 
 import logging
+import threading
 from typing import Any, Dict, List
 from datetime import datetime, timedelta
 
@@ -34,7 +35,8 @@ class LLMSchedulerAgent:
         self.calendar_api = CalendarAPI(suggest_only=suggest_only)
         self.llm_client = LLMClient()
         self.memory = MemoryModule()
-        
+        self._calendar_lock = threading.Lock()
+
         logger.info("LLMSchedulerAgent initialized")
 
     def run_from_journals(self, journals: List[Dict[str, Any]], user_id: str = None) -> Dict[str, Any]:
@@ -101,7 +103,36 @@ class LLMSchedulerAgent:
                 calendar_summary=calendar_summary,
                 mental_health=results['mental_health']
             )
-            results['proposed_changes'] = proposed_changes
+
+            # Server-side conflict filtering: remove proposals that overlap existing events
+            existing_events = calendar_summary.get('events', []) if calendar_summary else []
+
+            def _parse_naive(dt_str: str) -> datetime:
+                """Parse ISO datetime and strip timezone to avoid naive/aware comparison errors."""
+                dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+                return dt.replace(tzinfo=None)
+
+            def _has_server_conflict(proposal: dict) -> bool:
+                try:
+                    p_start = _parse_naive(proposal['start_time'])
+                    p_end   = _parse_naive(proposal['end_time'])
+                except (ValueError, KeyError, TypeError):
+                    return False
+                for ev in existing_events:
+                    try:
+                        e_start = _parse_naive(ev['start'])
+                        e_end   = _parse_naive(ev['end'])
+                    except (ValueError, KeyError, TypeError):
+                        continue
+                    if p_start < e_end - timedelta(minutes=1) and e_start < p_end - timedelta(minutes=1):
+                        return True
+                return False
+
+            filtered_changes = [p for p in proposed_changes if not _has_server_conflict(p)]
+            conflict_count = len(proposed_changes) - len(filtered_changes)
+            if conflict_count:
+                logger.info(f"Filtered {conflict_count} conflicting proposal(s) server-side")
+            results['proposed_changes'] = filtered_changes
 
             results['status'] = 'completed'
 
@@ -152,71 +183,70 @@ class LLMSchedulerAgent:
             'failed': [],
             'skipped': []
         }
-        
-        # Actually apply changes (disable suggest_only mode)
-        self.calendar_api.suggest_only = False
-        
-        for change in changes:
-            action = change.get('action', 'add')
-            
+
+        # Lock to prevent concurrent requests from interleaving suggest_only state
+        with self._calendar_lock:
+            self.calendar_api.suggest_only = False
             try:
-                if action == 'add':
-                    # Create new event
-                    start_time = datetime.fromisoformat(change.get('start_time'))
-                    end_time = datetime.fromisoformat(change.get('end_time'))
-                    
-                    event = CalendarEvent(
-                        id=None,
-                        summary=change.get('title', 'Wellness Activity'),
-                        description=change.get('description', ''),
-                        start_time=start_time,
-                        end_time=end_time
-                    )
-                    
-                    event_id = self.calendar_api.create_event(event)
-                    if event_id:
-                        results['applied'].append({
-                            'action': 'created',
-                            'title': event.summary,
-                            'event_id': event_id
-                        })
-                    else:
+                for change in changes:
+                    action = change.get('action', 'add')
+
+                    try:
+                        if action == 'add':
+                            start_time = datetime.fromisoformat(change.get('start_time'))
+                            end_time = datetime.fromisoformat(change.get('end_time'))
+
+                            event = CalendarEvent(
+                                id=None,
+                                summary=change.get('title', 'Wellness Activity'),
+                                description=change.get('description', ''),
+                                start_time=start_time,
+                                end_time=end_time
+                            )
+
+                            event_id = self.calendar_api.create_event(event)
+                            if event_id:
+                                results['applied'].append({
+                                    'action': 'created',
+                                    'title': event.summary,
+                                    'event_id': event_id
+                                })
+                            else:
+                                results['failed'].append(change)
+
+                        elif action == 'update':
+                            event_id = change.get('event_id')
+                            updates = change.get('updates', {})
+
+                            if self.calendar_api.update_event(event_id, updates):
+                                results['applied'].append({
+                                    'action': 'updated',
+                                    'event_id': event_id,
+                                    'updates': updates
+                                })
+                            else:
+                                results['failed'].append(change)
+
+                        elif action == 'delete':
+                            event_id = change.get('event_id')
+
+                            if self.calendar_api.delete_event(event_id):
+                                results['applied'].append({
+                                    'action': 'deleted',
+                                    'event_id': event_id
+                                })
+                            else:
+                                results['failed'].append(change)
+                        else:
+                            results['skipped'].append(change)
+
+                    except Exception as e:
+                        logger.error(f"Failed to apply change: {e}")
+                        change['error'] = str(e)
                         results['failed'].append(change)
-                        
-                elif action == 'update':
-                    event_id = change.get('event_id')
-                    updates = change.get('updates', {})
-                    
-                    if self.calendar_api.update_event(event_id, updates):
-                        results['applied'].append({
-                            'action': 'updated',
-                            'event_id': event_id,
-                            'updates': updates
-                        })
-                    else:
-                        results['failed'].append(change)
-                        
-                elif action == 'delete':
-                    event_id = change.get('event_id')
-                    
-                    if self.calendar_api.delete_event(event_id):
-                        results['applied'].append({
-                            'action': 'deleted',
-                            'event_id': event_id
-                        })
-                    else:
-                        results['failed'].append(change)
-                else:
-                    results['skipped'].append(change)
-                    
-            except Exception as e:
-                logger.error(f"Failed to apply change: {e}")
-                change['error'] = str(e)
-                results['failed'].append(change)
-        
-        # Re-enable suggest_only mode
-        self.calendar_api.suggest_only = True
-        
+            finally:
+                self.calendar_api.suggest_only = True
+
         return results
 
 

@@ -1,0 +1,40 @@
+CREATE TABLE sensor_logs (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    timestamp INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    content TEXT NOT NULL
+);
+
+CREATE TABLE journal_entries (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    createdTimestamp INTEGER NOT NULL,
+    periodStart INTEGER NOT NULL,
+    periodEnd INTEGER NOT NULL,
+    content TEXT NOT NULL
+);
+
+insertLog:
+INSERT INTO sensor_logs (timestamp, type, content)
+VALUES (?, ?, ?);
+
+insertJournal:
+INSERT INTO journal_entries (createdTimestamp, periodStart, periodEnd, content)
+VALUES (?, ?, ?, ?);
+
+getLogsBetween:
+SELECT * FROM sensor_logs WHERE timestamp BETWEEN ? AND ? ORDER BY timestamp ASC;
+
+getRecentLogs:
+SELECT * FROM sensor_logs ORDER BY timestamp DESC LIMIT 50;
+
+getAllJournalsDesc:
+SELECT * FROM journal_entries ORDER BY createdTimestamp DESC;
+
+getAllJournalsAsc:
+SELECT * FROM journal_entries ORDER BY createdTimestamp ASC;
+
+deleteAllLogs:
+DELETE FROM sensor_logs;
+
+deleteAllJournals:
+DELETE FROM journal_entries;
