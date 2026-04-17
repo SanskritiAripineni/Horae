@@ -50,4 +50,18 @@ class IOSDataExporter {
 
         try? output.write(to: fileURL, atomically: true, encoding: .utf8)
     }
+
+    static func exportBatteryReport(content: String) {
+        let exportDateFormatter = DateFormatter()
+        exportDateFormatter.dateFormat = "yyyyMMdd_HHmmss"
+        exportDateFormatter.locale = Locale(identifier: "en_US_POSIX")
+
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let autoLifeDir = docs.appendingPathComponent("AutoLife")
+        try? FileManager.default.createDirectory(at: autoLifeDir, withIntermediateDirectories: true)
+
+        let fileName = "battery_assessment_\(exportDateFormatter.string(from: Date())).md"
+        let fileURL = autoLifeDir.appendingPathComponent(fileName)
+        try? content.write(to: fileURL, atomically: true, encoding: .utf8)
+    }
 }

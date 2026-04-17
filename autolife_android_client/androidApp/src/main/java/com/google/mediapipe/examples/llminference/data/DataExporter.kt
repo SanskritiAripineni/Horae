@@ -48,6 +48,14 @@ object DataExporter {
         }
     }
 
+    suspend fun exportBatteryReport(context: Context, content: String): Boolean = withContext(Dispatchers.IO) {
+        exportText(
+            context = context,
+            fileNamePrefix = "battery_assessment",
+            content = content,
+        )
+    }
+
     private fun formatJournals(journals: List<JournalEntry>): String {
         val sb = StringBuilder()
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
@@ -79,6 +87,23 @@ object DataExporter {
         } catch (e: Exception) {
             Log.e(TAG, "Internal storage export failed", e)
             null
+        }
+    }
+
+    private suspend fun exportText(
+        context: Context,
+        fileNamePrefix: String,
+        content: String,
+    ): Boolean = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            val fileName = "${fileNamePrefix}_$timestamp.md"
+            val internalFile = exportToInternalStorage(context, fileName, content)
+            val publicUri = exportToPublicDownloads(context, fileName, content)
+            internalFile != null || publicUri != null
+        } catch (e: Exception) {
+            Log.e(TAG, "Text export failed", e)
+            false
         }
     }
 

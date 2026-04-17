@@ -4,23 +4,29 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Battery5Bar
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.autolife.composeapp.platform.BatteryTestCondition
 import com.autolife.composeapp.platform.PlatformStateProvider
 import com.autolife.composeapp.ui.components.DataRow
+import com.autolife.composeapp.ui.components.IconBulletItem
 import com.autolife.composeapp.ui.components.SectionHeader
 import com.autolife.composeapp.ui.components.StatusPill
 import com.autolife.composeapp.ui.components.SurfaceCard
 import com.autolife.composeapp.ui.theme.AutoLifeSemantic
+import com.autolife.shared.platform.currentTimeMillis
+import kotlinx.coroutines.delay
 import kotlin.math.pow
 import kotlin.math.roundToLong
-import kotlinx.coroutines.launch
 
 private fun Double.fmt(decimals: Int): String {
     val factor = 10.0.pow(decimals)
@@ -40,9 +46,18 @@ fun DevDashboardScreen() {
     val locationState by PlatformStateProvider.locationState.collectAsState()
     val lastJournal by PlatformStateProvider.lastJournal.collectAsState()
     val isPermanentMotion by PlatformStateProvider.isPermanentMotionEnabled.collectAsState()
+    val batteryState by PlatformStateProvider.batteryState.collectAsState()
 
-    val scope = rememberCoroutineScope()
     var isGenerating by remember { mutableStateOf(false) }
+    var batteryNotes by remember { mutableStateOf("") }
+    var autoDurationMinutes by remember { mutableStateOf(30) }
+    val activeAssessment = batteryState.activeAssessment
+    val nowMs by produceState(initialValue = currentTimeMillis(), activeAssessment?.autoStopAtMs) {
+        while (true) {
+            value = currentTimeMillis()
+            delay(1_000L)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -116,6 +131,205 @@ fun DevDashboardScreen() {
                     }
                     Spacer(Modifier.width(8.dp))
                     Text(if (isGenerating) "Generating..." else "Generate Journal Now")
+                }
+            }
+        }
+
+        SectionHeader("Battery Assessment")
+        SurfaceCard {
+            val currentBattery = batteryState.currentBatteryPercent
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Current Battery", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                    Text(
+                        if (currentBattery != null) "$currentBattery%" else "Unknown",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = if ((currentBattery ?: 100) <= 20) AutoLifeSemantic.riskSevere else MaterialTheme.colorScheme.primary,
+                    )
+                }
+                OutlinedButton(onClick = { PlatformStateProvider.refreshBatteryLevel() }) {
+                    Icon(Icons.Default.Refresh, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Refresh")
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Auto duration",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf(1, 5, 30).forEach { minutes ->
+                    FilterChip(
+                        selected = autoDurationMinutes == minutes,
+                        onClick = { autoDurationMinutes = minutes },
+                        label = { Text("${minutes}m") },
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Use one baseline run with collection off and one active run with normal collection on. Thirty minutes per run is enough for the IRB battery statement.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = batteryNotes,
+                onValueChange = { batteryNotes = it },
+                label = { Text("Run notes") },
+                placeholder = { Text("e.g. screen off, Wi-Fi on, service enabled") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 2,
+            )
+
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = { PlatformStateProvider.startBatteryAssessment(BatteryTestCondition.BASELINE, batteryNotes) },
+                    enabled = activeAssessment == null && currentBattery != null,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Start Baseline")
+                }
+                Button(
+                    onClick = { PlatformStateProvider.startBatteryAssessment(BatteryTestCondition.ACTIVE, batteryNotes) },
+                    enabled = activeAssessment == null && currentBattery != null,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Start Active")
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        PlatformStateProvider.completeBatteryAssessment(batteryNotes)
+                        batteryNotes = ""
+                    },
+                    enabled = activeAssessment != null && currentBattery != null,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(Icons.Default.Stop, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Stop Run")
+                }
+                OutlinedButton(
+                    onClick = { PlatformStateProvider.exportBatteryAssessmentReport() },
+                    enabled = batteryState.completedAssessments.isNotEmpty(),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(Icons.Default.Download, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Export Report")
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        PlatformStateProvider.startBatteryAssessment(
+                            condition = BatteryTestCondition.BASELINE,
+                            notes = batteryNotes,
+                            autoDurationMinutes = autoDurationMinutes,
+                        )
+                    },
+                    enabled = activeAssessment == null && currentBattery != null,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Auto Baseline")
+                }
+                OutlinedButton(
+                    onClick = {
+                        PlatformStateProvider.startBatteryAssessment(
+                            condition = BatteryTestCondition.ACTIVE,
+                            notes = batteryNotes,
+                            autoDurationMinutes = autoDurationMinutes,
+                        )
+                    },
+                    enabled = activeAssessment == null && currentBattery != null,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Auto Active")
+                }
+            }
+
+            if (activeAssessment != null) {
+                Spacer(Modifier.height(12.dp))
+                StatusPill(
+                    text = "Running ${activeAssessment.condition.name.lowercase()} test",
+                    color = AutoLifeSemantic.toolVectorDB,
+                )
+                Spacer(Modifier.height(8.dp))
+                DataRow("Started battery", "${activeAssessment.startBatteryPercent}%")
+                DataRow("Service", if (activeAssessment.serviceEnabledAtStart) "On" else "Off")
+                DataRow("Demo mode", if (activeAssessment.demoModeAtStart) "On" else "Off")
+                DataRow("Permanent motion", if (activeAssessment.permanentMotionAtStart) "On" else "Off")
+                if (activeAssessment.autoStopAtMs != null) {
+                    DataRow(
+                        "Auto stop",
+                        formatRemainingTime((activeAssessment.autoStopAtMs - nowMs).coerceAtLeast(0L)),
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Interpretation",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                batteryState.summary.interpretation,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (batteryState.completedAssessments.isNotEmpty()) {
+            SurfaceCard {
+                Text(
+                    "Recent Battery Runs",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.height(8.dp))
+                batteryState.completedAssessments.takeLast(4).reversed().forEach { record ->
+                    IconBulletItem(
+                        icon = Icons.Default.Battery5Bar,
+                        iconTint = when (record.condition) {
+                            BatteryTestCondition.BASELINE -> AutoLifeSemantic.categoryHealth
+                            BatteryTestCondition.ACTIVE -> AutoLifeSemantic.toolAutoLife
+                        },
+                        text = "${record.platform} ${record.condition.name.lowercase()}: " +
+                            "${record.startBatteryPercent}% -> ${record.endBatteryPercent}% " +
+                            "over ${record.durationMinutes.fmt(1)} min " +
+                            "(${record.drainPerHourPercent.fmt(1)}%/hr)",
+                    )
                 }
             }
         }
@@ -206,6 +420,13 @@ fun DevDashboardScreen() {
 
         Spacer(Modifier.height(16.dp))
     }
+}
+
+private fun formatRemainingTime(remainingMs: Long): String {
+    val totalSeconds = remainingMs / 1_000L
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "${minutes}:${seconds.toString().padStart(2, '0')} remaining"
 }
 
 @Composable

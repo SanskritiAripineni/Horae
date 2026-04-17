@@ -1,8 +1,15 @@
 package com.autolife.composeapp.platform
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 data class MotionDisplayState(
     val acceleration: Double = 0.0,
@@ -24,7 +31,17 @@ data class LocationDisplayState(
     val lastInference: String = "No inference yet",
 )
 
+data class BatteryDisplayState(
+    val currentBatteryPercent: Int? = null,
+    val activeAssessment: ActiveBatteryAssessment? = null,
+    val completedAssessments: List<BatteryAssessmentRecord> = emptyList(),
+    val summary: BatteryAssessmentSummary = BatteryAssessmentLogic.summarize(emptyList()),
+)
+
 object PlatformStateProvider {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var autoStopJob: Job? = null
+
     private val _motionState = MutableStateFlow(MotionDisplayState())
     val motionState: StateFlow<MotionDisplayState> = _motionState.asStateFlow()
 
@@ -40,11 +57,20 @@ object PlatformStateProvider {
     private val _isPermanentMotionEnabled = MutableStateFlow(false)
     val isPermanentMotionEnabled: StateFlow<Boolean> = _isPermanentMotionEnabled.asStateFlow()
 
+    private val _batteryState = MutableStateFlow(BatteryDisplayState())
+    val batteryState: StateFlow<BatteryDisplayState> = _batteryState.asStateFlow()
+
+    private var platformName: String = "Unknown"
+
     // Action callbacks — set by the host app (androidApp / iosApp)
     var onDemoModeChanged: ((Boolean) -> Unit)? = null
     var onPermanentMotionChanged: ((Boolean) -> Unit)? = null
     var onExportRequested: (() -> Unit)? = null
     var onGenerateJournalRequested: (() -> Unit)? = null
+    var onBatteryLevelRequested: (() -> Int?)? = null
+    var onBatteryAssessmentExportRequested: ((String) -> Unit)? = null
+    var onServiceToggleRequested: ((Boolean) -> Unit)? = null
+    var onBatteryAssessmentCompleted: ((BatteryAssessmentRecord) -> Unit)? = null
 
     fun updateMotion(
         acceleration: Double,
@@ -80,6 +106,85 @@ object PlatformStateProvider {
         _isPermanentMotionEnabled.value = enabled
     }
 
+    fun setPlatformName(name: String) {
+        platformName = name
+    }
+
+    fun refreshBatteryLevel(): Int? {
+        val level = onBatteryLevelRequested?.invoke()
+        _batteryState.value = _batteryState.value.copy(currentBatteryPercent = level)
+        return level
+    }
+
+    fun loadBatteryAssessments() {
+        val records = BatteryAssessmentStore.loadAll()
+        _batteryState.value = _batteryState.value.copy(
+            completedAssessments = records,
+            summary = BatteryAssessmentLogic.summarize(records),
+        )
+    }
+
+    fun startBatteryAssessment(
+        condition: BatteryTestCondition,
+        notes: String = "",
+        autoDurationMinutes: Int? = null,
+    ): Boolean {
+        val batteryPercent = refreshBatteryLevel() ?: _batteryState.value.currentBatteryPercent ?: return false
+        val serviceEnabledAtStart = _serviceState.value.isRunning
+        val desiredServiceState = condition == BatteryTestCondition.ACTIVE
+        if (autoDurationMinutes != null) {
+            onServiceToggleRequested?.invoke(desiredServiceState)
+            updateServiceState(isRunning = desiredServiceState)
+        }
+        val active = BatteryAssessmentLogic.startRun(
+            platform = platformName,
+            condition = condition,
+            batteryPercent = batteryPercent,
+            serviceEnabled = serviceEnabledAtStart,
+            demoModeEnabled = _serviceState.value.isDemoMode,
+            permanentMotionEnabled = _isPermanentMotionEnabled.value,
+            notes = notes.trim(),
+            autoDurationMinutes = autoDurationMinutes,
+            stopServiceOnCompletion = autoDurationMinutes != null && desiredServiceState,
+        )
+        _batteryState.value = _batteryState.value.copy(activeAssessment = active)
+        scheduleAutoStop(active)
+        return true
+    }
+
+    fun completeBatteryAssessment(notes: String = ""): BatteryAssessmentRecord? {
+        autoStopJob?.cancel()
+        autoStopJob = null
+        val activeRun = _batteryState.value.activeAssessment ?: return null
+        val endBatteryPercent = refreshBatteryLevel() ?: _batteryState.value.currentBatteryPercent ?: return null
+        val finalNotes = listOf(activeRun.notes, notes.trim()).filter { it.isNotBlank() }.joinToString(" | ")
+        val completed = BatteryAssessmentLogic.completeRun(
+            activeRun = activeRun.copy(notes = finalNotes),
+            endBatteryPercent = endBatteryPercent,
+        )
+        BatteryAssessmentStore.save(completed)
+        if (activeRun.stopServiceOnCompletion) {
+            onServiceToggleRequested?.invoke(false)
+            updateServiceState(isRunning = false)
+        }
+        val records = BatteryAssessmentStore.loadAll()
+        _batteryState.value = _batteryState.value.copy(
+            activeAssessment = null,
+            completedAssessments = records,
+            summary = BatteryAssessmentLogic.summarize(records),
+        )
+        onBatteryAssessmentCompleted?.invoke(completed)
+        return completed
+    }
+
+    fun exportBatteryAssessmentReport(): Boolean {
+        val records = _batteryState.value.completedAssessments
+        if (records.isEmpty()) return false
+        val report = BatteryAssessmentLogic.buildReport(records, _batteryState.value.summary)
+        onBatteryAssessmentExportRequested?.invoke(report)
+        return true
+    }
+
     /** Called by UI — triggers host callback or falls back to direct state update. */
     fun toggleDemoMode(enabled: Boolean) {
         val cb = onDemoModeChanged
@@ -92,5 +197,15 @@ object PlatformStateProvider {
         val cb = onPermanentMotionChanged
         if (cb != null) cb(enabled)
         else _isPermanentMotionEnabled.value = enabled
+    }
+
+    private fun scheduleAutoStop(activeAssessment: ActiveBatteryAssessment) {
+        autoStopJob?.cancel()
+        val autoStopAtMs = activeAssessment.autoStopAtMs ?: return
+        autoStopJob = scope.launch {
+            val delayMs = (autoStopAtMs - com.autolife.shared.platform.currentTimeMillis()).coerceAtLeast(0L)
+            delay(delayMs)
+            completeBatteryAssessment("auto-completed")
+        }
     }
 }

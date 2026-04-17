@@ -1,6 +1,9 @@
 package com.google.mediapipe.examples.llminference
 
 import android.app.Application
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
 import com.autolife.composeapp.platform.PlatformStateProvider
 import com.autolife.shared.ai.AiClientProvider
 import com.autolife.shared.ai.GeminiAiClient
@@ -108,5 +111,54 @@ class AutoLifeApp : Application() {
                 }
             }
         }
+        PlatformStateProvider.onServiceToggleRequested = { shouldStart ->
+            val intent = Intent(appContext, AutoLifeService::class.java)
+            if (shouldStart) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    appContext.startForegroundService(intent)
+                } else {
+                    appContext.startService(intent)
+                }
+            } else {
+                appContext.stopService(intent)
+            }
+        }
+        PlatformStateProvider.setPlatformName("Android")
+        PlatformStateProvider.onBatteryLevelRequested = {
+            currentBatteryPercent()
+        }
+        PlatformStateProvider.onBatteryAssessmentExportRequested = { report ->
+            appScope.launch {
+                val ok = DataExporter.exportBatteryReport(appContext, report)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        appContext,
+                        if (ok) "Battery report exported" else "Battery report export failed",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+        }
+        PlatformStateProvider.onBatteryAssessmentCompleted = { record ->
+            appScope.launch {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        appContext,
+                        "Battery run saved: ${record.batteryDropPercent}% drop in ${record.durationMinutes.toInt()} min",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+        }
+        PlatformStateProvider.loadBatteryAssessments()
+        PlatformStateProvider.refreshBatteryLevel()
+    }
+
+    private fun currentBatteryPercent(): Int? {
+        val batteryIntent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return null
+        val level = batteryIntent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = batteryIntent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+        if (level < 0 || scale <= 0) return null
+        return ((level * 100f) / scale).toInt()
     }
 }

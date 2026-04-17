@@ -44,7 +44,7 @@
 		AB000013 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AB000014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AB000019 /* AutoLife.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AutoLife.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		AB000020 /* ComposeApp.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ComposeApp.framework; path = ../composeApp/build/bin/iosSimulatorArm64/debugFramework/ComposeApp.framework; sourceTree = "<group>"; };
+		AB000020 /* ComposeApp.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ComposeApp.framework; path = ../composeApp/build/xcode-frameworks/ComposeApp.framework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -192,7 +192,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "cd \"$SRCROOT/..\"\n\nif [ \"${CONFIGURATION}\" = \"Debug\" ]; then\n    ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64\nelse\n    ./gradlew :composeApp:linkReleaseFrameworkIosSimulatorArm64\nfi\n";
+			shellScript = "set -eu\n\ncd \"$SRCROOT/..\"\n\nCONFIGURATION_NAME_LOWER=$(echo \"$CONFIGURATION\" | tr '[:upper:]' '[:lower:]')\n\nif [ \"$PLATFORM_NAME\" = \"iphoneos\" ]; then\n    KMP_TARGET=\"IosArm64\"\n    FRAMEWORK_SOURCE_DIR=\"$SRCROOT/../composeApp/build/bin/iosArm64/${CONFIGURATION_NAME_LOWER}Framework\"\nelif [ \"$NATIVE_ARCH_ACTUAL\" = \"x86_64\" ]; then\n    KMP_TARGET=\"IosX64\"\n    FRAMEWORK_SOURCE_DIR=\"$SRCROOT/../composeApp/build/bin/iosX64/${CONFIGURATION_NAME_LOWER}Framework\"\nelse\n    KMP_TARGET=\"IosSimulatorArm64\"\n    FRAMEWORK_SOURCE_DIR=\"$SRCROOT/../composeApp/build/bin/iosSimulatorArm64/${CONFIGURATION_NAME_LOWER}Framework\"\nfi\n\n./gradlew \":composeApp:link${CONFIGURATION}Framework${KMP_TARGET}\"\n\nFRAMEWORK_DEST_DIR=\"$SRCROOT/../composeApp/build/xcode-frameworks\"\nrm -rf \"$FRAMEWORK_DEST_DIR/ComposeApp.framework\"\nmkdir -p \"$FRAMEWORK_DEST_DIR\"\ncp -R \"$FRAMEWORK_SOURCE_DIR/ComposeApp.framework\" \"$FRAMEWORK_DEST_DIR/ComposeApp.framework\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -339,7 +339,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = F4RHN5SWJA;
-				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../composeApp/build/bin/iosSimulatorArm64/debugFramework";
+				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../composeApp/build/xcode-frameworks";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AutoLife/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -374,7 +374,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = F4RHN5SWJA;
-				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../composeApp/build/bin/iosSimulatorArm64/releaseFramework";
+				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../composeApp/build/xcode-frameworks";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AutoLife/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

@@ -27,6 +27,9 @@ SELECT * FROM sensor_logs WHERE timestamp BETWEEN ? AND ? ORDER BY timestamp ASC
 getRecentLogs:
 SELECT * FROM sensor_logs ORDER BY timestamp DESC LIMIT 50;
 
+getLogsByType:
+SELECT * FROM sensor_logs WHERE type = ? ORDER BY timestamp ASC;
+
 getAllJournalsDesc:
 SELECT * FROM journal_entries ORDER BY createdTimestamp DESC;
 

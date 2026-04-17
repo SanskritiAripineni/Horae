@@ -61,6 +61,12 @@ object DatabaseRepository {
         }
     }
 
+    fun getLogsByType(type: String): List<SensorLog> {
+        return queries.getLogsByType(type).executeAsList().map { row ->
+            SensorLog(id = row.id, timestamp = row.timestamp, type = row.type, content = row.content)
+        }
+    }
+
     fun observeJournals(): Flow<List<JournalEntry>> {
         return queries.getAllJournalsDesc().asFlow().mapToList(Dispatchers.IO).map { rows ->
             rows.map { row ->

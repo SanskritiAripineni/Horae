@@ -1,5 +1,6 @@
 import SwiftUI
 import ComposeApp
+import UIKit
 
 @main
 struct AutoLifeApp: App {
@@ -64,6 +65,31 @@ struct AutoLifeApp: App {
                 IOSSensorServiceManager.shared.generateJournalNow()
             }
         }
+
+        PlatformStateProvider.shared.onServiceToggleRequested = { shouldStart in
+            Task { @MainActor in
+                if shouldStart.boolValue {
+                    IOSSensorServiceManager.shared.start()
+                } else {
+                    IOSSensorServiceManager.shared.stop()
+                }
+            }
+        }
+
+        PlatformStateProvider.shared.onBatteryLevelRequested = {
+            UIDevice.current.isBatteryMonitoringEnabled = true
+            let level = UIDevice.current.batteryLevel
+            if level < 0 { return nil }
+            return KotlinInt(int: Int32(level * 100))
+        }
+
+        PlatformStateProvider.shared.onBatteryAssessmentExportRequested = { report in
+            IOSDataExporter.exportBatteryReport(content: report)
+        }
+
+        PlatformStateProvider.shared.setPlatformName(name: "iOS")
+        PlatformStateProvider.shared.loadBatteryAssessments()
+        PlatformStateProvider.shared.refreshBatteryLevel()
     }
 }
 
