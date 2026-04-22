@@ -84,8 +84,26 @@ class JournalEntry(BaseModel):
     content: str
     timestamp: str
 
+
+class RawDayMarkers(BaseModel):
+    """One day of StudentLife-style sensor markers from the Android client."""
+    date: str                                      # "YYYY-MM-DD"
+    sleep_onset_hour: Optional[float] = None       # 24h clock; e.g. 23.5 = 11:30 PM
+    sleep_duration_hours: Optional[float] = None
+    sleep_regularity_index: Optional[float] = None # 0–100
+    late_night_screen_min: Optional[float] = None  # 23:00–04:00 usage
+    total_screen_min: Optional[float] = None
+    app_switching_rate: Optional[float] = None     # switches per active minute
+    mobility_entropy: Optional[float] = None       # Shannon entropy of location clusters
+    location_revisit_ratio: Optional[float] = None # fraction of time at top-1 cluster
+    social_rhythm_metric: Optional[float] = None   # 0–1 regularity score
+    comm_reciprocity: Optional[float] = None       # outgoing / (outgoing + incoming)
+    coverage: Optional[Dict[str, float]] = None    # per-marker data coverage 0–1
+
+
 class ProcessJournalsRequest(BaseModel):
     journals: List[JournalEntry]
+    raw_days: Optional[List[RawDayMarkers]] = None  # real sensor markers from device
     user_id: Optional[str] = "default"
 
     @field_validator("journals")
@@ -126,10 +144,11 @@ async def process_journals(request: ProcessJournalsRequest):
         )
 
     journals = [j.model_dump() for j in request.journals]
+    raw_days = [r.model_dump() for r in request.raw_days] if request.raw_days else None
 
     try:
         result = await asyncio.to_thread(
-            agent_instance.run_from_journals, journals, request.user_id
+            agent_instance.run_from_journals, journals, request.user_id, raw_days
         )
     except Exception as e:
         logger.error(f"Pipeline error for user {db.anon_id(request.user_id)[:12]}: {e}")

@@ -32,6 +32,13 @@ fun AutoLifeNavHost(
     val currentRoute = backStack?.destination?.route
     val serviceState by PlatformStateProvider.serviceState.collectAsState()
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(Unit) {
+        SnackbarBus.messages.collect { msg ->
+            snackbarHostState.showSnackbar(msg)
+        }
+    }
+
     val topLevelScreens = listOf(
         Screen.Agent, Screen.Health, Screen.Schedule, Screen.Journal, Screen.Memory,
     )
@@ -71,6 +78,7 @@ fun AutoLifeNavHost(
                 },
             )
         },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         bottomBar = {
             if (isTopLevel) {
                 NavigationBar {

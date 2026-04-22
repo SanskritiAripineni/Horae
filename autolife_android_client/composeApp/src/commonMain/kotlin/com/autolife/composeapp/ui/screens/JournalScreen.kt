@@ -21,6 +21,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.autolife.composeapp.platform.PlatformStateProvider
 import com.autolife.composeapp.ui.DateFormat
+import com.autolife.composeapp.ui.SnackbarBus
 import com.autolife.composeapp.ui.components.*
 import com.autolife.shared.db.DatabaseRepository
 import com.autolife.shared.model.JournalEntry
@@ -117,6 +118,21 @@ private fun JournalsList(journals: List<JournalEntry>, viewModel: JournalViewMod
         return
     }
 
+    var showClearDialog by remember { mutableStateOf(false) }
+    if (showClearDialog) {
+        ConfirmClearDialog(
+            title = "Clear all journals?",
+            body = "This deletes ${journals.size} journal ${if (journals.size == 1) "entry" else "entries"} from the local database. This cannot be undone.",
+            onConfirm = {
+                val count = journals.size
+                showClearDialog = false
+                viewModel.clearJournals()
+                SnackbarBus.tryEmit("Cleared $count journal${if (count == 1) "" else "s"}")
+            },
+            onDismiss = { showClearDialog = false },
+        )
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
@@ -127,7 +143,7 @@ private fun JournalsList(journals: List<JournalEntry>, viewModel: JournalViewMod
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = { viewModel.clearJournals() }) {
+                TextButton(onClick = { showClearDialog = true }) {
                     Text("Clear All", color = MaterialTheme.colorScheme.error)
                 }
             }
@@ -199,6 +215,21 @@ private fun LogsList(logs: List<SensorLog>, viewModel: JournalViewModel) {
         return
     }
 
+    var showClearDialog by remember { mutableStateOf(false) }
+    if (showClearDialog) {
+        ConfirmClearDialog(
+            title = "Clear all sensor logs?",
+            body = "This deletes ${logs.size} log entries from the local database. This cannot be undone.",
+            onConfirm = {
+                val count = logs.size
+                showClearDialog = false
+                viewModel.clearLogs()
+                SnackbarBus.tryEmit("Cleared $count log${if (count == 1) "" else "s"}")
+            },
+            onDismiss = { showClearDialog = false },
+        )
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
@@ -209,7 +240,7 @@ private fun LogsList(logs: List<SensorLog>, viewModel: JournalViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = { viewModel.clearLogs() }) {
+                TextButton(onClick = { showClearDialog = true }) {
                     Text("Clear All", color = MaterialTheme.colorScheme.error)
                 }
             }
@@ -218,6 +249,28 @@ private fun LogsList(logs: List<SensorLog>, viewModel: JournalViewModel) {
             LogCard(log)
         }
     }
+}
+
+@Composable
+private fun ConfirmClearDialog(
+    title: String,
+    body: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(body) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Clear All", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 @Composable

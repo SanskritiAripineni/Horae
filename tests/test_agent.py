@@ -2,8 +2,8 @@
 Tests for agent.py — LLMSchedulerAgent orchestrator.
 
 All tool dependencies (LLMClient, VectorDBClient, CalendarAPI, AutoLifeReader,
-MemoryModule) are mocked. Tests cover:
-- run_from_journals() happy path and error cases
+MemoryModule, WellbeingSensor) are mocked. Tests cover:
+- run_from_journals() happy path (journal-only and with raw_days)
 - Server-side conflict filtering logic
 - apply_calendar_changes() with add/update/delete/unknown actions
 - Empty journals edge case
@@ -18,13 +18,11 @@ from unittest.mock import patch, MagicMock, PropertyMock
 from agent import LLMSchedulerAgent
 
 
-
 # Helpers
 
 def _make_agent():
     """Instantiate an agent with all tools mocked out."""
     with patch("agent.AutoLifeReader"), \
-         patch("agent.AutoLifePhoneAdapter"), \
          patch("agent.WellbeingSensor"), \
          patch("agent.VectorDBClient"), \
          patch("agent.CalendarAPI"), \
@@ -33,16 +31,8 @@ def _make_agent():
          patch("agent.MemoryModule"):
         agent = LLMSchedulerAgent(suggest_only=True)
 
-    # Provide sensible mock return values
-    agent.autolife_reader.get_context_for_prompt.return_value = "Journal text here"
-    # Ensure phone adapter returns no raw days so behavioral sensing is skipped
-    agent.phone_adapter.journals_to_raw_days.return_value = []
-    agent.llm_client.analyze_wellbeing.return_value = {
-        "summary": "User is doing okay",
-        "risk_level": "mild",
-        "concerns": [],
-        "positives": ["regular schedule"],
-    }
+    # Sensible mock return values
+    agent.autolife_reader.get_context_for_prompt.return_value = "Journal narrative text"
     agent.calendar_api.get_schedule_summary.return_value = {
         "event_count": 0,
         "events": [],
@@ -56,22 +46,27 @@ def _make_agent():
     agent.vectordb.get_intervention_suggestions.return_value = [
         {"category": "Sleep", "content": "Go to bed at 10pm", "source": "sleep_study.pdf"},
     ]
-    agent.llm_client.generate_recommendations.return_value = [
-        {"category": "Sleep", "action": "Sleep by 10pm", "when": "nightly", "source": "study"},
-    ]
-    agent.llm_client.generate_calendar_changes.return_value = [
-        {
-            "action": "add",
-            "title": "Evening Wind-Down",
-            "description": "Relax before bed",
-            "start_time": (datetime.now() + timedelta(days=1)).replace(hour=21, minute=0).strftime("%Y-%m-%dT%H:%M:%S"),
-            "end_time": (datetime.now() + timedelta(days=1)).replace(hour=21, minute=30).strftime("%Y-%m-%dT%H:%M:%S"),
-            "category": "Sleep",
-            "reason": "Better sleep hygiene",
-        }
-    ]
+    agent.llm_client.generate_schedule_proposals.return_value = {
+        "risk_level": "mild",
+        "summary": "User shows mild stress indicators from behavioral data.",
+        "concerns": ["irregular sleep"],
+        "positives": ["regular exercise"],
+        "recommendations": [
+            {"category": "Sleep", "action": "Sleep by 10pm", "when": "nightly", "source": "study"},
+        ],
+        "proposed_changes": [
+            {
+                "action": "add",
+                "title": "Evening Wind-Down",
+                "description": "Relax before bed",
+                "start_time": (datetime.now() + timedelta(days=1)).replace(hour=21, minute=0).strftime("%Y-%m-%dT%H:%M:%S"),
+                "end_time": (datetime.now() + timedelta(days=1)).replace(hour=21, minute=30).strftime("%Y-%m-%dT%H:%M:%S"),
+                "category": "Sleep",
+                "reason": "Better sleep hygiene",
+            }
+        ],
+    }
     return agent
-
 
 
 # run_from_journals
@@ -85,7 +80,6 @@ class TestRunFromJournals:
         assert result["status"] == "completed"
         assert result["user_id"] == "test"
         assert result["journal_count"] == 2
-        assert result["journal_summary"] == "User is doing okay"
         assert result["wellbeing"]["risk_level"] == "mild"
         assert isinstance(result["recommendations"], list)
         assert isinstance(result["proposed_changes"], list)
@@ -107,40 +101,56 @@ class TestRunFromJournals:
         assert result["status"] == "completed"
         assert any("VectorDB not available" in e for e in result["errors"])
 
-    def test_behavioral_summary_replaces_journal_fallback(self, sample_journals):
+    def test_journals_only_no_raw_days(self, sample_journals):
+        """When no raw_days are provided, behavioral_sensing is None and
+        the orchestrator still runs using journal narrative + VectorDB + calendar."""
         agent = _make_agent()
-        behavioral_summary = "Behavioral wellbeing signal is available from recent app data."
-        agent.llm_client.analyze_wellbeing.return_value = {
-            "summary": "Unable to analyze journals",
-            "risk_level": "mild",
-            "concerns": [],
-            "positives": [],
-        }
-        agent.phone_adapter.journals_to_raw_days.return_value = [
-            {
-                "date": "2026-04-21",
-                "activity": {"steps": 1200},
-                "mobility": {},
-                "screen": {},
-                "environment": {},
-            }
-        ]
-        agent.wellbeing_sensor.analyze.return_value = {
-            "prose": behavioral_summary,
-            "llm_analysis": None,
-        }
-
-        result = agent.run_from_journals(sample_journals)
+        result = agent.run_from_journals(sample_journals, raw_days=None)
 
         assert result["status"] == "completed"
-        assert result["journal_summary"] == behavioral_summary
-        assert result["wellbeing"]["behavioral_context"] == behavioral_summary
-        assert result["mental_health"] == result["wellbeing"]
-        agent.llm_client.synthesize_wellbeing.assert_not_called()
+        assert result["behavioral_sensing"] is None
+        agent.wellbeing_sensor.analyze.assert_not_called()
+        agent.llm_client.generate_schedule_proposals.assert_called_once()
+        # behavioral_prose arg should be None
+        call_kwargs = agent.llm_client.generate_schedule_proposals.call_args.kwargs
+        assert call_kwargs.get("behavioral_prose") is None
+
+    def test_with_raw_days_runs_behavioral_sensing(self, sample_journals):
+        """When raw_days are provided, WellbeingSensor runs and its prose reaches
+        the orchestrator."""
+        agent = _make_agent()
+        behavioral_prose = "Sleep regularity has declined over the past week."
+        agent.wellbeing_sensor.analyze.return_value = {
+            "prose": behavioral_prose,
+            "llm_analysis": {"suggestions": []},
+            "baseline_warm": True,
+        }
+
+        raw_days = [{"date": "2026-04-20", "sleep_onset_hour": 23.5,
+                     "sleep_duration_hours": 6.0, "mobility_entropy": 1.2}]
+        result = agent.run_from_journals(sample_journals, raw_days=raw_days)
+
+        assert result["status"] == "completed"
+        assert result["behavioral_sensing"]["prose"] == behavioral_prose
+        agent.wellbeing_sensor.analyze.assert_called_once()
+        call_kwargs = agent.llm_client.generate_schedule_proposals.call_args.kwargs
+        assert call_kwargs.get("behavioral_prose") == behavioral_prose
+
+    def test_baseline_not_warm_note_added(self, sample_journals):
+        agent = _make_agent()
+        agent.wellbeing_sensor.analyze.return_value = {
+            "prose": "Patterns observed.",
+            "llm_analysis": {},
+            "baseline_warm": False,
+        }
+        raw_days = [{"date": "2026-04-20"}]
+        result = agent.run_from_journals(sample_journals, raw_days=raw_days)
+
+        assert "baseline_note" in result["behavioral_sensing"]
 
     def test_pipeline_exception_sets_failed_status(self, sample_journals):
         agent = _make_agent()
-        agent.llm_client.analyze_wellbeing.side_effect = RuntimeError("API down")
+        agent.llm_client.generate_schedule_proposals.side_effect = RuntimeError("API down")
 
         result = agent.run_from_journals(sample_journals)
 
@@ -152,20 +162,22 @@ class TestRunFromJournals:
         agent.run_from_journals(sample_journals)
 
         agent.autolife_reader.get_context_for_prompt.assert_called_once()
-        agent.llm_client.analyze_wellbeing.assert_called_once()
         agent.calendar_api.get_schedule_summary.assert_called_once()
         agent.vectordb.initialize.assert_called_once()
         agent.vectordb.get_intervention_suggestions.assert_called_once()
-        agent.llm_client.generate_recommendations.assert_called_once()
-        agent.llm_client.generate_calendar_changes.assert_called_once()
+        agent.llm_client.generate_schedule_proposals.assert_called_once()
 
     def test_default_user_id(self, sample_journals):
         agent = _make_agent()
         agent.user_id = "agent_default"
         result = agent.run_from_journals(sample_journals)
-        # When user_id is None, falls back to agent.user_id
         assert result["user_id"] == "agent_default"
 
+    def test_mental_health_alias(self, sample_journals):
+        """mental_health key is a backward-compat alias for wellbeing."""
+        agent = _make_agent()
+        result = agent.run_from_journals(sample_journals)
+        assert result["mental_health"] == result["wellbeing"]
 
 
 # Conflict filtering
@@ -176,7 +188,6 @@ class TestConflictFiltering:
         agent = _make_agent()
 
         tomorrow = datetime.now() + timedelta(days=1)
-        # Existing event: 10:00-11:00
         agent.calendar_api.get_schedule_summary.return_value = {
             "events": [
                 {
@@ -190,17 +201,20 @@ class TestConflictFiltering:
         }
 
         # Proposed event overlaps: 10:30-11:30
-        agent.llm_client.generate_calendar_changes.return_value = [
-            {
-                "action": "add",
-                "title": "Walk",
-                "start_time": tomorrow.replace(hour=10, minute=30).strftime("%Y-%m-%dT%H:%M:%S"),
-                "end_time": tomorrow.replace(hour=11, minute=30).strftime("%Y-%m-%dT%H:%M:%S"),
-            }
-        ]
+        agent.llm_client.generate_schedule_proposals.return_value = {
+            "risk_level": "mild", "summary": "", "concerns": [], "positives": [],
+            "recommendations": [],
+            "proposed_changes": [
+                {
+                    "action": "add",
+                    "title": "Walk",
+                    "start_time": tomorrow.replace(hour=10, minute=30).strftime("%Y-%m-%dT%H:%M:%S"),
+                    "end_time": tomorrow.replace(hour=11, minute=30).strftime("%Y-%m-%dT%H:%M:%S"),
+                }
+            ],
+        }
 
         result = agent.run_from_journals(sample_journals)
-        # The overlapping proposal should be filtered out
         assert len(result["proposed_changes"]) == 0
 
     def test_keeps_non_overlapping_proposals(self, sample_journals):
@@ -220,30 +234,37 @@ class TestConflictFiltering:
         }
 
         # Proposed event does NOT overlap: 07:00-07:30
-        agent.llm_client.generate_calendar_changes.return_value = [
-            {
-                "action": "add",
-                "title": "Meditation",
-                "start_time": tomorrow.replace(hour=7, minute=0).strftime("%Y-%m-%dT%H:%M:%S"),
-                "end_time": tomorrow.replace(hour=7, minute=30).strftime("%Y-%m-%dT%H:%M:%S"),
-            }
-        ]
+        agent.llm_client.generate_schedule_proposals.return_value = {
+            "risk_level": "mild", "summary": "", "concerns": [], "positives": [],
+            "recommendations": [],
+            "proposed_changes": [
+                {
+                    "action": "add",
+                    "title": "Meditation",
+                    "start_time": tomorrow.replace(hour=7, minute=0).strftime("%Y-%m-%dT%H:%M:%S"),
+                    "end_time": tomorrow.replace(hour=7, minute=30).strftime("%Y-%m-%dT%H:%M:%S"),
+                }
+            ],
+        }
 
         result = agent.run_from_journals(sample_journals)
         assert len(result["proposed_changes"]) == 1
 
     def test_handles_malformed_proposal_times(self, sample_journals):
         agent = _make_agent()
-
         agent.calendar_api.get_schedule_summary.return_value = {"events": [], "tasks": []}
-        agent.llm_client.generate_calendar_changes.return_value = [
-            {
-                "action": "add",
-                "title": "Bad Times",
-                "start_time": "not-a-date",
-                "end_time": "also-not-a-date",
-            }
-        ]
+        agent.llm_client.generate_schedule_proposals.return_value = {
+            "risk_level": "minimal", "summary": "", "concerns": [], "positives": [],
+            "recommendations": [],
+            "proposed_changes": [
+                {
+                    "action": "add",
+                    "title": "Bad Times",
+                    "start_time": "not-a-date",
+                    "end_time": "also-not-a-date",
+                }
+            ],
+        }
 
         result = agent.run_from_journals(sample_journals)
         # Malformed proposals are NOT considered conflicts (_has_server_conflict returns False)
@@ -251,25 +272,26 @@ class TestConflictFiltering:
 
     def test_handles_malformed_event_times(self, sample_journals):
         agent = _make_agent()
-
         agent.calendar_api.get_schedule_summary.return_value = {
             "events": [{"id": "e1", "title": "Bad", "start": "nope", "end": "nope"}],
             "tasks": [],
         }
         tomorrow = datetime.now() + timedelta(days=1)
-        agent.llm_client.generate_calendar_changes.return_value = [
-            {
-                "action": "add",
-                "title": "Good",
-                "start_time": tomorrow.replace(hour=8).strftime("%Y-%m-%dT%H:%M:%S"),
-                "end_time": tomorrow.replace(hour=9).strftime("%Y-%m-%dT%H:%M:%S"),
-            }
-        ]
+        agent.llm_client.generate_schedule_proposals.return_value = {
+            "risk_level": "minimal", "summary": "", "concerns": [], "positives": [],
+            "recommendations": [],
+            "proposed_changes": [
+                {
+                    "action": "add",
+                    "title": "Good",
+                    "start_time": tomorrow.replace(hour=8).strftime("%Y-%m-%dT%H:%M:%S"),
+                    "end_time": tomorrow.replace(hour=9).strftime("%Y-%m-%dT%H:%M:%S"),
+                }
+            ],
+        }
 
         result = agent.run_from_journals(sample_journals)
-        # Malformed events are skipped during conflict check
         assert len(result["proposed_changes"]) == 1
-
 
 
 # apply_calendar_changes
@@ -359,7 +381,6 @@ class TestApplyCalendarChanges:
         ]
 
         agent.apply_calendar_changes(changes)
-        # After apply, suggest_only should be restored to True
         assert agent.calendar_api.suggest_only is True
 
     def test_suggest_only_restored_on_exception(self):
@@ -376,7 +397,6 @@ class TestApplyCalendarChanges:
             }
         ]
 
-        # The exception is caught per-change, so it won't propagate
         results = agent.apply_calendar_changes(changes)
         assert agent.calendar_api.suggest_only is True
         assert len(results["failed"]) == 1

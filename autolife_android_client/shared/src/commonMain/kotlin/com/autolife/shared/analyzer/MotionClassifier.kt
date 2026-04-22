@@ -8,20 +8,18 @@ import kotlin.math.abs
  * No platform dependencies — runs identically on Android and iOS.
  */
 object MotionClassifier {
+    private const val STATIONARY_STEPS_THRESHOLD = 2
+    private const val LIMITED_MOTION_STEPS_THRESHOLD = 10
+    private const val WALKING_STEPS_THRESHOLD = 50
+    private const val JOGGING_STEPS_THRESHOLD = 140
 
-    // Thresholds for session-based step counting
-    private const val STATIONARY_STEPS_THRESHOLD = 5
-    private const val LIMITED_MOTION_STEPS_THRESHOLD = 15
-    private const val WALKING_STEPS_THRESHOLD = 30
-    private const val JOGGING_STEPS_THRESHOLD = 80
-
-    private const val STATIONARY_ACCEL_THRESHOLD = 0.8
-    private const val STATIONARY_SPEED_THRESHOLD = 0.5  // m/s
-    private const val WALKING_SPEED_THRESHOLD = 0.5      // m/s (~1.8 km/h)
-    private const val JOGGING_SPEED_MIN = 2.0            // m/s
-    private const val JOGGING_SPEED_MAX = 5.0            // m/s
-    private const val CYCLING_SPEED_MIN = 4.0            // m/s
-    private const val VEHICLE_SPEED_MIN = 5.0            // m/s (~18 km/h)
+    private const val STATIONARY_ACCEL_THRESHOLD = 0.1
+    private const val STATIONARY_SPEED_THRESHOLD = 0.1
+    private const val WALKING_SPEED_THRESHOLD = 1.8
+    private const val JOGGING_SPEED_MIN = 2.0
+    private const val JOGGING_SPEED_MAX = 5.0
+    private const val CYCLING_SPEED_MIN = 4.0
+    private const val VEHICLE_SPEED_MIN = 5.0
 
     fun classify(
         sessionSteps: Int,
@@ -30,83 +28,64 @@ object MotionClassifier {
         speed: Double
     ): List<String> {
         val motions = mutableListOf<String>()
+        val absAltitudeDelta = abs(altitudeChange)
 
-        // Stationary (highest priority)
         if (sessionSteps <= STATIONARY_STEPS_THRESHOLD &&
             acceleration <= STATIONARY_ACCEL_THRESHOLD &&
-            abs(altitudeChange) <= 0.5 &&
+            absAltitudeDelta <= 0.1 &&
             speed <= STATIONARY_SPEED_THRESHOLD
         ) {
             motions.add("stationary")
-            return motions
         }
 
-        // Vehicular motion (high speed with low steps)
-        if (sessionSteps <= LIMITED_MOTION_STEPS_THRESHOLD &&
-            speed >= VEHICLE_SPEED_MIN
-        ) {
-            motions.add("vehicle/subway/ferry/train")
-            return motions
-        }
-
-        // Jogging/running (high step count AND high speed)
         if (sessionSteps >= JOGGING_STEPS_THRESHOLD &&
             speed >= JOGGING_SPEED_MIN &&
             speed <= JOGGING_SPEED_MAX
         ) {
             motions.add("jogging/running")
-            return motions
         }
 
-        // Cycling (high speed with moderate steps)
-        if (sessionSteps >= WALKING_STEPS_THRESHOLD &&
-            speed >= CYCLING_SPEED_MIN &&
-            speed < VEHICLE_SPEED_MIN
-        ) {
-            motions.add("cycling")
-            return motions
-        }
-
-        // Walking — multiple detection methods
-        val isWalkingBySpeed = speed >= WALKING_SPEED_THRESHOLD && speed < JOGGING_SPEED_MIN
-        val isWalkingBySteps = sessionSteps >= WALKING_STEPS_THRESHOLD
-        val isWalkingByAccel = sessionSteps >= LIMITED_MOTION_STEPS_THRESHOLD && acceleration > 0.5
-
-        if (isWalkingBySteps || (isWalkingBySpeed && sessionSteps > STATIONARY_STEPS_THRESHOLD) || isWalkingByAccel) {
+        if (sessionSteps >= WALKING_STEPS_THRESHOLD && speed < WALKING_SPEED_THRESHOLD) {
             motions.add("walking")
-            return motions
         }
 
-        // Elevator/escalator (altitude change with very few steps)
-        if (sessionSteps <= 3 &&
-            abs(altitudeChange) > 6.0 &&
-            speed < WALKING_SPEED_THRESHOLD &&
-            acceleration < 0.5
+        if (sessionSteps >= WALKING_STEPS_THRESHOLD && speed >= CYCLING_SPEED_MIN) {
+            motions.add("cycling")
+        }
+
+        if (sessionSteps <= LIMITED_MOTION_STEPS_THRESHOLD && speed > 2.0 || speed > VEHICLE_SPEED_MIN) {
+            motions.add("vehicle/subway/ferry/train")
+        }
+
+        if (sessionSteps <= LIMITED_MOTION_STEPS_THRESHOLD &&
+            altitudeChange > 2.5 &&
+            speed < 2.0
         ) {
             motions.add("escalator/elevator")
-            return motions
         }
 
-        // Limited motion — some movement but not enough for walking
-        if (sessionSteps > STATIONARY_STEPS_THRESHOLD && sessionSteps < WALKING_STEPS_THRESHOLD) {
+        if (sessionSteps <= LIMITED_MOTION_STEPS_THRESHOLD &&
+            absAltitudeDelta <= 1.0 &&
+            speed < 0.5
+        ) {
             motions.add("limited motion")
-            return motions
         }
 
-        // Minor fidgeting / phone movement
-        if (acceleration > STATIONARY_ACCEL_THRESHOLD && sessionSteps <= STATIONARY_STEPS_THRESHOLD) {
-            motions.add("limited motion")
-            return motions
+        if (motions.isEmpty() &&
+            sessionSteps >= WALKING_STEPS_THRESHOLD &&
+            speed in 0.5..<JOGGING_SPEED_MIN
+        ) {
+            motions.add("walking")
         }
 
-        // Fallback
-        if (motions.isEmpty() && sessionSteps > 0) {
+        if (motions.isEmpty() && sessionSteps > STATIONARY_STEPS_THRESHOLD) {
             motions.add("limited motion")
         }
+
         if (motions.isEmpty()) {
             motions.add("stationary")
         }
 
-        return motions
+        return motions.distinct()
     }
 }

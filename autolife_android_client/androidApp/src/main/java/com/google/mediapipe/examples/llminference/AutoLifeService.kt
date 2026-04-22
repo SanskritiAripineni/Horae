@@ -6,37 +6,61 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
-import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+import android.content.IntentFilter
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.autolife.shared.db.DatabaseRepository
-import com.autolife.shared.model.SensorLog
-import kotlinx.coroutines.*
-
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 class AutoLifeService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var analyzer: SequentialMotionLocationAnalyzer? = null
     @Volatile private var isRunning = false
     private var permanentMotionDetector: MotionDetector? = null
+    private var lightMonitor: LightSensorMonitor? = null
+    private var sleepStateReceiver: SleepStateReceiver? = null
+    private val analysisScheduler = AdaptiveAnalysisScheduler(
+        baseIntervalMs = LOG_INTERVAL,
+        demoIntervalMs = DEMO_LOG_INTERVAL
+    )
+    private val journalAttemptThrottle = JournalAttemptThrottle(
+        baseRetryMs = JOURNAL_RETRY_BACKOFF,
+        demoRetryMs = DEMO_JOURNAL_RETRY_BACKOFF
+    )
 
     companion object {
         private const val CHANNEL_ID = "AutoLifeChannel"
         private const val NOTIFICATION_ID = 1
         private const val LOG_INTERVAL = 60_000L // 1 minute
+        private const val DEMO_LOG_INTERVAL = 30_000L // 30 seconds
         private const val JOURNAL_INTERVAL = 15 * 60_000L // 15 minutes
         private const val DEMO_JOURNAL_INTERVAL = 2 * 60_000L // 2 minutes
+        private const val JOURNAL_RETRY_BACKOFF = 5 * 60_000L // 5 minutes
+        private const val DEMO_JOURNAL_RETRY_BACKOFF = 60_000L // 1 minute
     }
-    
-    // Track last journal time
-    private var lastJournalTime = 0L
+
+    private var lastAnalysisSignature: String? = null
 
     override fun onCreate() {
         super.onCreate()
         analyzer = SequentialMotionLocationAnalyzer(this)
         createNotificationChannel()
+        lightMonitor = LightSensorMonitor(this).also { it.start() }
+        sleepStateReceiver = SleepStateReceiver(lightMonitor!!).also { receiver ->
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+            }
+            registerReceiver(receiver, filter)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -73,52 +97,49 @@ class AutoLifeService : Service() {
     private fun startLoop() {
         serviceScope.launch {
             while (isActive && isRunning) {
-                // Trigger analysis
-                val timestamp = System.currentTimeMillis()
-                // DatabaseRepository.insertLog(SensorLog(timestamp = timestamp, type = "SYSTEM", content = "Starting periodic analysis"))
-                
-                startAnalysisCycle()
-                
-                // Dynamic Interval for Demo Mode
+                val cycleStartedAt = System.currentTimeMillis()
+                val analysisResult = startAnalysisCycle()
+                lastAnalysisSignature = analysisResult.materialContextSignature()
                 val isDemo = com.google.mediapipe.examples.llminference.data.DebugRepository.isDemoMode.value
                 val currentInterval = if (isDemo) DEMO_JOURNAL_INTERVAL else JOURNAL_INTERVAL
+                val now = System.currentTimeMillis()
 
-                // Check for journaling
-                if (System.currentTimeMillis() - lastJournalTime >= currentInterval) {
+                if (journalAttemptThrottle.shouldAttempt(
+                        nowMs = now,
+                        journalIntervalMs = currentInterval,
+                        contextSignature = lastAnalysisSignature,
+                        isDemoMode = isDemo
+                    )
+                ) {
                     val journalGenerator = JournalGenerator(this@AutoLifeService)
-                    journalGenerator.tryGenerateJournal(System.currentTimeMillis(), currentInterval)
-                    // If in demo mode, clear logs after generation so next 2 mins is fresh? 
-                    // Or just let it overlap? Paper says aggregation.
-                    // For demo mode, we just want to see it happen.
-                    lastJournalTime = System.currentTimeMillis()
+                    val generated = journalGenerator.tryGenerateJournal(now, currentInterval)
+                    journalAttemptThrottle.onAttemptFinished(
+                        nowMs = now,
+                        success = generated,
+                        contextSignature = lastAnalysisSignature,
+                        journalIntervalMs = currentInterval,
+                        isDemoMode = isDemo
+                    )
                 }
 
-                delay(LOG_INTERVAL)
+                val cycleDuration = System.currentTimeMillis() - cycleStartedAt
+                val delayMs = analysisScheduler.nextDelayMs(
+                    result = analysisResult,
+                    cycleDurationMs = cycleDuration,
+                    isDemoMode = isDemo
+                )
+                delay(delayMs)
             }
         }
     }
 
-    private suspend fun startAnalysisCycle() {
-        val deferred = CompletableDeferred<Unit>()
-        
-        // We need to run this on Main thread because MotionDetector internal logic might expect it (though we fixed it ideally to be thread safe, standard sensor listeners are main thread)
-        withContext(Dispatchers.Main) {
-            analyzer?.startAnalysis { result, phase ->
-               // We can log intermediate phases if we want, or just wait for complete
-               if (phase == SequentialMotionLocationAnalyzer.AnalysisPhase.COMPLETE) {
-                   deferred.complete(Unit)
-               }
-            }
+    private suspend fun startAnalysisCycle() = try {
+        analyzer?.analyzeOnce(sharedMotionDetector = permanentMotionDetector) { result, phase ->
+            Log.d("AutoLifeService", "Analysis phase=$phase result=$result")
         }
-        
-        // Wait for it to finish or timeout to prevent hanging
-        try {
-            withTimeout(30_000L) { // 30 seconds max for analysis
-                deferred.await()
-            }
-        } catch (e: Exception) {
-            Log.w("AutoLifeService", "Analysis cycle timed out or failed", e)
-        }
+    } catch (e: Exception) {
+        Log.w("AutoLifeService", "Analysis cycle timed out or failed", e)
+        null
     }
 
     private fun createNotificationChannel() {
@@ -137,26 +158,30 @@ class AutoLifeService : Service() {
         super.onDestroy()
         isRunning = false
         com.google.mediapipe.examples.llminference.data.DebugRepository.setServiceRunning(false)
+        sleepStateReceiver?.let { unregisterReceiver(it) }
+        sleepStateReceiver = null
+        lightMonitor?.stop()
+        lightMonitor = null
         analyzer?.close()
         permanentMotionDetector?.stopDetection()
         serviceScope.cancel()
     }
 
     private fun startPermanentMotionObserver() {
+        if (!BuildConfig.DEBUG) {
+            com.google.mediapipe.examples.llminference.data.DebugRepository.setPermanentMotionEnabled(false)
+            return
+        }
         serviceScope.launch {
-            com.google.mediapipe.examples.llminference.data.DebugRepository.isPermanentMotionEnabled.collect { enabled ->
-                withContext(Dispatchers.Main) {
-                    if (enabled) {
-                        if (permanentMotionDetector == null) {
-                            permanentMotionDetector = MotionDetector(this@AutoLifeService)
-                            permanentMotionDetector?.startDetection { /* handled internally for debug UI */ }
-                            // DatabaseRepository.insertLog(SensorLog(timestamp = System.currentTimeMillis(), type = "SYSTEM", content = "Permanent Motion Started"))
-                        }
-                    } else {
-                        permanentMotionDetector?.stopDetection()
-                        permanentMotionDetector = null
-                        // DatabaseRepository.insertLog(SensorLog(timestamp = System.currentTimeMillis(), type = "SYSTEM", content = "Permanent Motion Stopped"))
+            com.google.mediapipe.examples.llminference.data.DebugRepository.isPermanentMotionEnabled.collectLatest { enabled ->
+                if (enabled) {
+                    if (permanentMotionDetector == null) {
+                        permanentMotionDetector = MotionDetector(this@AutoLifeService)
+                        permanentMotionDetector?.startDetection { /* debug UI updates handled internally */ }
                     }
+                } else {
+                    permanentMotionDetector?.stopDetection()
+                    permanentMotionDetector = null
                 }
             }
         }

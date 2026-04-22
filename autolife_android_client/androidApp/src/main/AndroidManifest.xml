@@ -18,6 +18,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Screen-time markers via UsageStatsManager. User grants via Settings → Apps → Special access → Usage access. -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+
+    <!-- Communication reciprocity (comm_reciprocity marker). Runtime dangerous permissions;
+         either source alone is sufficient — the app degrades gracefully if not granted. -->
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+
     <application
         android:name=".AutoLifeApp"
         android:allowBackup="true"

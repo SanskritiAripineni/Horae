@@ -1,33 +1,40 @@
 package com.google.mediapipe.examples.llminference
 
 import android.content.Context
+import android.location.Location
 import android.util.Log
-import com.autolife.shared.model.SensorLog
+import com.autolife.shared.analyzer.MotionClassifier
 import com.autolife.shared.db.DatabaseRepository
-import kotlinx.coroutines.*
+import com.autolife.shared.model.ContextLog
+import com.autolife.shared.model.ContextLogCodec
+import com.autolife.shared.model.SensorLog
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.Closeable
 import java.lang.ref.WeakReference
-import com.google.mediapipe.examples.llminference.getBestLocation
 
 class SequentialMotionLocationAnalyzer(
     context: Context
 ) : Closeable {
     companion object {
         private const val TAG = "SequentialAnalyzer"
-        private const val MOTION_DURATION = 15000L // 15 seconds
+        private const val MOTION_DURATION_MS = 15_000L
+        private const val STATIONARY_MIN_MOTION_DURATION_MS = 5_000L
+        private const val LOCATION_REUSE_TTL_MS = 10 * 60_000L
+        private const val WIFI_REUSE_TTL_MS = 5 * 60_000L
+        private const val STATIONARY_STREAK_FOR_REUSE = 2
     }
 
     private val contextRef = WeakReference(context)
-    
-    // Use Default for background sequencing; hop to Main only for callbacks
     private val analyzerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var currentJob: Job? = null
     private var isAnalyzing = false
     private var currentPhase = AnalysisPhase.NONE
-    private var motionDetector: MotionDetector? = null
-
-    private var locationAnalyzer: LocationAnalyzer? = null
-    private var lastLocationContext: String? = null
+    private var lastContextLog: ContextLog? = null
+    private var signalReuseState = SignalReuseState()
 
     enum class AnalysisPhase {
         NONE,
@@ -37,277 +44,190 @@ class SequentialMotionLocationAnalyzer(
         COMPLETE
     }
 
-    fun startAnalysis(callback: (String, AnalysisPhase) -> Unit) {
+    suspend fun analyzeOnce(
+        sharedMotionDetector: MotionDetector? = null,
+        callback: ((String, AnalysisPhase) -> Unit)? = null
+    ): ContextLog? {
         if (isAnalyzing) {
-            callback("Analysis already in progress", currentPhase)
-            return
+            callback?.invoke("Analysis already in progress", currentPhase)
+            return null
         }
 
-        val context = contextRef.get() ?: run {
-            callback("Context no longer available", AnalysisPhase.NONE)
-            return
-        }
-
-        startMotionPhase(callback)
-    }
-
-    private suspend fun runMotionDetection(context: Context, callback: (String, AnalysisPhase) -> Unit): Boolean {
-        return try {
-            // Initialize MotionDetector and start sensors on Main thread (requires Looper)
-            withContext(Dispatchers.Main) {
-                motionDetector = MotionDetector(context)
-                motionDetector?.startDetection { motions ->
-                    // Callback invoked on sensor thread; post to Main for UI updates
-                    analyzerScope.launch(Dispatchers.Main) {
-                        callback("Current motions: ${motions.joinToString(", ")}", AnalysisPhase.MOTION)
-                    }
-                }
-            }
-            // Wait for motion detection on Default dispatcher
-            val start = System.nanoTime()
-            delay(MOTION_DURATION)
-            val elapsedMs = (System.nanoTime() - start) / 1_000_000
-            withContext(Dispatchers.Main) { callback("Motion phase elapsed: ${elapsedMs}ms", AnalysisPhase.MOTION) }
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Motion detection error", e)
-            false
-        } finally {
-            withContext(Dispatchers.Main) {
-                motionDetector?.stopDetection()
-            }
-            motionDetector = null
-        }
-    }
-
-    private fun startMotionPhase(callback: (String, AnalysisPhase) -> Unit) {
+        val context = contextRef.get() ?: return null
         isAnalyzing = true
-        currentPhase = AnalysisPhase.MOTION
 
-        val context = contextRef.get() ?: run {
-            cleanup()
-            callback("Context no longer available", AnalysisPhase.NONE)
-            return
-        }
+        try {
+            currentPhase = AnalysisPhase.MOTION
+            callback?.invoke("Collecting window features...", currentPhase)
 
-        currentJob = analyzerScope.launch {
-            try {
-                val motionSuccess = runMotionDetection(context, callback)
-                if (motionSuccess) {
-                    finishMotionPhase(callback)
-                } else {
-                    cleanup()
-                    callback("Motion detection failed", AnalysisPhase.MOTION)
-                }
-            } catch (e: CancellationException) {
-                cleanup()
-                throw e
-            }
-        }
-    }
-
-
-    private fun finishMotionPhase(callback: (String, AnalysisPhase) -> Unit) {
-        val context = contextRef.get() ?: run {
-            cleanup()
-            callback("Context no longer available", AnalysisPhase.NONE)
-            return
-        }
-
-        val motionStorage = MotionStorage(context)
-        val motionHistory = motionStorage.getMotionHistory() ?: "No motion detected"
-
-        // Save to DB
-        analyzerScope.launch {
-            DatabaseRepository.insertLog(
-                SensorLog(
-                    timestamp = System.currentTimeMillis(),
-                    type = "MOTION",
-                    content = motionHistory
-                )
+            val nowMs = System.currentTimeMillis()
+            val stableStationary = signalReuseState.isStableStationary(
+                previousLog = lastContextLog,
+                requiredStreak = STATIONARY_STREAK_FOR_REUSE
             )
-        }
 
-        // Stop detector on Main thread
-        analyzerScope.launch(Dispatchers.Main) {
-            motionDetector?.stopDetection()
-            motionDetector = null
-        }
-
-        startLocationPhase(callback)
-    }
-
-    private fun startLocationPhase(callback: (String, AnalysisPhase) -> Unit) {
-        currentPhase = AnalysisPhase.LOCATION
-        callback("Starting location analysis...", AnalysisPhase.LOCATION)
-
-        val context = contextRef.get() ?: run {
-            cleanup()
-            callback("Context no longer available", AnalysisPhase.NONE)
-            return
-        }
-
-        currentJob = analyzerScope.launch {
-            try {
-                val locationSuccess = runLocationAnalysis(context, callback)
-                if (locationSuccess) {
-                    startFusionPhase(callback)
-                } else {
-                    cleanup()
-                    callback("Location analysis failed", AnalysisPhase.LOCATION)
+            val location = when {
+                stableStationary && signalReuseState.canReuseLocation(nowMs, LOCATION_REUSE_TTL_MS) -> {
+                    callback?.invoke("Reusing recent location snapshot", currentPhase)
+                    signalReuseState.location?.let(::Location)
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error in location analysis", e)
-                callback("Error in location analysis: ${e.message}", AnalysisPhase.LOCATION)
-                cleanup()
+                else -> getBestLocation(context, requireFresh = false, highAccuracy = false)
             }
-        }
-    }
-
-
-    private suspend fun runLocationAnalysis(
-        context: Context,
-        callback: (String, AnalysisPhase) -> Unit
-    ): Boolean {
-        return try {
-            val loc = getBestLocation(context)
-            if (loc == null) {
-                callback("Location unavailable. Turn on Location or step outside.", AnalysisPhase.LOCATION)
-                false
+            val ssids = when {
+                stableStationary && signalReuseState.canReuseWifi(nowMs, WIFI_REUSE_TTL_MS) -> {
+                    callback?.invoke("Reusing recent Wi-Fi context", currentPhase)
+                    signalReuseState.ssids
+                }
+                stableStationary -> WifiScanner(context).getWifiNetworks(maxAgeMs = WIFI_REUSE_TTL_MS)
+                else -> WifiScanner(context).getWifiNetworks(forceRefresh = true)
+            }
+            val ssidFingerprint = WifiScanner.createFingerprint(ssids)
+            val speedMps = location
+                ?.takeIf { isUsableLocation(it) }
+                ?.speed
+                ?.toDouble()
+            val motionPolicy = if (stableStationary) {
+                MotionCollectionPolicy(minDurationMs = STATIONARY_MIN_MOTION_DURATION_MS)
             } else {
-                val ssids: List<String> = try {
-                    WifiScanner(context).getWifiNetworks()
-                } catch (_: Exception) { emptyList() }
-
-                val locationAnalyzer = LocationAnalyzer(context)
-                val result = if (ssids.isNotEmpty()) {
-                    locationAnalyzer.analyzeLocation(ssids)
-                } else {
-                    locationAnalyzer.analyzeLocation(listOf("No visible Wi-Fi SSIDs"))
-                }
-
-                // Log to DB
-                DatabaseRepository.insertLog(
-                    SensorLog(
-                        timestamp = System.currentTimeMillis(),
-                        type = "LOCATION",
-                        content = result
-                    )
-                )
-
-                callback("Location analysis complete: $result", AnalysisPhase.LOCATION)
-                lastLocationContext = result
-                true
+                null
             }
+
+            val windowFeatures = collectWindowFeatures(
+                context = context,
+                sharedMotionDetector = sharedMotionDetector,
+                speedMps = speedMps,
+                ssidFingerprint = ssidFingerprint,
+                motionPolicy = motionPolicy,
+                callback = callback
+            )
+
+            val motionCandidates = MotionClassifier.classify(
+                sessionSteps = windowFeatures.stepCount,
+                acceleration = windowFeatures.avgAcceleration,
+                altitudeChange = windowFeatures.altitudeDelta,
+                speed = windowFeatures.speedMps ?: 0.0
+            )
+
+            currentPhase = AnalysisPhase.LOCATION
+            callback?.invoke("Resolving location context...", currentPhase)
+
+            val locationAnalyzer = LocationAnalyzer(context)
+            val locationResult = locationAnalyzer.resolveLocationContext(
+                location = location,
+                ssids = ssids,
+                previousLog = lastContextLog
+            )
+
+            currentPhase = AnalysisPhase.FUSION
+            callback?.invoke("Calibrating motion if needed...", currentPhase)
+
+            val calibratedMotion = if (motionCandidates.size > 1 && !locationResult.fusedLocationContext.isNullOrBlank()) {
+                ContextFusionAnalyzer(context).calibrateMotion(motionCandidates, locationResult.fusedLocationContext)
+            } else {
+                motionCandidates.firstOrNull() ?: "stationary"
+            }
+
+            val contextLog = ContextLog(
+                windowStartMs = windowFeatures.windowStartMs,
+                windowEndMs = windowFeatures.windowEndMs,
+                motionCandidates = motionCandidates,
+                calibratedMotion = calibratedMotion,
+                mapContext = locationResult.mapContext,
+                ssidContext = locationResult.ssidContext,
+                fusedLocationContext = locationResult.fusedLocationContext,
+                locationGridKey = locationResult.gridKey,
+                ssidFingerprint = locationResult.ssidFingerprint,
+                reusedMapContext = locationResult.reusedMapContext,
+                reusedSsidContext = locationResult.reusedSsidContext
+            )
+
+            appendContextLog(contextLog)
+            lastContextLog = contextLog
+            signalReuseState = signalReuseState
+                .let { state ->
+                    when {
+                        location != null -> state.withLocation(location, nowMs)
+                        stableStationary -> state
+                        else -> state.clearLocation()
+                    }
+                }
+                .let { state ->
+                    when {
+                        ssids.isNotEmpty() -> state.withWifi(ssids, ssidFingerprint, nowMs)
+                        stableStationary -> state
+                        else -> state.clearWifi()
+                    }
+                }
+                .withMotion(calibratedMotion)
+
+            currentPhase = AnalysisPhase.COMPLETE
+            callback?.invoke(buildSummary(contextLog), currentPhase)
+            return contextLog
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            callback("Location analysis failed: ${e.message}", AnalysisPhase.LOCATION)
-            false
+            Log.e(TAG, "Analysis failed", e)
+            callback?.invoke("Analysis failed: ${e.message}", currentPhase)
+            return null
+        } finally {
+            isAnalyzing = false
+            currentPhase = AnalysisPhase.NONE
         }
     }
 
-
-    private fun startFusionPhase(callback: (String, AnalysisPhase) -> Unit) {
-        currentPhase = AnalysisPhase.FUSION
-        callback("Starting context fusion...", AnalysisPhase.FUSION)
-
-        locationAnalyzer?.close()
-        locationAnalyzer = null
-        // Removed forced GC to avoid UI pauses
-
-        currentJob = analyzerScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    val context = contextRef.get() ?: run {
-                        cleanup()
-                        callback("Context no longer available", AnalysisPhase.NONE)
-                        return@withContext
-                    }
-
-                    val result = performContextFusion(context)
-                    withContext(Dispatchers.Main) {
-                        callback(result, AnalysisPhase.FUSION)
-                    }
-                }
-                finishAnalysis(callback)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error in fusion phase", e)
-                callback("Error in fusion analysis: ${e.message}", AnalysisPhase.FUSION)
-                cleanup()
-            }
+    fun startAnalysis(callback: (String, AnalysisPhase) -> Unit) {
+        analyzerScope.launch {
+            analyzeOnce(callback = callback)
         }
     }
 
-    private suspend fun performContextFusion(context: Context): String {
-        val contextFusionAnalyzer = ContextFusionAnalyzer(context)
-        
-        val motionStorage = MotionStorage(context)
-        val motionHistory = motionStorage.getMotionHistory() ?: "Unknown Motion"
-        val locationContext = lastLocationContext ?: "Unknown Location"
-        
-        val result = contextFusionAnalyzer.performFusion(motionHistory, locationContext)
+    private suspend fun collectWindowFeatures(
+        context: Context,
+        sharedMotionDetector: MotionDetector?,
+        speedMps: Double?,
+        ssidFingerprint: String,
+        motionPolicy: MotionCollectionPolicy?,
+        callback: ((String, AnalysisPhase) -> Unit)?
+    ) = withContext(Dispatchers.Main) {
+        val detector = sharedMotionDetector ?: MotionDetector(context)
+        val localStart = System.currentTimeMillis()
+        val features = detector.collectWindowFeatures(
+            windowDurationMs = MOTION_DURATION_MS,
+            speedMps = speedMps,
+            ssidFingerprint = ssidFingerprint,
+            motionPolicy = motionPolicy
+        ) { motions ->
+            callback?.invoke("Motion candidates: ${motions.joinToString(", ")}", AnalysisPhase.MOTION)
+        }
+        callback?.invoke("Collected motion window in ${System.currentTimeMillis() - localStart}ms", AnalysisPhase.MOTION)
+        features
+    }
 
+    private fun appendContextLog(contextLog: ContextLog) {
         DatabaseRepository.insertLog(
             SensorLog(
-                timestamp = System.currentTimeMillis(),
-                type = "FUSION",
-                content = result
+                timestamp = contextLog.windowEndMs,
+                type = "CONTEXT",
+                content = ContextLogCodec.encode(contextLog)
             )
         )
-        
-        return result
     }
 
-    private fun finishAnalysis(callback: (String, AnalysisPhase) -> Unit) {
-        currentPhase = AnalysisPhase.COMPLETE
-        val results = getCombinedResults()
-        callback(results, AnalysisPhase.COMPLETE)
-        cleanup()
-    }
-
-    private fun getCombinedResults(): String {
-        val context = contextRef.get() ?: return "Context no longer available"
-
-        val resultBuilder = StringBuilder()
-
-        resultBuilder.append("=== Motion Analysis Results ===\n")
-        val motionStorage = MotionStorage(context)
-        val motionHistory = motionStorage.getMotionHistory()
-        resultBuilder.append(motionHistory ?: "No motion data available")
-        resultBuilder.append("\n\n")
-
-        resultBuilder.append("=== Location Analysis Results ===\n")
-        val fileStorage = FileStorage(context)
-        val locationHistory = fileStorage.getLastResponse()
-        resultBuilder.append(locationHistory ?: "No location data available")
-
-        return resultBuilder.toString()
+    private fun buildSummary(contextLog: ContextLog): String {
+        val location = contextLog.fusedLocationContext
+            ?: contextLog.ssidContext
+            ?: contextLog.mapContext
+            ?: "Unknown location"
+        return "${contextLog.calibratedMotion} @ $location"
     }
 
     fun getCurrentPhase(): AnalysisPhase = currentPhase
 
     fun stopAnalysis() {
-        currentJob?.cancel()
-        cleanup()
-    }
-
-    private fun cleanup() {
-        currentJob?.cancel()
-        currentJob = null
-        // Stop motion detector on Main thread
-        analyzerScope.launch(Dispatchers.Main) {
-            motionDetector?.stopDetection()
-            motionDetector = null
-        }
-        locationAnalyzer?.close()
-        locationAnalyzer = null
         isAnalyzing = false
-        currentPhase = AnalysisPhase.NONE
-        // Removed forced GC
     }
 
     override fun close() {
         stopAnalysis()
-        analyzerScope.cancel()
-            // Removed forced GC to reduce STW pauses
     }
 }

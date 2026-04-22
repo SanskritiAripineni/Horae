@@ -1,12 +1,13 @@
 package com.google.mediapipe.examples.llminference
 
-import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.runBlocking
 
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 import org.junit.runner.RunWith
-
-import org.junit.Assert.*
 
 /**
  * Instrumented test, which will execute on an Android device.
@@ -20,5 +21,18 @@ class ExampleInstrumentedTest {
         // Context of the app under test.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
         assertEquals("com.google.mediapipe.examples.llminference", appContext.packageName)
+    }
+
+    @Test
+    fun reverseGeocodeLocation_returnsAddressSummary() = runBlocking {
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+
+        val summary = reverseGeocodeLocation(
+            context = appContext,
+            latitude = 37.4219999,
+            longitude = -122.0840575
+        )
+
+        assertFalse("Expected geocoder summary for known coordinates", summary.isNullOrBlank())
     }
 }

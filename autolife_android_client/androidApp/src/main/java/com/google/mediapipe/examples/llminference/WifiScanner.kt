@@ -11,13 +11,40 @@ import com.autolife.shared.platform.WifiNetworkProvider
 class WifiScanner(private val context: Context) : WifiNetworkProvider {
     companion object {
         private const val TAG = "WifiScanner"
+        private data class CachedWifiSnapshot(
+            val ssids: List<String>,
+            val capturedAtMs: Long
+        )
+
+        @Volatile
+        private var cachedSnapshot: CachedWifiSnapshot? = null
+
+        fun createFingerprint(ssids: List<String>): String =
+            ssids.map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .sorted()
+                .joinToString("|")
+                .hashCode()
+                .toString()
     }
 
     override fun getVisibleNetworks(): List<String> = getWifiNetworks()
 
-    fun getWifiNetworks(): List<String> {
+    fun getWifiNetworks(
+        maxAgeMs: Long = 0L,
+        forceRefresh: Boolean = false
+    ): List<String> {
+        val now = System.currentTimeMillis()
+        cachedSnapshot
+            ?.takeIf { !forceRefresh && maxAgeMs > 0L && now - it.capturedAtMs <= maxAgeMs }
+            ?.let { cached ->
+                Log.d(TAG, "Reusing cached WiFi scan with ${cached.ssids.size} SSIDs")
+                return cached.ssids
+            }
+
         val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        
+
         if (!wifiManager.isWifiEnabled) {
             Log.w(TAG, "WiFi is disabled")
             return listOf("WiFi is disabled")
@@ -34,7 +61,7 @@ class WifiScanner(private val context: Context) : WifiNetworkProvider {
 
         return try {
             val results = wifiManager.scanResults
-            
+
             if (results == null) {
                 Log.w(TAG, "scanResults returned null")
                 return listOf("Scan results null")
@@ -55,6 +82,10 @@ class WifiScanner(private val context: Context) : WifiNetworkProvider {
                 return listOf("No visible Wi-Fi SSIDs")
             }
 
+            cachedSnapshot = CachedWifiSnapshot(
+                ssids = filteredNetworks,
+                capturedAtMs = now
+            )
             filteredNetworks
         } catch (e: SecurityException) {
             Log.e(TAG, "Security exception while scanning WiFi", e)

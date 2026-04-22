@@ -4,9 +4,6 @@ import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -20,6 +17,18 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
     private val json = Json { ignoreUnknownKeys = true }
     private val modelName = "gemini-2.0-flash-lite"
     private val baseUrl = "https://generativelanguage.googleapis.com/v1beta/models"
+    private val defaultGenerationConfig = buildJsonObject {
+        put("temperature", 0.7)
+        put("topK", 40)
+        put("topP", 0.95)
+        put("maxOutputTokens", 1024)
+    }
+    private val imageGenerationConfig = buildJsonObject {
+        put("temperature", 0.2)
+        put("topK", 20)
+        put("topP", 0.8)
+        put("maxOutputTokens", 256)
+    }
 
     override suspend fun generate(prompt: String): String {
         val body = buildJsonObject {
@@ -30,12 +39,7 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
                     }
                 }
             }
-            putJsonObject("generationConfig") {
-                put("temperature", 0.7)
-                put("topK", 40)
-                put("topP", 0.95)
-                put("maxOutputTokens", 1024)
-            }
+            put("generationConfig", defaultGenerationConfig)
         }
         val response = client.post("$baseUrl/$modelName:generateContent") {
             parameter("key", apiKey)
@@ -62,12 +66,7 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
                     }
                 }
             }
-            putJsonObject("generationConfig") {
-                put("temperature", 0.7)
-                put("topK", 40)
-                put("topP", 0.95)
-                put("maxOutputTokens", 1024)
-            }
+            put("generationConfig", imageGenerationConfig)
         }
         val response = client.post("$baseUrl/$modelName:generateContent") {
             parameter("key", apiKey)

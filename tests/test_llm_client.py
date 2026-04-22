@@ -4,7 +4,7 @@ Tests for tools/llm_client.py — Gemini API wrapper.
 All Gemini API calls are mocked. Tests cover:
 - JSON parsing from model responses (with and without markdown fencing)
 - Fallback behaviour when API key is missing or client is None
-- analyze_wellbeing(), generate_recommendations(), generate_calendar_changes()
+- generate_schedule_proposals(), generate_recommendations(), generate_calendar_changes()
 - parse_user_feedback()
 """
 
@@ -35,67 +35,131 @@ def _set_generate_response(mock_genai_client, text: str):
 
 
 
-# analyze_wellbeing
+# generate_schedule_proposals
 
-class TestAnalyzeWellbeing:
+class TestGenerateScheduleProposals:
 
-    def test_parses_clean_json(self):
+    def _base_calendar(self):
+        return {"events": [], "tasks": []}
+
+    def test_happy_path(self):
         client, mock = _make_client()
         payload = {
-            "summary": "User is stressed",
-            "risk_level": "moderate",
+            "risk_level": "mild",
+            "summary": "User shows mild stress from irregular sleep.",
             "concerns": ["poor sleep"],
-            "positives": ["exercise"],
+            "positives": ["regular exercise"],
+            "recommendations": [
+                {"category": "Sleep", "action": "Sleep by 10pm", "when": "nightly", "source": "study"}
+            ],
+            "proposed_changes": [
+                {
+                    "action": "add",
+                    "title": "Wind-Down",
+                    "description": "Relax before bed",
+                    "start_time": "2026-04-22T21:00:00",
+                    "end_time": "2026-04-22T21:30:00",
+                    "category": "Sleep",
+                    "reason": "Better sleep hygiene",
+                }
+            ],
         }
         _set_generate_response(mock, json.dumps(payload))
 
-        result = client.analyze_wellbeing("Some journal text")
+        result = client.generate_schedule_proposals(
+            journal_narrative="User went to gym and studied.",
+            behavioral_prose="Sleep onset shifted 90 min later this week.",
+            risk_level="mild",
+            calendar_summary=self._base_calendar(),
+            research_context=[{"category": "Sleep", "content": "Sleep matters", "source": "paper.pdf"}],
+        )
 
-        assert result["risk_level"] == "moderate"
-        assert "poor sleep" in result["concerns"]
+        assert result["risk_level"] == "mild"
+        assert len(result["recommendations"]) == 1
+        assert len(result["proposed_changes"]) == 1
+
+    def test_behavioral_prose_included_in_prompt(self):
+        client, mock = _make_client()
+        _set_generate_response(mock, json.dumps({
+            "risk_level": "minimal", "summary": "", "concerns": [], "positives": [],
+            "recommendations": [], "proposed_changes": [],
+        }))
+        behavioral_prose = "Mobility entropy dropped significantly."
+        client.generate_schedule_proposals(
+            journal_narrative="normal day",
+            behavioral_prose=behavioral_prose,
+            risk_level="mild",
+            calendar_summary=self._base_calendar(),
+            research_context=[],
+        )
+        prompt = mock.models.generate_content.call_args.kwargs.get("contents", "")
+        assert behavioral_prose in prompt
+
+    def test_none_behavioral_prose_signals_no_sensor_data(self):
+        client, mock = _make_client()
+        _set_generate_response(mock, json.dumps({
+            "risk_level": "minimal", "summary": "", "concerns": [], "positives": [],
+            "recommendations": [], "proposed_changes": [],
+        }))
+        client.generate_schedule_proposals(
+            journal_narrative="normal day",
+            behavioral_prose=None,
+            risk_level="minimal",
+            calendar_summary=self._base_calendar(),
+            research_context=[],
+        )
+        prompt = mock.models.generate_content.call_args.kwargs.get("contents", "")
+        assert "No sensor data available" in prompt
+
+    def test_user_preferences_in_prompt(self):
+        client, mock = _make_client()
+        _set_generate_response(mock, json.dumps({
+            "risk_level": "minimal", "summary": "", "concerns": [], "positives": [],
+            "recommendations": [], "proposed_changes": [],
+        }))
+        client.generate_schedule_proposals(
+            journal_narrative="",
+            behavioral_prose=None,
+            risk_level="minimal",
+            calendar_summary=self._base_calendar(),
+            research_context=[],
+            user_preferences=["No yoga", "Prefer running"],
+        )
+        prompt = mock.models.generate_content.call_args.kwargs.get("contents", "")
+        assert "No yoga" in prompt
+        assert "Prefer running" in prompt
+
+    def test_returns_fallback_on_invalid_json(self):
+        client, mock = _make_client()
+        _set_generate_response(mock, "not json at all")
+
+        result = client.generate_schedule_proposals(
+            journal_narrative="day",
+            behavioral_prose=None,
+            risk_level="mild",
+            calendar_summary=self._base_calendar(),
+            research_context=[],
+        )
+        assert result["risk_level"] == "mild"
+        assert isinstance(result["recommendations"], list)
+        assert isinstance(result["proposed_changes"], list)
 
     def test_strips_markdown_fencing(self):
         client, mock = _make_client()
         payload = {
-            "summary": "ok",
-            "risk_level": "minimal",
-            "concerns": [],
-            "positives": ["active"],
+            "risk_level": "minimal", "summary": "ok", "concerns": [], "positives": [],
+            "recommendations": [], "proposed_changes": [],
         }
-        fenced = f"```json\n{json.dumps(payload)}\n```"
-        _set_generate_response(mock, fenced)
+        _set_generate_response(mock, f"```json\n{json.dumps(payload)}\n```")
 
-        result = client.analyze_wellbeing("journal text")
+        result = client.generate_schedule_proposals(
+            journal_narrative="day",
+            behavioral_prose=None,
+            risk_level="minimal",
+            calendar_summary=self._base_calendar(),
+            research_context=[],
+        )
         assert result["risk_level"] == "minimal"
-
-    def test_returns_fallback_on_invalid_json(self):
-        client, mock = _make_client()
-        _set_generate_response(mock, "This is not JSON at all")
-
-        result = client.analyze_wellbeing("journal text")
-        assert result["risk_level"] == "mild"
-        assert result["summary"] == "Unable to analyze journals"
-
-    def test_returns_fallback_when_client_is_none(self):
-        """When no API key is set the client attribute is None."""
-        from tools.llm_client import LLMClient
-        with patch.dict("os.environ", {}, clear=False):
-            with patch("tools.llm_client.GENAI_AVAILABLE", True):
-                client = LLMClient.__new__(LLMClient)
-                client.api_key = None
-                client.model_name = "test"
-                client.client = None
-
-        result = client.analyze_wellbeing("journal")
-        assert result["risk_level"] == "mild"
-
-    def test_returns_fallback_on_api_exception(self):
-        client, mock = _make_client()
-        mock.models.generate_content.side_effect = Exception("API quota exceeded")
-
-        result = client.analyze_wellbeing("journal text")
-        assert result["risk_level"] == "mild"
-
 
 
 # generate_recommendations

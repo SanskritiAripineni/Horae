@@ -4,6 +4,7 @@ import ComposeApp
 
 class IOSLocationProvider: NSObject, LocationProvider, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
+    private let geocoder = CLGeocoder()
     private var continuation: CheckedContinuation<LocationData?, Never>?
 
     override init() {
@@ -28,6 +29,32 @@ class IOSLocationProvider: NSObject, LocationProvider, CLLocationManagerDelegate
             self.continuation?.resume(returning: nil)
             self.continuation = continuation
             manager.requestLocation()
+        }
+    }
+
+    func reverseGeocode(location: LocationData) async -> String? {
+        let clLocation = CLLocation(latitude: location.latitude, longitude: location.longitude)
+
+        do {
+            let placemarks = try await geocoder.reverseGeocodeLocation(clLocation)
+            guard let placemark = placemarks.first else { return nil }
+
+            let parts: [String] = [
+                placemark.name,
+                placemark.subLocality,
+                placemark.locality,
+                placemark.administrativeArea,
+                placemark.country
+            ].compactMap { value in
+                guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !trimmed.isEmpty else { return nil }
+                return trimmed
+            }
+
+            let uniqueParts = Array(NSOrderedSet(array: parts)) as? [String] ?? parts
+            return uniqueParts.isEmpty ? nil : uniqueParts.joined(separator: ", ")
+        } catch {
+            return nil
         }
     }
 

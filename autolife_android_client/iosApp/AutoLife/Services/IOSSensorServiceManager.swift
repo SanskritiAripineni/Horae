@@ -11,7 +11,6 @@ class IOSSensorServiceManager {
     private let locationProvider = IOSLocationProvider()
     private let motionProvider = IOSMotionSensorProvider()
     private let wifiProvider = IOSWifiNetworkProvider()
-    private let mapFetcher = IOSMapImageFetcher()
 
     private var pollTimer: Timer?
     private(set) var isRunning = false
@@ -130,55 +129,57 @@ class IOSSensorServiceManager {
                 content: content
             ))
 
-            // 2. Location analysis with map image
+            let ssids = wifiProvider.getVisibleNetworks()
+            let geocoderContext = await locationProvider.reverseGeocode(location: loc)
+
+            // 2. Fuse geocoder + SSID context
             do {
-                let mapBytes = try await mapFetcher.fetchMapImage(
-                    latitude: loc.latitude, longitude: loc.longitude
-                )
-                let locationPrompt = PromptBuilder.shared.buildLocationAnalysisPrompt()
-                let locationContext: String
-                if let mapBytes = mapBytes {
-                    locationContext = try await AiClientProvider.shared.client.generateWithImage(
-                        prompt: locationPrompt, imageBytes: mapBytes
-                    )
+                let ssidContext: String?
+                if ssids.isEmpty || ssids == ["(No WiFi info available)"] {
+                    ssidContext = nil
                 } else {
-                    locationContext = try await AiClientProvider.shared.client.generate(
-                        prompt: locationPrompt
+                    let ssidPrompt = PromptBuilder.shared.buildWifiLocationPrompt(ssids: ssids)
+                    let candidate = try await AiClientProvider.shared.client.generate(prompt: ssidPrompt)
+                    let normalized = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+                    ssidContext = normalized.lowercased().contains("ssid context unavailable") ? nil : normalized
+                }
+
+                let locationContext: String
+                if let geocoderContext, let ssidContext {
+                    let fusionPrompt = PromptBuilder.shared.buildLocationFusionPrompt(
+                        mapContext: geocoderContext,
+                        ssidContext: ssidContext
                     )
+                    locationContext = try await AiClientProvider.shared.client.generate(prompt: fusionPrompt)
+                } else {
+                    locationContext = geocoderContext ?? ssidContext ?? "Location unavailable"
                 }
 
                 lastLocationContext = locationContext
                 PlatformStateProvider.shared.updateLocation(
                     latitude: loc.latitude,
                     longitude: loc.longitude,
-                    ssids: wifiProvider.getVisibleNetworks(),
-                    inference: locationContext
+                    ssids: ssids,
+                    inference: locationContext,
+                    mapPreviewBytes: nil
                 )
-
-                // 3. Context fusion
-                let motionHistory = motionProvider.getMotionHistory() ?? currentMotionClass
-                let fusionPrompt = PromptBuilder.shared.buildFusionPrompt(
-                    motionHistory: motionHistory,
-                    locationContext: locationContext
-                )
-                let fusionResult = try await AiClientProvider.shared.client.generate(prompt: fusionPrompt)
 
                 DatabaseRepository.shared.insertLog(log: SensorLog(
                     id: 0,
                     timestamp: now,
                     type: "FUSION",
-                    content: fusionResult
+                    content: locationContext
                 ))
 
-                PlatformStateProvider.shared.updateLocationInference(inference: fusionResult)
+                PlatformStateProvider.shared.updateLocationInference(inference: locationContext)
             } catch {
                 // Non-fatal: AI calls may fail, continue polling
-                let ssids = wifiProvider.getVisibleNetworks()
                 PlatformStateProvider.shared.updateLocation(
                     latitude: loc.latitude,
                     longitude: loc.longitude,
                     ssids: ssids,
-                    inference: "Analysis unavailable: \(error.localizedDescription)"
+                    inference: geocoderContext ?? "Analysis unavailable: \(error.localizedDescription)",
+                    mapPreviewBytes: nil
                 )
             }
         }
@@ -228,7 +229,7 @@ class IOSSensorServiceManager {
             return "[\(time)] (\(log.type)): \(log.content)"
         }.joined(separator: "\n")
 
-        let prompt = PromptBuilder.shared.buildJournalPrompt(formattedLogs: formattedLogs)
+        let prompt = PromptBuilder.shared.buildJournalPrompt(refinedSegments: formattedLogs)
 
         do {
             let journalContent = try await AiClientProvider.shared.client.generate(prompt: prompt)

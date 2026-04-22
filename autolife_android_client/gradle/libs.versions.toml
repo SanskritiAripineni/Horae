@@ -15,7 +15,6 @@ room = "2.7.0"
 gson = "2.10.1"
 nav_version = "2.8.5"
 work = "2.9.1"
-generativeai = "0.9.0"
 kotlinxSerializationJson = "1.7.3"
 kotlinxCoroutines = "1.8.1"
 ktor = "3.0.3"
@@ -42,7 +41,6 @@ androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = 
 google-gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "nav_version" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
-google-generativeai = { group = "com.google.ai.client.generativeai", name = "generativeai", version.ref = "generativeai" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }

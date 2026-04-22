@@ -1,6 +1,7 @@
 import SwiftUI
 import ComposeApp
 import UIKit
+import Foundation
 
 @main
 struct AutoLifeApp: App {
@@ -29,6 +30,8 @@ struct AutoLifeApp: App {
     }
 
     private func setupPlatformCallbacks() {
+        let wifiProvider = IOSWifiNetworkProvider()
+
         // Service toggle: Kotlin iosMain -> IOSServiceBridge -> Swift
         IOSServiceBridge.shared.onServiceToggle = { shouldStart in
             Task { @MainActor in
@@ -82,6 +85,25 @@ struct AutoLifeApp: App {
             if level < 0 { return nil }
             return KotlinInt(int: Int32(level * 100))
         }
+        PlatformStateProvider.shared.onBatteryDeviceInfoRequested = {
+            UIDevice.current.isBatteryMonitoringEnabled = true
+            let model = "\(UIDevice.current.systemName) device (\(UIDevice.current.model))"
+            return BatteryDeviceInfo(
+                platform: "iOS",
+                deviceModel: model,
+                osVersion: "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)",
+                appVersion: currentAppVersion()
+            )
+        }
+        PlatformStateProvider.shared.onBatteryEnvironmentRequested = {
+            let networks = wifiProvider.getVisibleNetworks().joined(separator: ", ")
+            return BatteryRunEnvironment(
+                screenIntent: BatteryScreenIntent.mostlyScreenOff,
+                appStateIntent: BatteryAppStateIntent.mostlyBackground,
+                networkSummary: networks.isEmpty ? "Network state unavailable" : networks,
+                lowPowerModeEnabled: KotlinBoolean(bool: ProcessInfo.processInfo.isLowPowerModeEnabled)
+            )
+        }
 
         PlatformStateProvider.shared.onBatteryAssessmentExportRequested = { report in
             IOSDataExporter.exportBatteryReport(content: report)
@@ -90,6 +112,12 @@ struct AutoLifeApp: App {
         PlatformStateProvider.shared.setPlatformName(name: "iOS")
         PlatformStateProvider.shared.loadBatteryAssessments()
         PlatformStateProvider.shared.refreshBatteryLevel()
+    }
+
+    private func currentAppVersion() -> String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
+        return "\(version) (\(build))"
     }
 }
 

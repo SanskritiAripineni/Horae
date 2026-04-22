@@ -10,7 +10,6 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.autolife.composeapp.ui.components.*
 import com.autolife.composeapp.ui.theme.AutoLifeSemantic
@@ -20,18 +19,30 @@ import com.autolife.shared.repository.AnalysisRepository
 @Composable
 fun HealthScreen() {
     val result by AnalysisRepository.result.collectAsState()
+    val isLoading by AnalysisRepository.loading.collectAsState()
+
+    if (result == null && isLoading) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            SkeletonCard(height = 140)
+            SkeletonCard(height = 80)
+            SkeletonCard(height = 160)
+        }
+        return
+    }
 
     if (result == null) {
         EmptyState(
             icon = Icons.Default.FavoriteBorder,
             title = "No Health Data",
-            description = "Run analysis from the Agent tab to see your mental health assessment.",
+            description = "Run analysis from the Agent tab to see your wellbeing assessment.",
         )
         return
     }
 
-    val mh = result!!.mental_health
-    val phq4 = mh?.estimated_phq4 ?: 0
+    val mh = result!!.health
     val riskLevel = mh?.risk_level ?: "unknown"
     val rc = AutoLifeSemantic.riskColor(riskLevel)
 
@@ -40,13 +51,12 @@ fun HealthScreen() {
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // PHQ-4 hero card
+        // Wellbeing state hero card
         item {
             MetricCard(
-                value = phq4.toString(),
-                label = "PHQ-4 Score (0–12)",
+                value = riskLevel.replaceFirstChar { it.uppercase() },
+                label = "LLM-understood wellbeing state",
                 color = rc,
-                progress = phq4 / 12f,
             )
         }
 
@@ -60,10 +70,23 @@ fun HealthScreen() {
                     color = rc,
                 )
                 Text(
-                    text = "Mental Health Assessment",
+                    text = "Wellbeing Assessment",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+
+        if (!mh?.behavioral_context.isNullOrBlank()) {
+            item {
+                SectionHeader(title = "Behavioral Context")
+                SurfaceCard {
+                    Text(
+                        text = mh!!.behavioral_context,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
             }
         }
 

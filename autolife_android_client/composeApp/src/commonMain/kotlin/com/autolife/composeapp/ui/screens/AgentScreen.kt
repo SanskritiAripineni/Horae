@@ -23,7 +23,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.autolife.composeapp.platform.PlatformStateProvider
+import com.autolife.composeapp.platform.getBehavioralMarkers
 import com.autolife.composeapp.ui.DateFormat
+import com.autolife.composeapp.ui.ProposalApplier
 import com.autolife.composeapp.ui.components.*
 import com.autolife.composeapp.ui.theme.AutoLifeSemantic
 import com.autolife.shared.db.DatabaseRepository
@@ -74,8 +76,9 @@ class AgentViewModel : ViewModel() {
                         timestamp = DateFormat.dateTime(j.createdTimestamp)
                     )
                 }
+                val rawDays = getBehavioralMarkers(7).takeIf { it.isNotEmpty() }
                 val response = AutoLifeApi.processJournals(
-                    ProcessJournalsRequest(journals = apiJournals)
+                    ProcessJournalsRequest(journals = apiJournals, raw_days = rawDays)
                 )
                 repo.setResult(response)
                 repo.clearProposals()
@@ -90,7 +93,7 @@ class AgentViewModel : ViewModel() {
                     msg.contains("Unable to resolve host", ignoreCase = true)
                 if (isConnect) {
                     repo.setError(
-                        "Cannot reach backend server.\n" +
+                        "Cannot reach backend server.\n---\n" +
                         "• Emulator: ensure the server is running on host port 8000\n" +
                         "• Physical device: set BACKEND_URL in local.properties"
                     )
@@ -112,7 +115,7 @@ class AgentViewModel : ViewModel() {
     }
 }
 
-private enum class ExpandedTool { AUTOLIFE, KEMO, VECTORDB, CALENDAR, LAST_RESULT }
+private enum class ExpandedTool { AUTOLIFE, WELLBEING, VECTORDB, CALENDAR, LAST_RESULT }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -143,9 +146,12 @@ fun AgentScreen(viewModel: AgentViewModel = viewModel { AgentViewModel() }) {
                         style = MaterialTheme.typography.headlineMedium,
                     )
                     StatusPill(
-                        text = if (isLoading) "Running" else if (result != null) "Ready" else "Idle",
-                        color = if (isLoading) MaterialTheme.colorScheme.tertiary
-                                else MaterialTheme.colorScheme.secondary,
+                        kind = when {
+                            isLoading -> StatusKind.Running
+                            error != null -> StatusKind.Error
+                            result != null -> StatusKind.Ready
+                            else -> StatusKind.Idle
+                        },
                     )
                 }
                 Spacer(Modifier.height(8.dp))
@@ -184,10 +190,12 @@ fun AgentScreen(viewModel: AgentViewModel = viewModel { AgentViewModel() }) {
                 }
                 if (error != null) {
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = error!!,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
+                    val parts = error!!.split("\n---\n", limit = 2)
+                    ErrorCard(
+                        title = "Analysis didn't run",
+                        message = parts[0],
+                        details = parts.getOrNull(1),
+                        onRetry = if (!isLoading) { { viewModel.runAnalysis() } } else null,
                     )
                 }
             }
@@ -214,14 +222,14 @@ fun AgentScreen(viewModel: AgentViewModel = viewModel { AgentViewModel() }) {
                     ToolCard(
                         modifier = Modifier.weight(1f),
                         accentColor = AutoLifeSemantic.toolKEmo,
-                        title = "K-Emo",
-                        subtitle = "Mental State",
+                        title = "Wellbeing",
+                        subtitle = "Behavioral State",
                         dataLines = listOf(
-                            "PHQ-4" to (result?.mental_health?.estimated_phq4?.let { "$it/12" } ?: "—"),
-                            "Risk" to (result?.mental_health?.risk_level?.replaceFirstChar { it.uppercase() } ?: "—"),
+                            "State" to (result?.health?.risk_level?.replaceFirstChar { it.uppercase() } ?: "—"),
+                            "Signals" to (result?.health?.let { "${it.key_concerns.size + it.positive_indicators.size}" } ?: "—"),
                         ),
-                        status = if (result?.mental_health != null) "Ready" else "Idle",
-                        onClick = { expandedTool = ExpandedTool.KEMO },
+                        status = if (result?.health != null) "Ready" else "Idle",
+                        onClick = { expandedTool = ExpandedTool.WELLBEING },
                     )
                 }
                 Row(
@@ -270,7 +278,7 @@ fun AgentScreen(viewModel: AgentViewModel = viewModel { AgentViewModel() }) {
                 DataRow(
                     label = "Health History",
                     value = if (memory != null)
-                        "${memory!!.mental_health.history.size} entries · ${memory!!.mental_health.trend.replaceFirstChar { it.uppercase() }}"
+                        "${memory!!.health.history.size} entries · ${memory!!.health.trend.replaceFirstChar { it.uppercase() }}"
                     else "—",
                 )
             }
@@ -284,7 +292,7 @@ fun AgentScreen(viewModel: AgentViewModel = viewModel { AgentViewModel() }) {
                         Text("Details")
                     }
                 })
-                val mh = result!!.mental_health
+                val mh = result!!.health
                 val rc = AutoLifeSemantic.riskColor(mh?.risk_level)
                 SurfaceCard(modifier = Modifier.clickable { expandedTool = ExpandedTool.LAST_RESULT }) {
                     Row(
@@ -293,12 +301,12 @@ fun AgentScreen(viewModel: AgentViewModel = viewModel { AgentViewModel() }) {
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "${mh?.estimated_phq4 ?: "—"}",
+                                text = mh?.risk_level?.replaceFirstChar { it.uppercase() } ?: "—",
                                 style = MaterialTheme.typography.titleLarge,
                                 color = rc,
                                 fontWeight = FontWeight.Bold,
                             )
-                            Text("PHQ-4", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("State", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
@@ -382,14 +390,13 @@ private fun ToolCard(
                 DataRow(label = lbl, value = v)
             }
             Spacer(Modifier.height(6.dp))
-            StatusPill(
-                text = status,
-                color = when (status) {
-                    "Ready", "Active" -> MaterialTheme.colorScheme.secondary
-                    "Error" -> MaterialTheme.colorScheme.error
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
+            val kind = when (status) {
+                "Ready"  -> StatusKind.Ready
+                "Active" -> StatusKind.Active
+                "Error"  -> StatusKind.Error
+                else     -> StatusKind.Idle
+            }
+            StatusPill(kind = kind)
         }
     }
 }
@@ -426,10 +433,10 @@ private fun ToolDetailSheet(
     ) {
         val (sheetTitle, accentColor) = when (tool) {
             ExpandedTool.AUTOLIFE -> "AutoLife — Motion & Location" to AutoLifeSemantic.toolAutoLife
-            ExpandedTool.KEMO -> "K-Emo — Mental State" to AutoLifeSemantic.toolKEmo
+            ExpandedTool.WELLBEING -> "Wellbeing — Behavioral State" to AutoLifeSemantic.toolKEmo
             ExpandedTool.VECTORDB -> "VectorDB — Wellness Research" to AutoLifeSemantic.toolVectorDB
             ExpandedTool.CALENDAR -> "Calendar — Events & Tasks" to AutoLifeSemantic.toolCalendar
-            ExpandedTool.LAST_RESULT -> "Full Analysis Result" to AutoLifeSemantic.riskColor(result?.mental_health?.risk_level)
+            ExpandedTool.LAST_RESULT -> "Full Analysis Result" to AutoLifeSemantic.riskColor(result?.health?.risk_level)
         }
         Column(
             modifier = Modifier
@@ -457,7 +464,7 @@ private fun ToolDetailSheet(
 
             when (tool) {
                 ExpandedTool.AUTOLIFE -> AutoLifeDetail()
-                ExpandedTool.KEMO -> KemoDetail(result)
+                ExpandedTool.WELLBEING -> WellbeingDetail(result)
                 ExpandedTool.VECTORDB -> VectorDBDetail(result)
                 ExpandedTool.CALENDAR -> CalendarDetail(result)
                 ExpandedTool.LAST_RESULT -> LastResultDetail(result)
@@ -487,12 +494,20 @@ private fun AutoLifeDetail() {
 }
 
 @Composable
-private fun KemoDetail(result: ProcessJournalsResponse?) {
-    val mh = result?.mental_health
+private fun WellbeingDetail(result: ProcessJournalsResponse?) {
+    val mh = result?.health
     SurfaceCard {
-        SectionHeader(title = "PHQ-4 Assessment")
-        DataRow("Score", mh?.estimated_phq4?.let { "$it / 12" } ?: "— (run analysis first)")
-        DataRow("Risk Level", mh?.risk_level?.replaceFirstChar { it.uppercase() } ?: "—")
+        SectionHeader(title = "Wellbeing Assessment")
+        DataRow("State", mh?.risk_level?.replaceFirstChar { it.uppercase() } ?: "— (run analysis first)")
+        DataRow("Signals", mh?.let { "${it.key_concerns.size + it.positive_indicators.size}" } ?: "—")
+        if (!mh?.behavioral_context.isNullOrBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = mh!!.behavioral_context,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
     if (mh != null) {
         if (mh.key_concerns.isNotEmpty()) {
@@ -511,11 +526,12 @@ private fun KemoDetail(result: ProcessJournalsResponse?) {
         }
     }
     SurfaceCard {
-        SectionHeader(title = "Scoring Guide")
-        DataRow("0–2", "Minimal — healthy, normal")
-        DataRow("3–5", "Mild — some stress indicators")
-        DataRow("6–8", "Moderate — intervention recommended")
-        DataRow("9–12", "Severe — immediate support needed")
+        SectionHeader(title = "How It Works")
+        Text(
+            text = "The wellbeing pipeline combines journal language with behavioral signals and asks the model to form a qualitative state understanding, not a questionnaire score.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -534,7 +550,7 @@ private fun VectorDBDetail(result: ProcessJournalsResponse?) {
         SectionHeader(title = "Description")
         Text(
             "VectorDB stores embeddings of peer-reviewed wellness research. " +
-            "It retrieves the top-k most relevant interventions based on your PHQ-4 score and journal summary, " +
+            "It retrieves the top-k most relevant interventions based on your wellbeing state and journal summary, " +
             "providing evidence-based grounding for recommendations.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -586,11 +602,13 @@ private fun LastResultDetail(result: ProcessJournalsResponse?) {
         Text("No result yet — run analysis first.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         return
     }
-    val mh = result.mental_health
+    val mh = result.health
     SurfaceCard {
-        SectionHeader(title = "Mental Health")
-        DataRow("PHQ-4", mh?.estimated_phq4?.let { "$it / 12" } ?: "—")
-        DataRow("Risk Level", mh?.risk_level?.replaceFirstChar { it.uppercase() } ?: "—")
+        SectionHeader(title = "Wellbeing")
+        DataRow("State", mh?.risk_level?.replaceFirstChar { it.uppercase() } ?: "—")
+        if (!mh?.behavioral_context.isNullOrBlank()) {
+            DataRow("Context", mh!!.behavioral_context)
+        }
         if (!result.journal_summary.isNullOrBlank()) {
             Spacer(Modifier.height(8.dp))
             Text(result.journal_summary!!, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -619,6 +637,8 @@ private fun LastResultDetail(result: ProcessJournalsResponse?) {
         }
     }
     if (result.proposed_changes.isNotEmpty()) {
+        val scope = rememberCoroutineScope()
+        val isApplying by ProposalApplier.isApplying.collectAsState()
         SurfaceCard {
             SectionHeader(title = "Proposed Changes (${result.proposed_changes.size})")
             result.proposed_changes.forEach { change ->
@@ -627,6 +647,24 @@ private fun LastResultDetail(result: ProcessJournalsResponse?) {
                     value = change.start_time?.replace("T", " ")?.take(16) ?: "",
                 )
             }
+            Spacer(Modifier.height(10.dp))
+            val changes = result.proposed_changes
+            Button(
+                onClick = { scope.launch { ProposalApplier.apply(changes) } },
+                enabled = !isApplying,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    if (isApplying) "Applying…"
+                    else "Apply ${changes.size} change${if (changes.size == 1) "" else "s"} to Calendar",
+                )
+            }
+            Text(
+                text = "Review individually in the Schedule tab to apply selectively.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
         }
     }
     if (result.errors.isNotEmpty()) {

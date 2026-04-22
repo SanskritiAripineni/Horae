@@ -28,23 +28,17 @@ class MotionStorage(private val context: Context) {
      */
     fun saveMotionDetection(motions: List<String>): Boolean {
         return try {
-            // Create timestamp
             val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                 .format(Date())
 
-            // Read existing detections
             var detections = readDetections()
-
-            // Add new detection
             val newDetection = JSONObject().apply {
                 put("timestamp", timestamp)
                 put("motions", JSONArray(motions))
             }
 
-            // Add to list and keep only last 10
             detections.put(newDetection)
             while (detections.length() > MAX_DETECTIONS) {
-                // Remove oldest (first) detection
                 val newArray = JSONArray()
                 for (i in 1 until detections.length()) {
                     newArray.put(detections.get(i))
@@ -52,7 +46,6 @@ class MotionStorage(private val context: Context) {
                 detections = newArray
             }
 
-            // Write back to file
             file.writeText(detections.toString(2))
 
             Log.d(TAG, "Successfully saved motion detection")

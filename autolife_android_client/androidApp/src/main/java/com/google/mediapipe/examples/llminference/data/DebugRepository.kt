@@ -12,7 +12,7 @@ object DebugRepository {
         val stepCount: Int = 0,
         val speed: Double = 0.0,
         val altitude: Double = 0.0,
-        val detectedClass: String = "Wait..."
+        val detectedClass: String = "Idle"
     )
 
     private val _motionStats = MutableStateFlow(MotionStats())
@@ -21,6 +21,7 @@ object DebugRepository {
     // Location Data
     data class LocationDebugInfo(
         val mapImage: Bitmap? = null,
+        val mapImageBytes: ByteArray? = null,
         val latitude: Double = 0.0,
         val longitude: Double = 0.0,
         val ssids: List<String> = emptyList(),
@@ -56,9 +57,10 @@ object DebugRepository {
         )
     }
 
-    fun updateLocationMap(bitmap: Bitmap?, lat: Double, lon: Double) {
+    fun updateLocationMap(bitmap: Bitmap?, mapImageBytes: ByteArray? = null, lat: Double, lon: Double) {
         _locationInfo.value = _locationInfo.value.copy(
             mapImage = bitmap,
+            mapImageBytes = mapImageBytes,
             latitude = lat,
             longitude = lon
         )

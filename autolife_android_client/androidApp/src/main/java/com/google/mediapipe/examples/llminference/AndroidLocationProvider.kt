@@ -15,4 +15,11 @@ class AndroidLocationProvider(private val context: Context) : LocationProvider {
             altitude = location.altitude
         )
     }
+
+    override suspend fun reverseGeocode(location: LocationData): String? =
+        reverseGeocodeLocation(
+            context = context,
+            latitude = location.latitude,
+            longitude = location.longitude
+        )
 }

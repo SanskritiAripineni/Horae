@@ -6,19 +6,19 @@ package com.autolife.shared.analyzer
  */
 object PromptBuilder {
 
-    fun buildFusionPrompt(motionHistory: String, locationContext: String): String =
+    fun buildMotionCalibrationPrompt(motionCandidates: List<String>, locationContext: String): String =
         """
         You are an intelligent life-logging assistant.
         Input:
-        - Detected Motion (from sensors): $motionHistory
-        - Location Context (from map analysis): $locationContext
+        - Candidate motions from sensors: ${motionCandidates.joinToString(", ")}
+        - Location context: $locationContext
 
         Task:
-        1. Motion Calibration: Select the most probable motion given the location context.
-        2. Present the result as a concise log entry.
+        1. Select the single most probable motion given the location context.
+        2. Keep the answer objective and concise.
 
         Format:
-        [Motion Calibrated] in [Location Context]
+        Summary: <single motion label>
         """.trimIndent()
 
     fun buildLocationAnalysisPrompt(): String =
@@ -29,23 +29,55 @@ object PromptBuilder {
         - natural features
         - built environment
 
-        Provide a brief summary of the map's central region.
+        Response format:
+        Reasoning: <brief analysis>
+        Summary: <brief summary of the map's central region>
         """.trimIndent()
 
-    fun buildJournalPrompt(formattedLogs: String): String =
+    fun buildWifiLocationPrompt(ssids: List<String>): String =
+        """
+        Objective: Determine the user's surrounding conditions from Wi-Fi SSIDs.
+
+        Task:
+        Infer the most likely surrounding environment from this de-duplicated SSID list:
+        ${ssids.joinToString(prefix = "[", postfix = "]")}
+
+        Response format:
+        Reasoning: <brief analysis of what the SSIDs imply>
+        Summary: <short location context, or "SSID context unavailable" if the SSIDs are not informative>
+        """.trimIndent()
+
+    fun buildLocationFusionPrompt(mapContext: String?, ssidContext: String?): String =
+        """
+        You are fusing location context for life journaling.
+
+        Inputs:
+        - Geocoder-based location context: ${mapContext ?: "Unavailable"}
+        - Wi-Fi SSID-based location context: ${ssidContext ?: "Unavailable"}
+
+        Task:
+        Keep the most specific accurate location context. Prefer the SSID context when it adds a concrete venue or place, otherwise keep the geocoder context.
+
+        Response format:
+        Reasoning: <brief comparison>
+        Summary: <single fused location context>
+        """.trimIndent()
+
+    fun buildJournalPrompt(refinedSegments: String): String =
         """
         You are an AI Life Journaling Assistant.
-        Your goal is to write a semantic, objective, and accurate daily journal based on the user's context logs.
+        Your goal is to write a semantic, objective, and accurate daily journal based on refined context segments.
 
         Input:
-        A list of context logs in the format: [timestamp] [context description]
-        $formattedLogs
+        A list of refined context segments:
+        $refinedSegments
 
         Instructions:
-        1. Synthesize the logs into a coherent narrative.
+        1. Synthesize the segments into a coherent narrative.
         2. Identify high-level activities (e.g., "dining out", "working", "commuting") from the low-level signals.
         3. Remove any subjective comments (e.g., avoid "The user had a productive day" or "It was a relaxing evening"). Stick to factual descriptions of behavior and context.
         4. Be concise.
+        5. Prefer the most specific location detail available in the segments.
 
         Example Journal Style:
         "In the morning, the user spent time at a local library, likely reading and researching. Around noon, the user visited a restaurant in the city center..."

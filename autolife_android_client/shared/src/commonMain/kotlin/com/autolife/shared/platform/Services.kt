@@ -16,6 +16,7 @@ data class LocationData(
 /** Provides the device's current GPS location. */
 interface LocationProvider {
     suspend fun getCurrentLocation(): LocationData?
+    suspend fun reverseGeocode(location: LocationData): String?
 }
 
 /** Scans for visible Wi-Fi network SSIDs. */

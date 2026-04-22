@@ -1,10 +1,18 @@
 package com.google.mediapipe.examples.llminference
 
 import android.app.Application
+import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
+import android.os.Build
+import android.os.PowerManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import com.autolife.composeapp.platform.AppContextHolder
 import com.autolife.composeapp.platform.PlatformStateProvider
+import com.autolife.composeapp.platform.BatteryDeviceInfo
+import com.autolife.composeapp.platform.BatteryRunEnvironment
 import com.autolife.shared.ai.AiClientProvider
 import com.autolife.shared.ai.GeminiAiClient
 import com.autolife.shared.db.DatabaseRepository
@@ -25,6 +33,7 @@ class AutoLifeApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        AppContextHolder.context = applicationContext
         AutoLifeApi.init(BuildConfig.BACKEND_URL)
         DatabaseRepository.init(createAndroidDriver(this))
         AiClientProvider.init(GeminiAiClient(BuildConfig.GEMINI_API_KEY))
@@ -67,6 +76,7 @@ class AutoLifeApp : Application() {
                     longitude = loc.longitude,
                     ssids = loc.ssids,
                     inference = loc.lastInference,
+                    mapPreviewBytes = loc.mapImageBytes,
                 )
             }
         }
@@ -85,7 +95,9 @@ class AutoLifeApp : Application() {
         // can trigger Android-specific operations.
         val appContext = this
         PlatformStateProvider.onDemoModeChanged = { DebugRepository.setDemoMode(it) }
-        PlatformStateProvider.onPermanentMotionChanged = { DebugRepository.setPermanentMotionEnabled(it) }
+        PlatformStateProvider.onPermanentMotionChanged = {
+            DebugRepository.setPermanentMotionEnabled(it && BuildConfig.DEBUG)
+        }
         PlatformStateProvider.onExportRequested = {
             appScope.launch {
                 val ok = DataExporter.exportJournals(appContext)
@@ -127,6 +139,20 @@ class AutoLifeApp : Application() {
         PlatformStateProvider.onBatteryLevelRequested = {
             currentBatteryPercent()
         }
+        PlatformStateProvider.onBatteryDeviceInfoRequested = {
+            BatteryDeviceInfo(
+                platform = "Android",
+                deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}",
+                osVersion = "Android ${Build.VERSION.RELEASE}",
+                appVersion = currentAppVersion(),
+            )
+        }
+        PlatformStateProvider.onBatteryEnvironmentRequested = {
+            BatteryRunEnvironment(
+                networkSummary = currentNetworkSummary(),
+                lowPowerModeEnabled = isLowPowerModeEnabled(),
+            )
+        }
         PlatformStateProvider.onBatteryAssessmentExportRequested = { report ->
             appScope.launch {
                 val ok = DataExporter.exportBatteryReport(appContext, report)
@@ -160,5 +186,41 @@ class AutoLifeApp : Application() {
         val scale = batteryIntent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
         if (level < 0 || scale <= 0) return null
         return ((level * 100f) / scale).toInt()
+    }
+
+    private fun currentAppVersion(): String {
+        val pkg = packageManager.getPackageInfo(packageName, 0)
+        val versionName = pkg.versionName ?: "unknown"
+        val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            pkg.longVersionCode.toString()
+        } else {
+            @Suppress("DEPRECATION")
+            pkg.versionCode.toString()
+        }
+        return "$versionName ($versionCode)"
+    }
+
+    private fun isLowPowerModeEnabled(): Boolean {
+        val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        return powerManager?.isPowerSaveMode ?: false
+    }
+
+    private fun currentNetworkSummary(): String {
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return "Network unavailable"
+        val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+            ?: return "No active network"
+        val transport = when {
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi"
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "Cellular"
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
+            else -> "Other"
+        }
+        val internet = if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+            "internet"
+        } else {
+            "limited"
+        }
+        return "$transport, $internet"
     }
 }

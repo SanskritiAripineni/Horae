@@ -22,6 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -35,10 +36,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.autolife.composeapp.platform.currentDateKey
 import com.autolife.composeapp.ui.DateFormat
+import com.autolife.composeapp.ui.ProposalApplier
 import com.autolife.composeapp.ui.components.*
 import com.autolife.composeapp.ui.theme.AutoLifeSemantic
 import com.autolife.shared.model.*
-import com.autolife.shared.network.AutoLifeApi
 import com.autolife.shared.repository.AnalysisRepository
 import kotlinx.coroutines.launch
 
@@ -281,31 +282,10 @@ private fun hasConflict(proposal: CalendarEventBar, existing: List<CalendarEvent
 // ── ViewModel ────────────────────────────────────────────────
 
 class ScheduleViewModel : ViewModel() {
-    var applyStatus by mutableStateOf<String?>(null)
-        private set
-    var isApplying by mutableStateOf(false)
-        private set
-
     fun applySelected() {
         val current = AnalysisRepository.selectedProposals.value
         if (current.isEmpty()) return
-        viewModelScope.launch {
-            isApplying = true; applyStatus = null
-            try {
-                val resp = AutoLifeApi.applyCalendar(ApplyCalendarRequest(changes = current))
-                applyStatus = "Applied ${resp.applied.size}, failed ${resp.failed.size}"
-                AnalysisRepository.setResult(
-                    AnalysisRepository.result.value?.copy(
-                        proposed_changes = AnalysisRepository.result.value!!.proposed_changes.filter { it !in current }
-                    )
-                )
-                AnalysisRepository.clearProposals()
-            } catch (e: Exception) {
-                applyStatus = "Error: ${e.message}"
-            } finally {
-                isApplying = false
-            }
-        }
+        viewModelScope.launch { ProposalApplier.apply(current) }
     }
 }
 
@@ -425,10 +405,27 @@ fun ScheduleScreen(viewModel: ScheduleViewModel = viewModel { ScheduleViewModel(
                 }
             }
 
-            // Chart
+            // Chart (or filtered-empty hint)
             item {
                 SurfaceCard {
-                    WeekBarChart(bars = weekBars, weekMondayKey = weekMondayKey, onBarClick = { selectedBar = it })
+                    if (weekBars.isEmpty() && weekAllBars.isNotEmpty()) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                "No events match the current filters",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            TextButton(onClick = {
+                                showWork = true; showHealth = true; showLeisure = true
+                            }) { Text("Clear filters") }
+                        }
+                    } else {
+                        WeekBarChart(bars = weekBars, weekMondayKey = weekMondayKey, onBarClick = { selectedBar = it })
+                    }
                 }
             }
 
@@ -515,22 +512,14 @@ fun ScheduleScreen(viewModel: ScheduleViewModel = viewModel { ScheduleViewModel(
 
                 // Apply button
                 item {
-                    if (viewModel.applyStatus != null) {
-                        Text(
-                            viewModel.applyStatus!!,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (viewModel.applyStatus!!.startsWith("Error")) MaterialTheme.colorScheme.error
-                            else AutoLifeSemantic.riskLow,
-                            modifier = Modifier.padding(bottom = 4.dp),
-                        )
-                    }
+                    val isApplying by ProposalApplier.isApplying.collectAsState()
                     Button(
                         onClick = { viewModel.applySelected() },
-                        enabled = selectedProposals.isNotEmpty() && !viewModel.isApplying,
+                        enabled = selectedProposals.isNotEmpty() && !isApplying,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
-                            if (viewModel.isApplying) "Applying..."
+                            if (isApplying) "Applying..."
                             else "Apply to Calendar (${selectedProposals.size})",
                         )
                     }
@@ -745,8 +734,19 @@ private fun ProposalRow(
     val title = change.title ?: "Untitled"
     val startStr = change.start_time ?: ""
     val desc = change.description
+    val accentColor = if (hasConflict) MaterialTheme.colorScheme.error else Color.Transparent
 
-    SurfaceCard {
+    SurfaceCard(
+        modifier = Modifier.drawBehind {
+            if (hasConflict) {
+                drawRect(
+                    color = accentColor,
+                    topLeft = Offset(0f, 0f),
+                    size = Size(4.dp.toPx(), size.height),
+                )
+            }
+        },
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,

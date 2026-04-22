@@ -12,7 +12,6 @@ from datetime import datetime, timedelta
 from config import config
 
 from tools.autolife_reader import AutoLifeReader
-from tools.autolife_phone_adapter import AutoLifePhoneAdapter
 from tools.vectordb_client import VectorDBClient
 from tools.calendar_api import CalendarAPI, CalendarEvent
 from tools.llm_client import LLMClient
@@ -22,7 +21,17 @@ from memory import MemoryModule
 
 logger = logging.getLogger(__name__)
 
-_JOURNAL_ANALYSIS_FALLBACK_SUMMARY = "Unable to analyze journals"
+
+def _infer_risk_from_prose(prose: str) -> str:
+    """Heuristic risk label from Layer 3 behavioral prose for VectorDB query."""
+    if not prose:
+        return "minimal"
+    lower = prose.lower()
+    if any(w in lower for w in ["severe", "critical", "crisis", "significant deterioration"]):
+        return "moderate"
+    if any(w in lower for w in ["notable", "above average", "elevated", "concerning", "irregular", "deviation"]):
+        return "mild"
+    return "minimal"
 
 
 class LLMSchedulerAgent:
@@ -39,7 +48,6 @@ class LLMSchedulerAgent:
         self.calendar_api = CalendarAPI(suggest_only=suggest_only)
         self.llm_client = LLMClient()
         self.wellbeing_sensor = WellbeingSensor()
-        self.phone_adapter = AutoLifePhoneAdapter(self.llm_client)
         self.memory = MemoryModule()
         self._calendar_lock = threading.Lock()
 
@@ -56,14 +64,15 @@ class LLMSchedulerAgent:
         Parameters
         ----------
         journals:
-            AutoLife journal entries (required).
+            AutoLife journal entries — treated as narrative context only, not a
+            wellbeing signal.
         user_id:
             Override the instance-level user_id for this run.
         raw_days:
-            Optional list of raw phone-sensor marker dicts (one per day) for the
-            WellbeingSensor pipeline.  When provided and non-empty, behavioral
-            sensing runs in parallel with journal analysis and the two signals are
-            fused via ``synthesize_wellbeing``.
+            Real phone-sensor marker dicts (one per day) for the WellbeingSensor
+            pipeline (Layer 1–4).  This is the sole wellbeing signal source.
+            When absent, the orchestrator works from journal narrative + calendar
+            + VectorDB only and notes the absence of behavioral data.
         """
         start_time = datetime.now()
         effective_user_id = user_id or self.user_id
@@ -86,39 +95,24 @@ class LLMSchedulerAgent:
                 results['status'] = 'completed_with_warnings'
                 return results
 
-            journal_text = self.autolife_reader.get_context_for_prompt(journals)
+            # 1. Journal narrative — context only, not assessment
+            journal_narrative = self.autolife_reader.get_context_for_prompt(journals)
             results['journal_count'] = len(journals)
 
-            logger.info("Analyzing wellbeing...")
-            analysis = self.llm_client.analyze_wellbeing(journal_text)
-            results['journal_summary'] = analysis.get('summary', '')
-            journal_analysis_unavailable = (
-                results['journal_summary'].strip() == _JOURNAL_ANALYSIS_FALLBACK_SUMMARY
-            )
-            results['wellbeing'] = {
-                'risk_level': analysis.get('risk_level', 'minimal'),
-                'key_concerns': analysis.get('concerns', []),
-                'positive_indicators': analysis.get('positives', [])
-            }
-
-            # ----------------------------------------------------------------
-            # Behavioral sensing (optional — only when raw_days supplied)
-            # If raw_days were not provided but journals are available, derive
-            # them automatically via the phone adapter (one Gemini call per day).
-            # ----------------------------------------------------------------
-            if raw_days is None and journals:
-                logger.info("raw_days not provided; deriving from journals via AutoLifePhoneAdapter...")
-                raw_days = self.phone_adapter.journals_to_raw_days(journals)
-
+            # 2. Calendar
             logger.info("Getting calendar information...")
             calendar_summary = self.calendar_api.get_schedule_summary(days=7)
             results['calendar_summary'] = calendar_summary
             calendar_events = calendar_summary.get('events', []) if calendar_summary else []
 
-            behavioral_prose: str = ""
+            # 3. Behavioral sensing — the sole wellbeing signal
+            behavioral_prose: Optional[str] = None
+            risk_level: str = "minimal"
+            feedback_history: List[Dict[str, Any]] = []
+            llm_analysis: Dict[str, Any] = {}
+
             if raw_days:
-                logger.info("Running WellbeingSensor pipeline...")
-                # Gather feedback history for personalisation context
+                logger.info("Running WellbeingSensor pipeline (Layer 1-4)...")
                 feedback = WellbeingFeedback()
                 feedback_history = feedback.get_history(effective_user_id, n=10)
 
@@ -129,71 +123,58 @@ class LLMSchedulerAgent:
                     feedback_history=feedback_history,
                     with_llm=True,
                 )
-                behavioral_prose = sensing_result.get("prose", "")
+                behavioral_prose = sensing_result.get("prose", "") or None
                 baseline_warm = sensing_result.get("baseline_warm", True)
+                llm_analysis = sensing_result.get("llm_analysis") or {}
+
                 results['behavioral_sensing'] = {
                     "prose": behavioral_prose,
-                    "llm_analysis": sensing_result.get("llm_analysis"),
+                    "llm_analysis": llm_analysis,
                 }
-
                 if not baseline_warm:
                     results['behavioral_sensing']['baseline_note'] = (
                         "Baseline still building — behavioral patterns will be more reliable after ~10 days of data."
                     )
 
-                if journal_analysis_unavailable:
-                    results['journal_summary'] = behavioral_prose
-                    results['wellbeing']['behavioral_context'] = behavioral_prose
-                    analysis = {
-                        **analysis,
-                        "summary": behavioral_prose,
-                    }
+                # Heuristic risk estimate from Layer 3 prose for VectorDB query
+                risk_level = _infer_risk_from_prose(behavioral_prose or "")
+            else:
+                logger.info("No raw_days provided — proceeding without behavioral sensing.")
 
-            # Fuse journal + behavioral signals when both are present
-            if behavioral_prose and not journal_analysis_unavailable:
-                logger.info("Synthesizing journal + behavioral signals...")
-                fused = self.llm_client.synthesize_wellbeing(
-                    journal_analysis=analysis,
-                    behavioral_prose=behavioral_prose,
-                    feedback_history=feedback_history if feedback_history else None,
-                )
-                # Replace wellbeing with fused assessment
-                results['journal_summary'] = fused.get('summary', results['journal_summary'])
-                results['wellbeing'] = {
-                    'risk_level': fused.get('risk_level', results['wellbeing']['risk_level']),
-                    'key_concerns': fused.get('concerns', results['wellbeing']['key_concerns']),
-                    'positive_indicators': fused.get('positives', results['wellbeing']['positive_indicators']),
-                    'behavioral_context': fused.get('behavioral_context', ''),
-                }
-                # Update analysis dict so downstream steps use fused values
-                analysis = fused
-
+            # 4. VectorDB
             logger.info("Querying VectorDB for interventions...")
-            risk_level = results['wellbeing']['risk_level']
+            vectordb_summary = behavioral_prose or journal_narrative
             if self.vectordb.initialize():
                 research_suggestions = self.vectordb.get_intervention_suggestions(
                     risk_level=risk_level,
-                    journal_summary=results['journal_summary']
+                    journal_summary=vectordb_summary,
                 )
             else:
                 research_suggestions = []
                 results['errors'].append("VectorDB not available")
 
-            logger.info("Generating recommendations...")
-            recommendations = self.llm_client.generate_recommendations(
-                journal_summary=results['journal_summary'],
-                risk_level=results['wellbeing']['risk_level'],
-                concerns=results['wellbeing']['key_concerns'],
-                research_context=research_suggestions
-            )
-            results['recommendations'] = recommendations
-
-            logger.info("Generating calendar optimization proposals...")
-            proposed_changes = self.llm_client.generate_calendar_changes(
-                recommendations=recommendations,
+            # 5. Orchestrator: one structured-prompt call over all tool outputs
+            logger.info("Running orchestrator (schedule proposals)...")
+            proposals = self.llm_client.generate_schedule_proposals(
+                journal_narrative=journal_narrative,
+                behavioral_prose=behavioral_prose,
+                risk_level=risk_level,
                 calendar_summary=calendar_summary,
-                mental_health=results['wellbeing']
+                research_context=research_suggestions,
+                user_preferences=None,
+                feedback_history=feedback_history,
             )
+
+            final_risk = proposals.get('risk_level', risk_level)
+            results['journal_summary'] = proposals.get('summary', behavioral_prose or journal_narrative)
+            results['wellbeing'] = {
+                'risk_level': final_risk,
+                'key_concerns': proposals.get('concerns', []),
+                'positive_indicators': proposals.get('positives', []),
+                'behavioral_context': behavioral_prose or "",
+            }
+            results['recommendations'] = proposals.get('recommendations', [])
+            proposed_changes = proposals.get('proposed_changes', [])
 
             # Server-side conflict filtering: remove proposals that overlap existing events
             existing_events = calendar_summary.get('events', []) if calendar_summary else []

@@ -25,14 +25,9 @@ class FileStorage(private val context: Context) {
      */
     fun saveLLMResponse(response: String): Boolean {
         return try {
-            // Create timestamp
             val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                 .format(Date())
-
-            // Format the content with timestamp
             val content = "[$timestamp]\n$response\n\n"
-
-            // Write to file, overwriting previous content
             file.writeText(content)
 
             Log.d(TAG, "Successfully saved LLM response to file")
@@ -41,6 +36,18 @@ class FileStorage(private val context: Context) {
             Log.e(TAG, "Error saving LLM response to file", e)
             false
         }
+    }
+
+    /**
+     * Saves only when the semantic response changed, avoiding repeated churn from identical outputs.
+     */
+    fun saveLLMResponseIfChanged(response: String): Boolean {
+        val previousResponse = extractSavedResponse(getLastResponse())
+        if (previousResponse == response) {
+            Log.d(TAG, "Skipping LLM response write because content is unchanged")
+            return false
+        }
+        return saveLLMResponse(response)
     }
 
     /**
@@ -85,5 +92,15 @@ class FileStorage(private val context: Context) {
             Log.e(TAG, "Error clearing saved responses", e)
             false
         }
+    }
+
+    private fun extractSavedResponse(content: String?): String? {
+        if (content.isNullOrBlank()) return null
+        return content
+            .lineSequence()
+            .dropWhile { it.startsWith("[") && it.endsWith("]") }
+            .joinToString("\n")
+            .trim()
+            .ifBlank { null }
     }
 }

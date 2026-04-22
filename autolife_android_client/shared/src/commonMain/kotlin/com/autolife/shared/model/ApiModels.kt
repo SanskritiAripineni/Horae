@@ -16,8 +16,25 @@ data class ApiJournalEntry(
 )
 
 @Serializable
+data class RawDayMarkers(
+    val date: String,
+    val sleep_onset_hour: Float? = null,
+    val sleep_duration_hours: Float? = null,
+    val sleep_regularity_index: Float? = null,
+    val late_night_screen_min: Float? = null,
+    val total_screen_min: Float? = null,
+    val app_switching_rate: Float? = null,
+    val mobility_entropy: Float? = null,
+    val location_revisit_ratio: Float? = null,
+    val social_rhythm_metric: Float? = null,
+    val comm_reciprocity: Float? = null,
+    val coverage: Map<String, Float>? = null,
+)
+
+@Serializable
 data class ProcessJournalsRequest(
     val journals: List<ApiJournalEntry>,
+    val raw_days: List<RawDayMarkers>? = null,
     val user_id: String = "default"
 )
 
@@ -35,7 +52,8 @@ data class MentalHealthAssessment(
     val estimated_phq4: Int = 0,
     val risk_level: String = "unknown",
     val key_concerns: List<String> = emptyList(),
-    val positive_indicators: List<String> = emptyList()
+    val positive_indicators: List<String> = emptyList(),
+    val behavioral_context: String = "",
 )
 
 @Serializable
@@ -54,11 +72,15 @@ data class ProcessJournalsResponse(
     val user_id: String = "",
     val journal_summary: String? = null,
     val mental_health: MentalHealthAssessment? = null,
+    val wellbeing: MentalHealthAssessment? = null,
     val recommendations: List<Recommendation> = emptyList(),
     val calendar_summary: CalendarSummary? = null,
     val proposed_changes: List<ProposedChange> = emptyList(),
     val errors: List<String> = emptyList()
-)
+) {
+    val health: MentalHealthAssessment?
+        get() = mental_health ?: wellbeing
+}
 
 @Serializable
 data class ApplyCalendarResponse(
@@ -73,8 +95,12 @@ data class ApplyCalendarResponse(
 data class UserMemoryData(
     val user_id: String = "",
     val preferences: UserPrefs = UserPrefs(),
-    val mental_health: MemoryHealthSummary = MemoryHealthSummary()
-)
+    val mental_health: MemoryHealthSummary? = null,
+    val wellbeing: MemoryHealthSummary? = null
+) {
+    val health: MemoryHealthSummary
+        get() = mental_health ?: wellbeing ?: MemoryHealthSummary()
+}
 
 @Serializable
 data class UserPrefs(
