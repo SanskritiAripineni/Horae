@@ -138,7 +138,10 @@ async def process_journals(request: ProcessJournalsRequest):
             detail="Journal processing failed. The pipeline encountered an error."
         )
 
-    db.log_session(request.user_id, journals, result)
+    try:
+        db.log_session(request.user_id, journals, result)
+    except Exception as e:
+        logger.warning(f"DB log failed (non-fatal): {e}")
     return result
 
 
@@ -164,7 +167,10 @@ async def apply_calendar(request: ApplyCalendarRequest):
             detail="Failed to apply calendar changes."
         )
 
-    db.log_calendar_accepted(request.user_id, request.user_comments or "")
+    try:
+        db.log_calendar_accepted(request.user_id, request.user_comments or "")
+    except Exception as e:
+        logger.warning(f"DB log failed (non-fatal): {e}")
     return results
 
 @app.get("/api/memory")
