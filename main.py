@@ -31,7 +31,7 @@ def format_analysis(results: dict) -> str:
     lines = []
     
     lines.append("\n" + "=" * 70)
-    lines.append("  MENTAL HEALTH ANALYSIS")
+    lines.append("  WELLBEING ANALYSIS")
     lines.append("=" * 70)
     
     # Journal info
@@ -55,15 +55,14 @@ def format_analysis(results: dict) -> str:
         if current_line.strip():
             lines.append(current_line)
     
-    # Mental health assessment
-    mh = results.get('mental_health', {})
+    # Wellbeing assessment
+    mh = results.get('wellbeing', {})
     if mh:
         lines.append(f"\n  ASSESSMENT")
         lines.append(f"  {'-' * 50}")
         risk = mh.get('risk_level', 'unknown').upper()
-        phq4 = mh.get('estimated_phq4', '?')
-        lines.append(f"  Risk Level: {risk}  |  PHQ-4 Estimate: {phq4}/12")
-        
+        lines.append(f"  Risk Level: {risk}")
+
         if mh.get('key_concerns'):
             lines.append(f"\n  Concerns:")
             for c in mh['key_concerns'][:3]:
@@ -235,7 +234,7 @@ def interactive_mode(agent: LLMSchedulerAgent, results: dict):
                     changes = agent.llm_client.generate_calendar_changes(
                         results.get('recommendations', []),
                         results.get('calendar_summary', {}),
-                        results.get('mental_health', {}),
+                        results.get('wellbeing', {}),
                         user_preferences=user_preferences
                     )
                     

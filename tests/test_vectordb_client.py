@@ -4,7 +4,7 @@ Tests for tools/vectordb_client.py — ChromaDB wellness retrieval.
 ChromaDB and Gemini embedding calls are mocked. Tests cover:
 - initialize() success and failure
 - retrieve() with and without category filters
-- get_intervention_suggestions() with various PHQ-4 score ranges
+- get_intervention_suggestions() with various risk levels
 - Graceful degradation when ChromaDB directory is missing
 """
 
@@ -16,9 +16,8 @@ from pathlib import Path
 from tools.vectordb_client import VectorDBClient, WELLNESS_CATEGORIES
 
 
-# ---------------------------------------------------------------------------
+
 # Helpers
-# ---------------------------------------------------------------------------
 
 def _mock_collection(documents, metadatas):
     """Return a mock ChromaDB collection whose .query() returns the given data."""
@@ -45,9 +44,8 @@ def _patched_client(tmp_path, documents=None, metadatas=None):
     return client
 
 
-# ---------------------------------------------------------------------------
+
 # initialize
-# ---------------------------------------------------------------------------
 
 class TestInitialize:
 
@@ -94,9 +92,8 @@ class TestInitialize:
             assert client.initialize() is False
 
 
-# ---------------------------------------------------------------------------
+
 # retrieve
-# ---------------------------------------------------------------------------
 
 class TestRetrieve:
 
@@ -155,34 +152,31 @@ class TestRetrieve:
         assert "Stress Management" in categories
 
 
-# ---------------------------------------------------------------------------
+
 # get_intervention_suggestions
-# ---------------------------------------------------------------------------
 
 class TestGetInterventionSuggestions:
 
-    def test_severe_score_queries_coping_and_social(self, tmp_path):
+    def test_severe_queries_coping_and_social(self, tmp_path):
         client = _patched_client(tmp_path)
-        suggestions = client.get_intervention_suggestions(phq4_score=10)
+        suggestions = client.get_intervention_suggestions(risk_level="severe")
 
-        # With score >= 9, the method calls retrieve twice
         assert client._embed_query.call_count == 2
         assert len(suggestions) <= 4
 
-    def test_moderate_score_queries_stress_and_sleep(self, tmp_path):
+    def test_moderate_queries_stress_and_sleep(self, tmp_path):
         client = _patched_client(tmp_path)
-        suggestions = client.get_intervention_suggestions(phq4_score=7)
+        suggestions = client.get_intervention_suggestions(risk_level="moderate")
 
         assert client._embed_query.call_count == 2
 
-    def test_mild_score_queries_habits_and_mindfulness(self, tmp_path):
+    def test_mild_queries_habits_and_mindfulness(self, tmp_path):
         client = _patched_client(tmp_path)
-        suggestions = client.get_intervention_suggestions(phq4_score=2)
+        suggestions = client.get_intervention_suggestions(risk_level="mild")
 
         assert client._embed_query.call_count == 2
 
     def test_limits_to_four_results(self, tmp_path):
-        # Return 3 docs per query (6 total) — should be capped at 4
         docs = ["a", "b", "c"]
         metas = [
             {"category": "X", "filename": "x.pdf"},
@@ -190,23 +184,21 @@ class TestGetInterventionSuggestions:
             {"category": "Z", "filename": "z.pdf"},
         ]
         client = _patched_client(tmp_path, documents=docs, metadatas=metas)
-        suggestions = client.get_intervention_suggestions(phq4_score=10)
+        suggestions = client.get_intervention_suggestions(risk_level="severe")
         assert len(suggestions) <= 4
 
     def test_journal_summary_parameter_accepted(self, tmp_path):
         """The journal_summary parameter is accepted even if not directly used in queries."""
         client = _patched_client(tmp_path)
-        # Should not raise
         suggestions = client.get_intervention_suggestions(
-            phq4_score=5,
+            risk_level="mild",
             journal_summary="User is feeling stressed about exams"
         )
         assert isinstance(suggestions, list)
 
 
-# ---------------------------------------------------------------------------
+
 # WELLNESS_CATEGORIES constant
-# ---------------------------------------------------------------------------
 
 class TestWellnessCategories:
 

@@ -1,7 +1,6 @@
 # Core ML/AI frameworks
 tensorflow>=2.13.0
 langchain>=0.1.0
-google-generativeai>=0.3.0
 
 # Vector database support
 chromadb>=0.4.0
@@ -17,6 +16,9 @@ google-api-python-client>=2.100.0
 numpy>=1.24.0
 pandas>=2.0.0
 scipy>=1.11.0
+
+# Anthropic / wellbeing pipeline
+anthropic>=0.40.0
 
 # Utilities
 python-dotenv>=1.0.0

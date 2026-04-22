@@ -45,10 +45,6 @@ class Config:
     CALENDAR_TIMEZONE: str = "America/Chicago"
     CALENDAR_SUGGEST_ONLY: bool = True
     
-    # Mental health thresholds
-    PHQ4_INTERVENTION_THRESHOLD: int = 6
-    PHQ4_SEVERE_THRESHOLD: int = 9
-    
     # Workload settings
     MAX_DAILY_HOURS: float = 8.0
     WORK_HOURS_START: int = 9

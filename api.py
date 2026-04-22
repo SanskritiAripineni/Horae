@@ -32,7 +32,6 @@ import db
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Cache agent instance
 agent_instance = None
 
 @asynccontextmanager
@@ -46,10 +45,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="LLM Scheduler Agent API", lifespan=lifespan)
 
-
-# ---------------------------------------------------------------------------
-# Structured error responses
-# ---------------------------------------------------------------------------
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -80,10 +75,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         content={"error": "internal_error", "detail": "An unexpected error occurred. Please try again."},
     )
 
-
-# ---------------------------------------------------------------------------
-# Request / response models
-# ---------------------------------------------------------------------------
 
 class JournalEntry(BaseModel):
     id: str
@@ -117,10 +108,6 @@ class ApplyCalendarRequest(BaseModel):
     user_id: Optional[str] = "default"
 
 
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
-
 @app.post("/api/process_journals")
 async def process_journals(request: ProcessJournalsRequest):
     """
@@ -153,6 +140,7 @@ async def process_journals(request: ProcessJournalsRequest):
 
     db.log_session(request.user_id, journals, result)
     return result
+
 
 @app.post("/api/apply_calendar")
 async def apply_calendar(request: ApplyCalendarRequest):
@@ -190,7 +178,7 @@ async def get_memory(user_id: str = "default"):
 
     try:
         ctx = agent_instance.memory.get_user_context(user_id)
-        ctx["mental_health"]["history"] = agent_instance.memory.health_tracker.get_history(user_id)
+        ctx["wellbeing"]["history"] = agent_instance.memory.wellbeing_tracker.get_history(user_id)
         return ctx
     except Exception as e:
         logger.error(f"Memory retrieval error for user {db.anon_id(user_id)[:12]}: {e}")

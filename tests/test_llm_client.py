@@ -4,7 +4,7 @@ Tests for tools/llm_client.py — Gemini API wrapper.
 All Gemini API calls are mocked. Tests cover:
 - JSON parsing from model responses (with and without markdown fencing)
 - Fallback behaviour when API key is missing or client is None
-- analyze_mental_health(), generate_recommendations(), generate_calendar_changes()
+- analyze_wellbeing(), generate_recommendations(), generate_calendar_changes()
 - parse_user_feedback()
 """
 
@@ -13,9 +13,8 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 
-# ---------------------------------------------------------------------------
+
 # Helpers
-# ---------------------------------------------------------------------------
 
 def _make_client(api_key="fake-key"):
     """Instantiate LLMClient with a mocked genai.Client."""
@@ -35,26 +34,23 @@ def _set_generate_response(mock_genai_client, text: str):
     mock_genai_client.models.generate_content.return_value = mock_response
 
 
-# ---------------------------------------------------------------------------
-# analyze_mental_health
-# ---------------------------------------------------------------------------
 
-class TestAnalyzeMentalHealth:
+# analyze_wellbeing
+
+class TestAnalyzeWellbeing:
 
     def test_parses_clean_json(self):
         client, mock = _make_client()
         payload = {
             "summary": "User is stressed",
-            "phq4_estimate": 7,
             "risk_level": "moderate",
             "concerns": ["poor sleep"],
             "positives": ["exercise"],
         }
         _set_generate_response(mock, json.dumps(payload))
 
-        result = client.analyze_mental_health("Some journal text")
+        result = client.analyze_wellbeing("Some journal text")
 
-        assert result["phq4_estimate"] == 7
         assert result["risk_level"] == "moderate"
         assert "poor sleep" in result["concerns"]
 
@@ -62,7 +58,6 @@ class TestAnalyzeMentalHealth:
         client, mock = _make_client()
         payload = {
             "summary": "ok",
-            "phq4_estimate": 2,
             "risk_level": "minimal",
             "concerns": [],
             "positives": ["active"],
@@ -70,15 +65,14 @@ class TestAnalyzeMentalHealth:
         fenced = f"```json\n{json.dumps(payload)}\n```"
         _set_generate_response(mock, fenced)
 
-        result = client.analyze_mental_health("journal text")
-        assert result["phq4_estimate"] == 2
+        result = client.analyze_wellbeing("journal text")
+        assert result["risk_level"] == "minimal"
 
     def test_returns_fallback_on_invalid_json(self):
         client, mock = _make_client()
         _set_generate_response(mock, "This is not JSON at all")
 
-        result = client.analyze_mental_health("journal text")
-        assert result["phq4_estimate"] == 3
+        result = client.analyze_wellbeing("journal text")
         assert result["risk_level"] == "mild"
         assert result["summary"] == "Unable to analyze journals"
 
@@ -92,21 +86,19 @@ class TestAnalyzeMentalHealth:
                 client.model_name = "test"
                 client.client = None
 
-        result = client.analyze_mental_health("journal")
-        assert result["phq4_estimate"] == 3
+        result = client.analyze_wellbeing("journal")
         assert result["risk_level"] == "mild"
 
     def test_returns_fallback_on_api_exception(self):
         client, mock = _make_client()
         mock.models.generate_content.side_effect = Exception("API quota exceeded")
 
-        result = client.analyze_mental_health("journal text")
-        assert result["phq4_estimate"] == 3
+        result = client.analyze_wellbeing("journal text")
+        assert result["risk_level"] == "mild"
 
 
-# ---------------------------------------------------------------------------
+
 # generate_recommendations
-# ---------------------------------------------------------------------------
 
 class TestGenerateRecommendations:
 
@@ -156,9 +148,8 @@ class TestGenerateRecommendations:
         assert recs[0]["category"] == "General"
 
 
-# ---------------------------------------------------------------------------
+
 # generate_calendar_changes
-# ---------------------------------------------------------------------------
 
 class TestGenerateCalendarChanges:
 
@@ -182,7 +173,7 @@ class TestGenerateCalendarChanges:
         changes = client.generate_calendar_changes(
             recommendations=[{"category": "Physical", "action": "walk", "when": "morning"}],
             calendar_summary={"events": [], "tasks": []},
-            mental_health={"risk_level": "moderate", "estimated_phq4": 6, "key_concerns": []},
+            mental_health={"risk_level": "moderate", "key_concerns": []},
         )
         assert len(changes) == 1
         assert changes[0]["title"] == "Walk"
@@ -205,7 +196,7 @@ class TestGenerateCalendarChanges:
         client.generate_calendar_changes(
             recommendations=[],
             calendar_summary={"events": [], "tasks": []},
-            mental_health={"risk_level": "mild", "estimated_phq4": 3, "key_concerns": []},
+            mental_health={"risk_level": "mild", "key_concerns": []},
             user_preferences=["No yoga", "Prefer running"],
         )
 
@@ -215,9 +206,8 @@ class TestGenerateCalendarChanges:
         assert "Prefer running" in prompt
 
 
-# ---------------------------------------------------------------------------
+
 # parse_user_feedback
-# ---------------------------------------------------------------------------
 
 class TestParseUserFeedback:
 
@@ -244,9 +234,8 @@ class TestParseUserFeedback:
         assert result["should_save"] is True
 
 
-# ---------------------------------------------------------------------------
+
 # generate (low-level)
-# ---------------------------------------------------------------------------
 
 class TestGenerate:
 

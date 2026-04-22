@@ -17,9 +17,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-# ---------------------------------------------------------------------------
+
 # Fixtures: sample data
-# ---------------------------------------------------------------------------
 
 @pytest.fixture
 def sample_journals():
@@ -46,10 +45,9 @@ def sample_journals():
 
 @pytest.fixture
 def sample_analysis():
-    """Typical output from LLMClient.analyze_mental_health()."""
+    """Typical output from LLMClient.analyze_wellbeing()."""
     return {
         "summary": "User shows signs of stress and poor sleep.",
-        "phq4_estimate": 6,
         "risk_level": "moderate",
         "concerns": ["poor sleep", "anxiety", "skipping meals"],
         "positives": ["still attending class"],

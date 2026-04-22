@@ -18,24 +18,27 @@ from unittest.mock import patch, MagicMock, PropertyMock
 from agent import LLMSchedulerAgent
 
 
-# ---------------------------------------------------------------------------
+
 # Helpers
-# ---------------------------------------------------------------------------
 
 def _make_agent():
     """Instantiate an agent with all tools mocked out."""
     with patch("agent.AutoLifeReader"), \
+         patch("agent.AutoLifePhoneAdapter"), \
+         patch("agent.WellbeingSensor"), \
          patch("agent.VectorDBClient"), \
          patch("agent.CalendarAPI"), \
          patch("agent.LLMClient"), \
+         patch("agent.WellbeingFeedback"), \
          patch("agent.MemoryModule"):
         agent = LLMSchedulerAgent(suggest_only=True)
 
     # Provide sensible mock return values
     agent.autolife_reader.get_context_for_prompt.return_value = "Journal text here"
-    agent.llm_client.analyze_mental_health.return_value = {
+    # Ensure phone adapter returns no raw days so behavioral sensing is skipped
+    agent.phone_adapter.journals_to_raw_days.return_value = []
+    agent.llm_client.analyze_wellbeing.return_value = {
         "summary": "User is doing okay",
-        "phq4_estimate": 3,
         "risk_level": "mild",
         "concerns": [],
         "positives": ["regular schedule"],
@@ -70,9 +73,8 @@ def _make_agent():
     return agent
 
 
-# ---------------------------------------------------------------------------
+
 # run_from_journals
-# ---------------------------------------------------------------------------
 
 class TestRunFromJournals:
 
@@ -84,8 +86,7 @@ class TestRunFromJournals:
         assert result["user_id"] == "test"
         assert result["journal_count"] == 2
         assert result["journal_summary"] == "User is doing okay"
-        assert result["mental_health"]["estimated_phq4"] == 3
-        assert result["mental_health"]["risk_level"] == "mild"
+        assert result["wellbeing"]["risk_level"] == "mild"
         assert isinstance(result["recommendations"], list)
         assert isinstance(result["proposed_changes"], list)
         assert "duration_seconds" in result
@@ -106,9 +107,40 @@ class TestRunFromJournals:
         assert result["status"] == "completed"
         assert any("VectorDB not available" in e for e in result["errors"])
 
+    def test_behavioral_summary_replaces_journal_fallback(self, sample_journals):
+        agent = _make_agent()
+        behavioral_summary = "Behavioral wellbeing signal is available from recent app data."
+        agent.llm_client.analyze_wellbeing.return_value = {
+            "summary": "Unable to analyze journals",
+            "risk_level": "mild",
+            "concerns": [],
+            "positives": [],
+        }
+        agent.phone_adapter.journals_to_raw_days.return_value = [
+            {
+                "date": "2026-04-21",
+                "activity": {"steps": 1200},
+                "mobility": {},
+                "screen": {},
+                "environment": {},
+            }
+        ]
+        agent.wellbeing_sensor.analyze.return_value = {
+            "prose": behavioral_summary,
+            "llm_analysis": None,
+        }
+
+        result = agent.run_from_journals(sample_journals)
+
+        assert result["status"] == "completed"
+        assert result["journal_summary"] == behavioral_summary
+        assert result["wellbeing"]["behavioral_context"] == behavioral_summary
+        assert result["mental_health"] == result["wellbeing"]
+        agent.llm_client.synthesize_wellbeing.assert_not_called()
+
     def test_pipeline_exception_sets_failed_status(self, sample_journals):
         agent = _make_agent()
-        agent.llm_client.analyze_mental_health.side_effect = RuntimeError("API down")
+        agent.llm_client.analyze_wellbeing.side_effect = RuntimeError("API down")
 
         result = agent.run_from_journals(sample_journals)
 
@@ -120,7 +152,7 @@ class TestRunFromJournals:
         agent.run_from_journals(sample_journals)
 
         agent.autolife_reader.get_context_for_prompt.assert_called_once()
-        agent.llm_client.analyze_mental_health.assert_called_once()
+        agent.llm_client.analyze_wellbeing.assert_called_once()
         agent.calendar_api.get_schedule_summary.assert_called_once()
         agent.vectordb.initialize.assert_called_once()
         agent.vectordb.get_intervention_suggestions.assert_called_once()
@@ -135,9 +167,8 @@ class TestRunFromJournals:
         assert result["user_id"] == "agent_default"
 
 
-# ---------------------------------------------------------------------------
+
 # Conflict filtering
-# ---------------------------------------------------------------------------
 
 class TestConflictFiltering:
 
@@ -240,9 +271,8 @@ class TestConflictFiltering:
         assert len(result["proposed_changes"]) == 1
 
 
-# ---------------------------------------------------------------------------
+
 # apply_calendar_changes
-# ---------------------------------------------------------------------------
 
 class TestApplyCalendarChanges:
 

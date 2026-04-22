@@ -14,9 +14,8 @@ from pathlib import Path
 from tools.autolife_reader import AutoLifeReader
 
 
-# ---------------------------------------------------------------------------
+
 # get_context_for_prompt
-# ---------------------------------------------------------------------------
 
 class TestGetContextForPrompt:
 
@@ -79,9 +78,8 @@ class TestGetContextForPrompt:
         assert "2024-06-01 09:00:00" in result
 
 
-# ---------------------------------------------------------------------------
+
 # read_journals (with temp files)
-# ---------------------------------------------------------------------------
 
 class TestReadJournals:
 

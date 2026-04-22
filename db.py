@@ -7,7 +7,7 @@ so the API keeps working even if the DB is down.
 RESEARCH-READINESS AUDIT (2026-04-10):
   Anonymization coverage:
     - log_session(): hashes user_id at entry → used for users, journal_sessions,
-      mental_health_assessments, raw_journals, and calendar_proposals tables. OK.
+      wellbeing_assessments, raw_journals, and calendar_proposals tables. OK.
     - log_calendar_accepted(): hashes user_id at entry → used for UPDATE query. OK.
     - anon_id() is deterministic (SHA-256 of raw string) — same user always maps
       to same hash. OK.
@@ -27,9 +27,8 @@ import json
 import logging
 import os
 import uuid
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Optional
 
-import psycopg2
 from psycopg2 import pool as pg_pool
 
 logger = logging.getLogger(__name__)
@@ -80,11 +79,10 @@ def init_schema() -> None:
                     created_at      TIMESTAMPTZ DEFAULT NOW()
                 );
 
-                CREATE TABLE IF NOT EXISTS mental_health_assessments (
+                CREATE TABLE IF NOT EXISTS wellbeing_assessments (
                     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                     session_id          UUID REFERENCES journal_sessions(id),
                     user_anon_id        TEXT REFERENCES users(anon_id),
-                    phq4_score          INT,
                     risk_level          TEXT,
                     key_concerns        JSONB,
                     positive_indicators JSONB,
@@ -169,19 +167,19 @@ def log_session(user_id: str, journals: List[Dict], result: Dict) -> Optional[st
                 (session_id, uid, len(journals), result.get("journal_summary"))
             )
 
-            # Mental health assessment
-            mh = result.get("mental_health") or {}
-            if mh:
+            # Wellbeing assessment
+            wb = result.get("wellbeing") or {}
+            if wb:
                 cur.execute(
-                    """INSERT INTO mental_health_assessments
-                           (session_id, user_anon_id, phq4_score, risk_level,
+                    """INSERT INTO wellbeing_assessments
+                           (session_id, user_anon_id, risk_level,
                             key_concerns, positive_indicators)
-                       VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb)""",
+                       VALUES (%s, %s, %s, %s::jsonb, %s::jsonb)""",
                     (
                         session_id, uid,
-                        mh.get("estimated_phq4"), mh.get("risk_level"),
-                        json.dumps(mh.get("key_concerns", [])),
-                        json.dumps(mh.get("positive_indicators", [])),
+                        wb.get("risk_level"),
+                        json.dumps(wb.get("key_concerns", [])),
+                        json.dumps(wb.get("positive_indicators", [])),
                     )
                 )
 

@@ -1,69 +1,82 @@
 """
-Mental Health Tracker - Memory Component
+Wellbeing Tracker - Memory Component
+
+Tracks a history of wellbeing assessments (risk_level + timestamp) and
+computes simple trend direction from the ordinal risk levels.
 """
 
 from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Any
 from datetime import datetime
 
+RISK_LEVELS = ("minimal", "mild", "moderate", "severe")
+_RISK_RANK = {lvl: i for i, lvl in enumerate(RISK_LEVELS)}
+
+
 @dataclass
-class PHQ4Score:
-    total: int
+class WellbeingAssessment:
+    risk_level: str  # minimal / mild / moderate / severe
     user_id: str = "default"
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
-    risk_level: str = "unknown"
+
 
 @dataclass
 class TrendAnalysis:
     direction: str = "stable"
 
-class MentalHealthTracker:
+
+class WellbeingTracker:
     def __init__(self, storage):
         self.storage = storage
-    
-    def add_assessment(self, score: PHQ4Score):
-        history = self._get_history(score.user_id)
-        history.append(asdict(score))
-        self.storage.save('health_history', score.user_id, history)
-    
-    def get_latest_score(self, user_id: str = "default") -> Optional[PHQ4Score]:
+
+    def add_assessment(self, assessment: WellbeingAssessment):
+        history = self._get_history(assessment.user_id)
+        history.append(asdict(assessment))
+        self.storage.save('health_history', assessment.user_id, history)
+
+    def get_latest(self, user_id: str = "default") -> Optional[WellbeingAssessment]:
         history = self._get_history(user_id)
-        if not history: return None
+        if not history:
+            return None
         data = history[-1]
-        return PHQ4Score(total=data['total'], user_id=data['user_id'], timestamp=data['timestamp'], risk_level=data['risk_level'])
-    
+        return WellbeingAssessment(
+            risk_level=data.get('risk_level', 'unknown'),
+            user_id=data.get('user_id', user_id),
+            timestamp=data.get('timestamp', ''),
+        )
+
     def get_trend(self, user_id: str = "default") -> Optional[TrendAnalysis]:
         history = self._get_history(user_id)
-        scores = [entry['total'] for entry in history]
+        ranks = [_RISK_RANK.get(e.get('risk_level', ''), None) for e in history]
+        ranks = [r for r in ranks if r is not None]
 
-        if len(scores) < 3:
+        if len(ranks) < 3:
             return TrendAnalysis(direction="insufficient_data")
 
-        recent_3 = scores[-3:]
+        recent_3 = ranks[-3:]
         recent_avg = sum(recent_3) / len(recent_3)
 
-        prior = scores[:-3]
+        prior = ranks[:-3]
         if not prior:
-            # Only 3 scores total — nothing to compare against
             return TrendAnalysis(direction="insufficient_data")
 
         if len(prior) < 3:
-            # Fewer than 6 data points: compare recent 3 against all prior scores
             prior_avg = sum(prior) / len(prior)
         else:
-            prior_3 = scores[-6:-3]
+            prior_3 = ranks[-6:-3]
             prior_avg = sum(prior_3) / len(prior_3)
 
         diff = recent_avg - prior_avg
-        if diff > 1:
+        if diff > 0.5:
             return TrendAnalysis(direction="rising")
-        elif diff < -1:
+        elif diff < -0.5:
             return TrendAnalysis(direction="falling")
         else:
             return TrendAnalysis(direction="stable")
-    
+
     def get_history(self, user_id: str) -> List[Any]:
         return self.storage.load('health_history', user_id) or []
 
-    # Keep alias for internal callers
     _get_history = get_history
+
+

@@ -4,7 +4,7 @@
 
 AutoLife is a life-logging app that uses smartphone sensors (motion, location, WiFi) with Gemini AI to generate contextual life journals and optimize calendar scheduling for mental wellness. It has two major components:
 
-1. **Python backend** — FastAPI server that runs a multi-agent pipeline: journal analysis → mental health assessment (PHQ-4) → VectorDB research retrieval → calendar optimization
+1. **Python backend** — FastAPI server that runs a multi-agent pipeline: journal analysis → wellbeing assessment (risk_level + behavioral sensing) → VectorDB research retrieval → calendar optimization
 2. **KMP/CMP mobile client** — Kotlin Multiplatform + Compose Multiplatform app targeting Android and iOS, handling sensor collection, journaling, and displaying agent results
 
 ## Repository Structure
@@ -26,11 +26,14 @@ Multi-Agent-LLM/
 │   ├── llm_client.py       # Gemini API wrapper (google.genai)
 │   ├── vectordb_client.py  # ChromaDB wellness paper retrieval
 │   ├── calendar_api.py     # Google Calendar + Tasks OAuth integration
-│   └── ihope_model.py      # PHQ-4 prediction model
-├── memory/                 # Python memory module (preferences, health tracking)
+│   ├── wellbeing_sensor.py # Three-layer behavioral sensing pipeline
+│   ├── autolife_phone_adapter.py  # Derives sensor markers from journals
+│   └── wellbeing_feedback.py  # Records suggestion accept/reject feedback
+├── wellbeing_pipeline/     # Layer 1–4 baselines, deviations, coherence, LLM synthesis
+├── memory/                 # Python memory module (preferences, wellbeing tracking)
 │   ├── storage.py          # File-based storage
 │   ├── user_preferences.py # User preference management
-│   └── mental_health_tracker.py
+│   └── wellbeing_tracker.py
 ├── vectordb/               # ChromaDB data + ingestion scripts
 │   ├── chroma_db/          # Pre-built collection (committed for Docker)
 │   ├── research_papers/    # Source PDFs
@@ -57,11 +60,14 @@ Multi-Agent-LLM/
 ```
 Android journals → POST /api/process_journals
   → AutoLifeReader.get_context_for_prompt()
-  → LLMClient.analyze_mental_health()        # Gemini → PHQ-4 estimate
-  → CalendarAPI.get_schedule_summary()        # Google Calendar OAuth
-  → VectorDBClient.get_intervention_suggestions()  # ChromaDB retrieval
+  → LLMClient.analyze_wellbeing()             # Gemini → risk_level + concerns
+  → AutoLifePhoneAdapter.journals_to_raw_days() + WellbeingSensor.analyze()
+                                               # Layer 1–4 behavioral sensing
+  → LLMClient.synthesize_wellbeing()          # fuse journal + sensor signals
+  → CalendarAPI.get_schedule_summary()         # Google Calendar OAuth
+  → VectorDBClient.get_intervention_suggestions(risk_level)  # ChromaDB retrieval
   → LLMClient.generate_recommendations()
-  → LLMClient.generate_calendar_changes()    # with conflict filtering
+  → LLMClient.generate_calendar_changes()     # with conflict filtering
   → Response with proposed_changes
 ```
 

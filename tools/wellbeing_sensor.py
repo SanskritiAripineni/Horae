@@ -1,153 +1,109 @@
 """
-I-HOPE Model - Tool 2
-Runs the PHQ-4 prediction model for mental health assessment.
-"""
+WellbeingSensor — three-layer behavioral sensing pipeline (wellbeing_pipeline/).
 
+Input:  list of raw_day dicts (one per day) — phone sensor markers.
+Output: {
+    "behavioral_state": <Layer 3 structured JSON>,
+    "prose":            <Layer 3 daily journal string>,
+    "llm_analysis":     <Layer 4 dict: coherent_patterns, salience_reasoning,
+                         suggestions, questions_for_user>   (None if no API key)
+}
+"""
+from __future__ import annotations
 import logging
-from typing import List, Dict, Any
-import numpy as np
+import os
+import sys
 from pathlib import Path
+from typing import Optional
+
+# Make wellbeing_pipeline importable from here
+_PIPELINE_DIR = Path(__file__).parent.parent / "wellbeing_pipeline"
+if str(_PIPELINE_DIR) not in sys.path:
+    sys.path.insert(0, str(_PIPELINE_DIR))
+
+from layer1 import PersonalBaseline, markers_from_raw        # noqa: E402
+from layer2 import detect_deviations, find_coherent_patterns  # noqa: E402
+from layer3 import build_state_description, render_llm_input  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 
-class IHopeModel:
+class WellbeingSensor:
     """
-    I-HOPE PHQ-4 prediction model.
-    Predicts mental health state from AutoLife journal data.
-    
-    PHQ-4 measures:
-    - Anxiety (2 questions)
-    - Depression (2 questions)
-    Scale: 0-3 per question, total 0-12
+    Runs the wellbeing pipeline (Layers 1–4) on pre-processed daily sensor data.
+
+    Usage:
+        sensor = WellbeingSensor()
+        result = sensor.analyze(raw_days, calendar=[...], user_prefs={...})
+        print(result["prose"])
+        print(result["llm_analysis"]["suggestions"])
     """
-    
-    def __init__(self, model_weights_dir: str = "data/ihope_weights"):
+
+    def __init__(self,
+                 warmup_days: int = 10,
+                 recent_days: int = 4,
+                 baseline_days: int = 28,
+                 model: Optional[str] = None):
+        self.warmup_days = warmup_days
+        self.recent_days = recent_days
+        self.baseline_days = baseline_days
+        self.model = model  # None → uses wellbeing_pipeline/config.DEFAULT_MODEL
+
+    def analyze(self,
+                raw_days: list[dict],
+                calendar: Optional[list] = None,
+                user_prefs: Optional[dict] = None,
+                feedback_history: Optional[list] = None,
+                with_llm: bool = True) -> dict:
         """
-        Initialize the I-HOPE model.
-        
-        Args:
-            model_weights_dir: Directory containing model weights
+        Run Layers 1→4 on a list of raw_day dicts.
+
+        raw_days: list of dicts with keys matching MARKER_SPECS plus a 'date'
+                  field (date object). Missing markers should be None.
+        calendar: list of calendar event dicts for the next 7 days (optional).
+        user_prefs: dict of user preferences passed to Layer 4 (optional).
+        feedback_history: list of feedback dicts for personalization (optional).
+        with_llm: if False, skip the Layer 4 API call.
+
+        Returns dict with keys: behavioral_state, prose, llm_analysis, baseline_warm.
         """
-        self.model_weights_dir = Path(model_weights_dir)
-        self.model = None
-        logger.info(f"Initialized IHopeModel with weights_dir: {self.model_weights_dir}")
-        
-        # Load model if weights exist
-        self._load_model()
-    
-    def _load_model(self):
-        """Load the trained model from saved weights."""
-        if not self.model_weights_dir.exists():
-            logger.warning(f"Model weights directory does not exist: {self.model_weights_dir}")
-            return
-        
-        # TODO: Load actual model weights
-        # For now, using placeholder
-        logger.info("Model weights loaded (placeholder)")
-        self.model = "placeholder_model"
-    
-    def predict(self, journals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Predict PHQ-4 scores from journal entries.
-        
-        Args:
-            journals: List of journal dictionaries
-            
-        Returns:
-            List of prediction dictionaries containing PHQ-4 scores
-        """
-        predictions = []
-        
-        if self.model is None:
-            logger.warning("Model not loaded. Returning placeholder predictions.")
-            return self._generate_placeholder_predictions(journals)
-        
-        for journal in journals:
-            # Extract features from journal
-            features = self._extract_features(journal)
-            
-            # Make prediction
-            phq4_score = self._predict_single(features)
-            
-            prediction = {
-                'journal_id': journal.get('id', 'unknown'),
-                'timestamp': journal.get('timestamp', None),
-                'phq4_total': phq4_score['total'],
-                'phq4_anxiety': phq4_score['anxiety'],
-                'phq4_depression': phq4_score['depression'],
-                'risk_level': self._classify_risk(phq4_score['total'])
-            }
-            
-            predictions.append(prediction)
-        
-        logger.info(f"Generated predictions for {len(journals)} journals")
-        return predictions
-    
-    def _extract_features(self, journal: Dict[str, Any]) -> np.ndarray:
-        """
-        Extract features from journal entry for model input.
-        
-        Args:
-            journal: Journal dictionary
-            
-        Returns:
-            Feature vector as numpy array
-        """
-        # TODO: Implement actual feature extraction
-        # Should extract: motion patterns, location context, time features, etc.
-        return np.zeros(10)  # Placeholder
-    
-    def _predict_single(self, features: np.ndarray) -> Dict[str, float]:
-        """
-        Make prediction for a single feature vector.
-        
-        Args:
-            features: Feature vector
-            
-        Returns:
-            Dictionary with PHQ-4 component scores
-        """
-        # TODO: Implement actual model inference
-        # Placeholder random scores for now
-        anxiety = np.random.randint(0, 7)
-        depression = np.random.randint(0, 7)
-        
+        if not raw_days:
+            return {"behavioral_state": None, "prose": "", "llm_analysis": None, "baseline_warm": True}
+
+        baseline = PersonalBaseline(warmup_days=self.warmup_days)
+        for raw in raw_days:
+            baseline.add(markers_from_raw(raw))
+
+        as_of = raw_days[-1]["date"]
+        devs = detect_deviations(
+            baseline, as_of=as_of,
+            recent_days=self.recent_days,
+            baseline_days=self.baseline_days,
+            min_magnitude="mild",
+        )
+        patterns = find_coherent_patterns(devs)
+        state = build_state_description(baseline, devs, patterns, as_of)
+        baseline_warm = baseline.is_warm()
+
+        llm_result = None
+        if with_llm and os.environ.get("ANTHROPIC_API_KEY"):
+            try:
+                from layer4_llm import call_scheduler
+                llm_result = call_scheduler(
+                    state=state,
+                    calendar=calendar or [],
+                    user_prefs=user_prefs or {},
+                    feedback_history=feedback_history,
+                    model=self.model,
+                )
+            except Exception as e:
+                logger.warning(f"Layer 4 LLM call failed: {e}")
+
         return {
-            'anxiety': anxiety,
-            'depression': depression,
-            'total': anxiety + depression
+            "behavioral_state": state["structured"],
+            "prose": state["prose"],
+            "llm_analysis": llm_result,
+            "baseline_warm": baseline_warm,
         }
-    
-    def _classify_risk(self, phq4_total: float) -> str:
-        """
-        Classify risk level based on PHQ-4 total score.
-        
-        Args:
-            phq4_total: Total PHQ-4 score (0-12)
-            
-        Returns:
-            Risk level string
-        """
-        if phq4_total < 3:
-            return "minimal"
-        elif phq4_total < 6:
-            return "mild"
-        elif phq4_total < 9:
-            return "moderate"
-        else:
-            return "severe"
-    
-    def _generate_placeholder_predictions(self, journals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Generate placeholder predictions when model is not loaded."""
-        return [
-            {
-                'journal_id': journal.get('id', 'unknown'),
-                'timestamp': journal.get('timestamp', None),
-                'phq4_total': 0,
-                'phq4_anxiety': 0,
-                'phq4_depression': 0,
-                'risk_level': 'minimal'
-            }
-            for journal in journals
-        ]
+
+

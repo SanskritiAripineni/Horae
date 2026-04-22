@@ -4,7 +4,6 @@ User Preferences - Memory Component
 
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Tuple, Any
-from datetime import datetime
 
 @dataclass
 class UserPreferences:

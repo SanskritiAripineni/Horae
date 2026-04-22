@@ -4,13 +4,50 @@ Full OAuth 2.0 authentication with event and task management.
 """
 
 import logging
-import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TypedDict
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+
+class TaskSummary(TypedDict):
+    """A normalized Google Task entry as exposed to the pipeline."""
+    id: str
+    title: str
+    notes: str
+    due: str
+    list: str
+    status: str
+
+
+class FormattedEvent(TypedDict):
+    """A calendar event flattened for the LLM prompt."""
+    id: Optional[str]
+    title: str
+    start: str
+    end: str
+    duration_hours: float
+
+
+class FormattedTask(TypedDict):
+    """A task flattened for the LLM prompt."""
+    id: str
+    title: str
+    due: str
+    list: str
+
+
+class ScheduleSummary(TypedDict):
+    """Return shape of CalendarAPI.get_schedule_summary()."""
+    event_count: int
+    events: List[FormattedEvent]
+    total_hours: float
+    busiest_day: Optional[str]
+    days_covered: int
+    tasks: List[FormattedTask]
+    task_count: int
 
 # Google API scopes
 SCOPES = [
@@ -86,7 +123,6 @@ class CalendarAPI:
     def authenticate(self) -> bool:
         """Authenticate with Google APIs using OAuth 2.0."""
         try:
-            from google.oauth2.credentials import Credentials
             from google_auth_oauthlib.flow import InstalledAppFlow
             from google.auth.transport.requests import Request
             from googleapiclient.discovery import build
@@ -96,35 +132,61 @@ class CalendarAPI:
             return False
         
         if self.token_path.exists():
+            # Try JSON first (Railway injects a JSON token via startup.sh)
             try:
-                with open(self.token_path, 'rb') as f:
-                    self.credentials = pickle.load(f)
-            except:
-                pass
-        
+                from google.oauth2.credentials import Credentials as OAuthCredentials
+                import json
+                with open(self.token_path, 'r') as f:
+                    token_data = json.load(f)
+                self.credentials = OAuthCredentials.from_authorized_user_info(token_data, SCOPES)
+                logger.info("Loaded calendar token from JSON")
+            except Exception:
+                # Fall back to legacy pickle format
+                try:
+                    with open(self.token_path, 'rb') as f:
+                        self.credentials = pickle.load(f)
+                    logger.info("Loaded calendar token from pickle")
+                except Exception:
+                    pass
+
         if self.credentials and self.credentials.expired and self.credentials.refresh_token:
             try:
                 self.credentials.refresh(Request())
-            except:
+                # Persist refreshed token back as JSON
+                try:
+                    import json
+                    with open(self.token_path, 'w') as f:
+                        json.dump(json.loads(self.credentials.to_json()), f)
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.error(f"Token refresh failed: {e}")
                 self.credentials = None
-        
+
         if not self.credentials or not self.credentials.valid:
             if not self.credentials_path.exists():
                 logger.error(f"credentials.json not found")
                 return False
-            
+
             try:
                 flow = InstalledAppFlow.from_client_secrets_file(str(self.credentials_path), SCOPES)
                 self.credentials = flow.run_local_server(port=0)
             except Exception as e:
                 logger.error(f"OAuth flow failed: {e}")
                 return False
-        
+
+        # Persist as JSON (canonical format for Railway)
         try:
-            with open(self.token_path, 'wb') as f:
-                pickle.dump(self.credentials, f)
-        except:
-            pass
+            import json
+            with open(self.token_path, 'w') as f:
+                json.dump(json.loads(self.credentials.to_json()), f)
+        except Exception:
+            # Fall back to pickle if to_json() not available (older google-auth)
+            try:
+                with open(self.token_path, 'wb') as f:
+                    pickle.dump(self.credentials, f)
+            except Exception:
+                pass
         
         try:
             self.calendar_service = build('calendar', 'v3', credentials=self.credentials)
@@ -210,7 +272,7 @@ class CalendarAPI:
             logger.error(f"Failed to get events: {e}")
             return []
     
-    def get_tasks(self, max_results: int = 20) -> List[Dict[str, Any]]:
+    def get_tasks(self, max_results: int = 20) -> List[TaskSummary]:
         """Get Google Tasks."""
         if not self.tasks_service:
             if not self.authenticate():
@@ -271,7 +333,7 @@ class CalendarAPI:
             logger.error(f"Failed to create event: {e}")
             return None
     
-    def get_schedule_summary(self, days: int = 7) -> Dict[str, Any]:
+    def get_schedule_summary(self, days: int = 7) -> ScheduleSummary:
         """Get a summary of schedule for LLM analysis."""
         events = self.get_events(days=days)
         tasks = self.get_tasks()

@@ -8,10 +8,47 @@ import os
 import json
 import re
 import time
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, TypedDict
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+
+class WellbeingAnalysis(TypedDict):
+    """Structured output of LLMClient.analyze_wellbeing()."""
+    summary: str
+    risk_level: str  # minimal / mild / moderate / severe
+    concerns: List[str]
+    positives: List[str]
+
+
+class Recommendation(TypedDict):
+    """A single wellness recommendation produced by generate_recommendations()."""
+    category: str
+    action: str
+    when: str
+    source: str
+
+
+class CalendarChange(TypedDict, total=False):
+    """A proposed calendar change from generate_calendar_changes()."""
+    action: str  # add / update / delete
+    title: str
+    description: str
+    start_time: str
+    end_time: str
+    category: str
+    reason: str
+    event_id: str
+    updates: Dict[str, Any]
+
+
+class UserFeedback(TypedDict):
+    """Structured output of parse_user_feedback()."""
+    preference: str
+    dislikes: List[str]
+    prefers: List[str]
+    should_save: bool
 
 # Retry configuration
 MAX_RETRIES = 3
@@ -64,6 +101,19 @@ class LLMClient:
             return True
         return False
 
+    @staticmethod
+    def _parse_json_response(response: str, default: Any) -> Any:
+        """Strip optional ```json fences from a model response and parse JSON.
+
+        Returns `default` on any parse error — callers supply the shape they
+        need so the pipeline keeps moving on malformed output.
+        """
+        try:
+            cleaned = re.sub(r'```json\s*|\s*```', '', response).strip()
+            return json.loads(cleaned)
+        except (json.JSONDecodeError, ValueError, KeyError):
+            return default
+
     def generate(self, prompt: str, max_tokens: int = 8192) -> str:
         """Generate text from a prompt with exponential-backoff retry."""
         if not self.client:
@@ -95,9 +145,9 @@ class LLMClient:
         logger.error(f"Generation failed after {MAX_RETRIES + 1} attempts: {last_error}")
         return ""
 
-    def analyze_mental_health(self, journal_text: str) -> Dict[str, Any]:
-        """Analyze journal entries to estimate mental health state."""
-        prompt = f'''Analyze these journal entries to assess the user's mental health state.
+    def analyze_wellbeing(self, journal_text: str) -> WellbeingAnalysis:
+        """Analyze journal entries to assess the user's wellbeing state."""
+        prompt = f'''Analyze these journal entries to assess the user's wellbeing state.
 
 JOURNAL ENTRIES:
 {journal_text[:4000]}
@@ -105,17 +155,16 @@ JOURNAL ENTRIES:
 Respond in this exact JSON format (no markdown, just JSON):
 {{
     "summary": "Brief 2-sentence summary of the user's recent activities and state",
-    "phq4_estimate": <number 0-12 estimating PHQ-4 score based on anxiety/depression indicators>,
     "risk_level": "<minimal/mild/moderate/severe>",
     "concerns": ["list", "of", "key", "concerns"],
     "positives": ["list", "of", "positive", "indicators"]
 }}
 
-PHQ-4 scoring guide:
-- 0-2: Minimal (healthy, normal functioning)
-- 3-5: Mild (some stress indicators)
-- 6-8: Moderate (intervention recommended)
-- 9-12: Severe (immediate support needed)
+Risk-level guide:
+- minimal: healthy, normal functioning
+- mild: some stress indicators
+- moderate: intervention recommended
+- severe: immediate support needed
 
 Base your assessment on:
 - Motion patterns (stationary vs. active)
@@ -124,18 +173,12 @@ Base your assessment on:
 - Any emotional indicators in the text'''
 
         response = self.generate(prompt)
-        
-        try:
-            cleaned = re.sub(r'```json\s*|\s*```', '', response).strip()
-            return json.loads(cleaned)
-        except (json.JSONDecodeError, ValueError, KeyError):
-            return {
-                "summary": "Unable to analyze journals",
-                "phq4_estimate": 3,
-                "risk_level": "mild",
-                "concerns": [],
-                "positives": []
-            }
+        return self._parse_json_response(response, {
+            "summary": "Unable to analyze journals",
+            "risk_level": "mild",
+            "concerns": [],
+            "positives": []
+        })
 
     def generate_recommendations(
         self,
@@ -143,7 +186,7 @@ Base your assessment on:
         risk_level: str,
         concerns: List[str],
         research_context: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Recommendation]:
         """Generate personalized recommendations based on analysis and research."""
         research_text = ""
         for i, r in enumerate(research_context[:6], 1):
@@ -179,26 +222,23 @@ Rules:
 4. Keep recommendations realistic for a college student'''
 
         response = self.generate(prompt)
-        
-        try:
-            cleaned = re.sub(r'```json\s*|\s*```', '', response).strip()
-            data = json.loads(cleaned)
+        data = self._parse_json_response(response, None)
+        if isinstance(data, dict) and 'recommendations' in data:
             return data.get('recommendations', [])
-        except (json.JSONDecodeError, ValueError, KeyError):
-            return [{
-                "category": "General",
-                "action": "Consider taking a short break for self-care",
-                "when": "When feeling stressed",
-                "source": "General wellness advice"
-            }]
+        return [{
+            "category": "General",
+            "action": "Consider taking a short break for self-care",
+            "when": "When feeling stressed",
+            "source": "General wellness advice"
+        }]
 
     def generate_calendar_changes(
         self,
-        recommendations: List[Dict[str, Any]],
+        recommendations: List[Recommendation],
         calendar_summary: Dict[str, Any],
         mental_health: Dict[str, Any],
-        user_preferences: List[str] = None
-    ) -> List[Dict[str, Any]]:
+        user_preferences: Optional[List[str]] = None
+    ) -> List[CalendarChange]:
         """Generate proposed calendar changes based on recommendations, schedule, tasks, and user preferences."""
         now = datetime.now()
         tomorrow = now + timedelta(days=1)
@@ -248,9 +288,8 @@ Rules:
 
 TODAY: {now.strftime('%A, %Y-%m-%d %H:%M')} (timezone: America/Chicago)
 
-MENTAL STATE:
+WELLBEING STATE:
 - Risk Level: {mental_health.get('risk_level', 'unknown')}
-- PHQ-4 Estimate: {mental_health.get('estimated_phq4', '?')}/12
 - Concerns: {', '.join(mental_health.get('key_concerns', [])[:3])}
 
 SCHEDULE FOR THE NEXT 7 DAYS (busy slots listed per day — DO NOT overlap these):
@@ -288,16 +327,88 @@ STRICT RULES — follow every one exactly:
 10. Base the number and type of proposals on the wellness recommendations and research context — quality over quantity'''
 
         response = self.generate(prompt)
-        
-        try:
-            cleaned = re.sub(r'```json\s*|\s*```', '', response).strip()
-            data = json.loads(cleaned)
+        data = self._parse_json_response(response, None)
+        if isinstance(data, dict):
             return data.get('proposed_changes', [])
-        except Exception as e:
-            logger.error(f"Failed to parse calendar changes: {e}")
-            return []
+        logger.error("Failed to parse calendar changes from model response")
+        return []
 
-    def parse_user_feedback(self, raw_feedback: str) -> Dict[str, Any]:
+    def synthesize_wellbeing(
+        self,
+        journal_analysis: dict,
+        behavioral_prose: str,
+        feedback_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> dict:
+        """Fuse journal-text analysis with sensor-derived behavioral prose.
+
+        Parameters
+        ----------
+        journal_analysis:
+            Output of ``analyze_wellbeing`` — contains summary, risk_level,
+            concerns, positives.
+        behavioral_prose:
+            Layer 3 prose from WellbeingSensor describing objective sensor observations
+            (sleep, screen time, mobility, social rhythm, etc.).
+        feedback_history:
+            Optional list of past suggestion feedback records from WellbeingFeedback
+            (each a dict with keys: timestamp, suggestion_change, action,
+            behavioral_summary).  Provides personalisation context.
+
+        Returns
+        -------
+        dict with the same shape as WellbeingAnalysis plus a
+        ``behavioral_context`` string field.
+        """
+        history_text = ""
+        if feedback_history:
+            lines = []
+            for rec in feedback_history[-10:]:
+                action = rec.get("action", "?")
+                change = rec.get("suggestion_change", "")
+                ts = rec.get("timestamp", "")[:10]
+                lines.append(f"  [{ts}] {change!r} — {action}")
+            if lines:
+                history_text = (
+                    "\n\nPAST SUGGESTION HISTORY (most recent last):\n"
+                    + "\n".join(lines)
+                    + "\nUse this to understand what the user has accepted or rejected "
+                    "before and personalise your synthesis accordingly."
+                )
+
+        prompt = f"""You are a wellbeing synthesis assistant. Combine TWO sources of
+information about a user into one unified assessment.
+
+SOURCE 1 — JOURNAL ANALYSIS (narrative / text-derived):
+{json.dumps(journal_analysis, indent=2)}
+
+SOURCE 2 — BEHAVIORAL SENSING (objective phone sensor observations):
+{behavioral_prose[:3000]}
+{history_text}
+
+Produce a unified wellbeing summary that integrates BOTH sources. When the two
+sources agree, reflect that confidence. When they conflict, note the tension briefly
+in the behavioral_context field and lean on the more objective sensor signal for
+risk_level.
+
+Respond in this exact JSON format (no markdown, just JSON):
+{{
+    "summary": "2-3 sentence unified summary that incorporates both journal narrative and sensor observations",
+    "risk_level": "<minimal/mild/moderate/severe>",
+    "concerns": ["updated list of concerns drawing on both sources"],
+    "positives": ["updated list of positive indicators from both sources"],
+    "behavioral_context": "1-2 sentences describing what the sensor data adds or contradicts vs. the journal narrative"
+}}"""
+
+        response = self.generate(prompt)
+        return self._parse_json_response(response, {
+            "summary": journal_analysis.get("summary", "Unable to synthesize"),
+            "risk_level": journal_analysis.get("risk_level", "mild"),
+            "concerns": journal_analysis.get("concerns", []),
+            "positives": journal_analysis.get("positives", []),
+            "behavioral_context": behavioral_prose[:200] if behavioral_prose else "",
+        })
+
+    def parse_user_feedback(self, raw_feedback: str) -> UserFeedback:
         """Parse raw user feedback into structured preferences."""
         prompt = f'''Parse this user feedback into a structured preference statement.
 
@@ -314,14 +425,9 @@ Respond in JSON format (no markdown):
 Keep the preference statement professional and actionable for future recommendations.'''
 
         response = self.generate(prompt, max_tokens=500)
-        
-        try:
-            cleaned = re.sub(r'```json\s*|\s*```', '', response).strip()
-            return json.loads(cleaned)
-        except (json.JSONDecodeError, ValueError, KeyError):
-            return {
-                "preference": raw_feedback,
-                "dislikes": [],
-                "prefers": [],
-                "should_save": True
-            }
+        return self._parse_json_response(response, {
+            "preference": raw_feedback,
+            "dislikes": [],
+            "prefers": [],
+            "should_save": True
+        })

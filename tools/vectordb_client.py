@@ -6,8 +6,15 @@ Uses native PDF embeddings via gemini-embedding-2-preview for superior retrieval
 import os
 import logging
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TypedDict
 from pathlib import Path
+
+
+class WellnessConcept(TypedDict):
+    """Retrieved wellness concept from the research VectorDB."""
+    content: str
+    category: str
+    source: str
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +152,7 @@ class VectorDBClient:
                     logger.error(f"Failed to initialize VectorDB after {MAX_RETRIES + 1} attempts: {e}")
                     return False
 
-    def retrieve(self, query: str, category: Optional[str] = None, top_k: int = 3) -> List[Dict[str, Any]]:
+    def retrieve(self, query: str, category: Optional[str] = None, top_k: int = 3) -> List[WellnessConcept]:
         """
         Retrieve relevant wellness concepts.
 
@@ -185,26 +192,24 @@ class VectorDBClient:
             logger.error(f"Retrieval failed: {e}")
             return []
 
-    def get_intervention_suggestions(self, phq4_score: int, journal_summary: str = "") -> List[Dict[str, Any]]:
+    def get_intervention_suggestions(self, risk_level: str, journal_summary: str = "") -> List[WellnessConcept]:
         """
-        Get research-backed intervention suggestions based on mental health state.
+        Get research-backed intervention suggestions based on wellbeing state.
 
         Args:
-            phq4_score: PHQ-4 score (0-12)
+            risk_level: One of 'minimal', 'mild', 'moderate', 'severe'
             journal_summary: Optional context from journals
 
         Returns:
             List of intervention suggestions from research papers
         """
-        # Determine priority areas based on severity
-        if phq4_score >= 9:
-            # Severe - immediate support focus
+        level = (risk_level or "mild").lower()
+        if level == "severe":
             queries = ["emotional coping strategies", "social support wellness"]
-        elif phq4_score >= 6:
-            # Moderate - balanced interventions
+        elif level == "moderate":
             queries = ["stress reduction techniques", "sleep improvement mental health"]
         else:
-            # Minimal/Mild - preventive
+            # minimal / mild — preventive
             queries = ["habit formation daily routine", "mindfulness practice"]
 
         all_suggestions = []

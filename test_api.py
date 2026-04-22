@@ -9,7 +9,6 @@ Usage:
 """
 
 import requests
-import json
 import sys
 import time
 import subprocess
@@ -62,7 +61,7 @@ def run_tests() -> bool:
 
     # ── Top-level keys ────────────────────────────────────────────────────
     for key in ("status", "user_id", "journal_count", "journal_summary",
-                "mental_health", "recommendations", "proposed_changes", "errors"):
+                "wellbeing", "recommendations", "proposed_changes", "errors"):
         assert key in data, f"Missing key in response: '{key}'"
     print(f"  [OK] all top-level keys present")
 
@@ -79,14 +78,13 @@ def run_tests() -> bool:
     assert data["journal_count"] == 2, f"Expected journal_count=2, got {data['journal_count']}"
     print(f"  [OK] journal_count == 2")
 
-    # ── Mental health shape ───────────────────────────────────────────────
-    mh = data.get("mental_health") or {}
-    assert isinstance(mh.get("estimated_phq4"), int), "estimated_phq4 should be int"
-    assert mh.get("risk_level") in ("minimal", "mild", "moderate", "severe"), \
-        f"Unexpected risk_level: {mh.get('risk_level')}"
-    assert isinstance(mh.get("key_concerns"), list), "key_concerns should be a list"
-    assert isinstance(mh.get("positive_indicators"), list), "positive_indicators should be a list"
-    print(f"  [OK] mental_health shape valid  (risk={mh['risk_level']}, phq4={mh['estimated_phq4']})")
+    # ── Wellbeing shape ───────────────────────────────────────────────────
+    wb = data.get("wellbeing") or {}
+    assert wb.get("risk_level") in ("minimal", "mild", "moderate", "severe"), \
+        f"Unexpected risk_level: {wb.get('risk_level')}"
+    assert isinstance(wb.get("key_concerns"), list), "key_concerns should be a list"
+    assert isinstance(wb.get("positive_indicators"), list), "positive_indicators should be a list"
+    print(f"  [OK] wellbeing shape valid  (risk={wb['risk_level']})")
 
     # ── Recommendations ───────────────────────────────────────────────────
     assert isinstance(data["recommendations"], list), "recommendations should be a list"

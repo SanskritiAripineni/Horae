@@ -1,9 +1,9 @@
 # Framework Rishi
 
 ## Overview
-Multi-agent LLM framework integrating AutoLife data collection with I-HOPE mental health prediction and calendar integration.
+Multi-agent LLM framework integrating AutoLife data collection with a three-layer wellbeing sensing pipeline and calendar integration.
 
-Note: most Python-side framework files are placeholders. The Android client under `autolife_android_client/` contains the concrete AutoLife implementation work.
+The Python backend orchestrates journal analysis, behavioral sensing (Layer 1–4 of `wellbeing_pipeline/`), research-backed interventions, and calendar suggestions. The Android client under `autolife_android_client/` handles on-device sensing and journal generation.
 
 ## LLM Scheduler RIDE Architecture
 
@@ -19,10 +19,13 @@ framework_rishi/
 ├── autolife_android_client/   # Android app for AutoLife data collection/journaling
 ├── tools/                     # Core agent tools
 │   ├── autolife_reader.py     # Parses generated journals
-│   ├── ihope_model.py         # PHQ-4 prediction model
+│   ├── wellbeing_sensor.py    # Three-layer behavioral sensing pipeline
+│   ├── autolife_phone_adapter.py  # Derives sensor markers from journals
 │   ├── vectordb_client.py     # Fetches Top K concepts
+│   ├── wellbeing_feedback.py  # Records accept/reject feedback
 │   └── calendar_api.py        # Calendar integration
-├── data/                      # Storage for logs and models
+├── wellbeing_pipeline/        # Layer 1–4 baselines, deviations, LLM synthesis
+├── data/                      # Storage for logs and feedback
 ├── main.py                    # Entry point
 └── agent.py                   # Core agent logic (conductor)
 ```

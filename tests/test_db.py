@@ -15,9 +15,8 @@ from unittest.mock import patch, MagicMock
 import db
 
 
-# ---------------------------------------------------------------------------
+
 # anon_id — SHA-256 anonymization
-# ---------------------------------------------------------------------------
 
 class TestAnonId:
 
@@ -43,9 +42,8 @@ class TestAnonId:
         assert len(result) == 64
 
 
-# ---------------------------------------------------------------------------
+
 # get_pool — graceful degradation
-# ---------------------------------------------------------------------------
 
 class TestGetPool:
 
@@ -81,9 +79,8 @@ class TestGetPool:
         db._pool = None
 
 
-# ---------------------------------------------------------------------------
+
 # init_schema
-# ---------------------------------------------------------------------------
 
 class TestInitSchema:
 
@@ -126,9 +123,8 @@ class TestInitSchema:
         mock_pool.putconn.assert_called_once_with(mock_conn)
 
 
-# ---------------------------------------------------------------------------
+
 # log_session
-# ---------------------------------------------------------------------------
 
 class TestLogSession:
 
@@ -155,8 +151,7 @@ class TestLogSession:
         ]
         result_data = {
             "journal_summary": "summary",
-            "mental_health": {
-                "estimated_phq4": 3,
+            "wellbeing": {
                 "risk_level": "mild",
                 "key_concerns": [],
                 "positive_indicators": [],
@@ -202,7 +197,7 @@ class TestLogSession:
 
         journals = [{"id": "j1", "entry_number": 1, "period": "AM",
                       "content": "x", "created_at": "2024-01-01"}]
-        result_data = {"mental_health": {}, "recommendations": [], "proposed_changes": []}
+        result_data = {"wellbeing": {}, "recommendations": [], "proposed_changes": []}
 
         db.log_session("user1", journals, result_data)
 
@@ -216,9 +211,8 @@ class TestLogSession:
         assert len(raw_journal_inserts) == 0
 
 
-# ---------------------------------------------------------------------------
+
 # log_calendar_accepted
-# ---------------------------------------------------------------------------
 
 class TestLogCalendarAccepted:
 

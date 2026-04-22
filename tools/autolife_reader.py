@@ -3,13 +3,10 @@ AutoLife Reader - Tool 1
 Reads and parses daily journals exported from the AutoLife Android app.
 """
 
-import os
-import json
 import logging
 import re
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from pathlib import Path
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -46,38 +43,31 @@ class AutoLifeReader:
             logger.warning("No journal export files found")
             return journals
         
-        # Sort by modification time, get most recent
         export_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
         latest_file = export_files[0]
         logger.info(f"Reading journals from: {latest_file.name}")
-        
-        # Parse the export file
+
         try:
             with open(latest_file, 'r') as f:
                 content = f.read()
-            
-            # Parse individual journal entries
+
             # Format: ========\nJOURNAL ENTRY #N\nCreated At: ...\nPeriod: ...\n--------\n\n<content>
             entries = re.split(r'={40,}', content)
-            
+
             for entry in entries:
                 entry = entry.strip()
                 if not entry or 'JOURNAL ENTRY' not in entry:
                     continue
-                
-                # Extract entry number
+
                 match = re.search(r'JOURNAL ENTRY #(\d+)', entry)
                 entry_num = match.group(1) if match else '0'
-                
-                # Extract created timestamp
+
                 created_match = re.search(r'Created At: ([\d\-: ]+)', entry)
                 created_at = created_match.group(1) if created_match else ''
-                
-                # Extract period
+
                 period_match = re.search(r'Period: (.+)', entry)
                 period = period_match.group(1) if period_match else ''
-                
-                # Extract content (after the dashed line)
+
                 content_match = re.search(r'-{20,}\s*\n\n(.+)', entry, re.DOTALL)
                 content = content_match.group(1).strip() if content_match else entry
                 
@@ -95,7 +85,6 @@ class AutoLifeReader:
         except Exception as e:
             logger.error(f"Error reading journal file: {e}")
         
-        # Sort by entry number descending and limit
         journals.sort(key=lambda x: x.get('entry_number', 0), reverse=True)
         return journals[:limit]
 
