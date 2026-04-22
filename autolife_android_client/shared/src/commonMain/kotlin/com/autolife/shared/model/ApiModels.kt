@@ -21,6 +21,19 @@ data class EnrollResponse(
     val detail: String? = null
 )
 
+// ── OAuth models ────────────────────────────────────────────────────
+
+@Serializable
+data class OAuthAuthorizeResponse(
+    val auth_url: String = "",
+    val state: String = ""
+)
+
+@Serializable
+data class OAuthStatusResponse(
+    val connected: Boolean = false
+)
+
 // ── Request models ──────────────────────────────────────────────────
 
 @Serializable

@@ -31,9 +31,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.autolife.composeapp.platform.currentDateKey
@@ -42,6 +46,7 @@ import com.autolife.composeapp.ui.ProposalApplier
 import com.autolife.composeapp.ui.components.*
 import com.autolife.composeapp.ui.theme.AutoLifeSemantic
 import com.autolife.shared.model.*
+import com.autolife.shared.network.AutoLifeApi
 import com.autolife.shared.repository.AnalysisRepository
 import kotlinx.coroutines.launch
 
@@ -284,10 +289,102 @@ private fun hasConflict(proposal: CalendarEventBar, existing: List<CalendarEvent
 // ── ViewModel ────────────────────────────────────────────────
 
 class ScheduleViewModel : ViewModel() {
+    var calendarConnected by androidx.compose.runtime.mutableStateOf<Boolean?>(null)
+        private set
+    var oauthLoading by androidx.compose.runtime.mutableStateOf(false)
+        private set
+    var oauthError by androidx.compose.runtime.mutableStateOf<String?>(null)
+        private set
+    var pendingAuthUrl by androidx.compose.runtime.mutableStateOf<String?>(null)
+        private set
+
+    fun checkCalendarStatus() {
+        viewModelScope.launch {
+            try {
+                calendarConnected = AutoLifeApi.getOAuthStatus().connected
+            } catch (_: Exception) {
+                calendarConnected = false
+            }
+        }
+    }
+
+    fun requestAuthUrl() {
+        if (oauthLoading) return
+        oauthLoading = true
+        oauthError = null
+        viewModelScope.launch {
+            try {
+                val response = AutoLifeApi.getOAuthAuthorizeUrl()
+                pendingAuthUrl = response.auth_url
+            } catch (_: Exception) {
+                oauthError = "Could not reach server. Check your connection."
+            } finally {
+                oauthLoading = false
+            }
+        }
+    }
+
+    fun clearPendingUrl() { pendingAuthUrl = null }
+
     fun applySelected() {
         val current = AnalysisRepository.selectedProposals.value
         if (current.isEmpty()) return
         viewModelScope.launch { ProposalApplier.apply(current) }
+    }
+}
+
+// ── Calendar connect card ────────────────────────────────────
+
+@Composable
+private fun CalendarConnectCard(
+    connected: Boolean?,
+    loading: Boolean,
+    error: String?,
+    onConnect: () -> Unit,
+    onRefresh: () -> Unit,
+) {
+    SurfaceCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (connected == true) Icons.Default.CheckCircle else Icons.Default.CalendarMonth,
+                    contentDescription = null,
+                    tint = if (connected == true) AutoLifeSemantic.categoryHealth else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(
+                        "Google Calendar",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        when (connected) {
+                            true -> "Connected"
+                            false -> "Not connected"
+                            null -> "Checking…"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (connected == true) AutoLifeSemantic.categoryHealth
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            when {
+                loading -> CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                connected == true -> TextButton(onClick = onRefresh) { Text("Refresh") }
+                else -> Button(onClick = onConnect, enabled = !loading) { Text("Connect") }
+            }
+        }
+        if (error != null) {
+            Spacer(Modifier.height(6.dp))
+            Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
     }
 }
 
@@ -298,12 +395,46 @@ class ScheduleViewModel : ViewModel() {
 fun ScheduleScreen(viewModel: ScheduleViewModel = viewModel { ScheduleViewModel() }) {
     val result by AnalysisRepository.result.collectAsState()
     val selectedProposals by AnalysisRepository.selectedProposals.collectAsState()
+    val uriHandler = LocalUriHandler.current
+
+    // Check calendar status on first load
+    LaunchedEffect(Unit) { viewModel.checkCalendarStatus() }
+
+    // Open auth URL in browser when ready
+    val pendingUrl = viewModel.pendingAuthUrl
+    LaunchedEffect(pendingUrl) {
+        if (pendingUrl != null) {
+            uriHandler.openUri(pendingUrl)
+            viewModel.clearPendingUrl()
+        }
+    }
+
+    // Re-check status whenever screen resumes (e.g. returning from browser)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.checkCalendarStatus()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     if (result == null) {
         EmptyState(
             icon = Icons.AutoMirrored.Filled.EventNote,
             title = "No Schedule Data",
             description = "Run analysis from the Agent tab to see your weekly schedule.",
+            action = {
+                Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
+                    CalendarConnectCard(
+                        connected = viewModel.calendarConnected,
+                        loading = viewModel.oauthLoading,
+                        error = viewModel.oauthError,
+                        onConnect = { viewModel.requestAuthUrl() },
+                        onRefresh = { viewModel.checkCalendarStatus() },
+                    )
+                }
+            }
         )
         return
     }
@@ -354,6 +485,17 @@ fun ScheduleScreen(viewModel: ScheduleViewModel = viewModel { ScheduleViewModel(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // Calendar connect card
+            item {
+                CalendarConnectCard(
+                    connected = viewModel.calendarConnected,
+                    loading = viewModel.oauthLoading,
+                    error = viewModel.oauthError,
+                    onConnect = { viewModel.requestAuthUrl() },
+                    onRefresh = { viewModel.checkCalendarStatus() },
+                )
+            }
+
             // Summary card
             item {
                 SurfaceCard {

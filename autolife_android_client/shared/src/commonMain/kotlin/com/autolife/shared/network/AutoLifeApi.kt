@@ -87,4 +87,18 @@ object AutoLifeApi {
             parameter("user_id", userId)
         }.body()
     }
+
+    suspend fun getOAuthAuthorizeUrl(userId: String = "default"): OAuthAuthorizeResponse {
+        return client.get("$_baseUrl/api/oauth/authorize") {
+            _authToken?.let { header("Authorization", "Bearer $it") }
+            parameter("user_id", userId)
+        }.body()
+    }
+
+    suspend fun getOAuthStatus(userId: String = "default"): OAuthStatusResponse {
+        return client.get("$_baseUrl/api/oauth/status") {
+            _authToken?.let { header("Authorization", "Bearer $it") }
+            parameter("user_id", userId)
+        }.body()
+    }
 }
