@@ -60,7 +60,7 @@ app/build/
 data/raw_logs/*.log
 data/ihope_weights/*.h5
 data/ihope_weights/*.pb
-data/tokens/*.json
+data/tokens/**
 *.pkl
 *.npy
 
