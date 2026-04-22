@@ -131,6 +131,7 @@ class CalendarAPI:
             logger.error(f"Google API libraries not installed: {e}")
             return False
         
+        logger.info(f"Token file exists: {self.token_path.exists()} ({self.token_path.resolve()})")
         if self.token_path.exists():
             # Try JSON first (Railway injects a JSON token via startup.sh)
             try:
@@ -140,14 +141,15 @@ class CalendarAPI:
                     token_data = json.load(f)
                 self.credentials = OAuthCredentials.from_authorized_user_info(token_data, SCOPES)
                 logger.info("Loaded calendar token from JSON")
-            except Exception:
+            except Exception as e:
+                logger.warning(f"JSON token load failed: {e}")
                 # Fall back to legacy pickle format
                 try:
                     with open(self.token_path, 'rb') as f:
                         self.credentials = pickle.load(f)
                     logger.info("Loaded calendar token from pickle")
-                except Exception:
-                    pass
+                except Exception as e2:
+                    logger.warning(f"Pickle token load failed: {e2}")
 
         if self.credentials and self.credentials.expired and self.credentials.refresh_token:
             try:
