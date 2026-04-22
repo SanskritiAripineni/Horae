@@ -58,17 +58,20 @@ Multi-Agent-LLM/
 ### Backend Pipeline (agent.py)
 
 ```
-Android journals → POST /api/process_journals
-  → AutoLifeReader.get_context_for_prompt()
-  → LLMClient.analyze_wellbeing()             # Gemini → risk_level + concerns
-  → AutoLifePhoneAdapter.journals_to_raw_days() + WellbeingSensor.analyze()
-                                               # Layer 1–4 behavioral sensing
-  → LLMClient.synthesize_wellbeing()          # fuse journal + sensor signals
-  → CalendarAPI.get_schedule_summary()         # Google Calendar OAuth
+Android journals (+ optional raw_days) → POST /api/process_journals
+  → AutoLifeReader.get_context_for_prompt()     # journals = narrative context only
+  → CalendarAPI.get_schedule_summary()          # Google Calendar OAuth, 7-day window
+  → WellbeingSensor.analyze(raw_days)           # Layer 1–4 behavioral sensing;
+                                                # SOLE wellbeing signal. Skipped
+                                                # when raw_days absent (graceful).
   → VectorDBClient.get_intervention_suggestions(risk_level)  # ChromaDB retrieval
-  → LLMClient.generate_recommendations()
-  → LLMClient.generate_calendar_changes()     # with conflict filtering
-  → Response with proposed_changes
+  → LLMClient.generate_schedule_proposals()    # ONE structured-prompt call
+                                                # returns: summary, risk_level,
+                                                # concerns, positives,
+                                                # recommendations,
+                                                # proposed_changes (filtered for
+                                                # calendar conflicts server-side)
+  → Response
 ```
 
 ### Mobile Architecture (KMP/CMP)
