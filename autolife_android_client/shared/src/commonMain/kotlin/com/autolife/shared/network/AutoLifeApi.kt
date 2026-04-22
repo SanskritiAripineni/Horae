@@ -8,6 +8,7 @@ import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -25,8 +26,13 @@ object AutoLifeApi {
 
     private var _client: HttpClient? = null
     private var _baseUrl: String = ""
+    private var _authToken: String? = null
 
     val isInitialized: Boolean get() = _client != null
+
+    fun setAuthToken(token: String?) {
+        _authToken = token
+    }
 
     fun init(baseUrl: String) {
         _baseUrl = baseUrl.trimEnd('/')
@@ -52,9 +58,17 @@ object AutoLifeApi {
     private val client: HttpClient
         get() = _client ?: error("AutoLifeApi not initialized. Call init(baseUrl) first.")
 
+    suspend fun enroll(request: EnrollRequest): EnrollResponse {
+        return client.post("$_baseUrl/api/enroll") {
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }.body()
+    }
+
     suspend fun processJournals(request: ProcessJournalsRequest): ProcessJournalsResponse {
         return client.post("$_baseUrl/api/process_journals") {
             contentType(ContentType.Application.Json)
+            _authToken?.let { header("Authorization", "Bearer $it") }
             setBody(request)
         }.body()
     }
@@ -62,12 +76,14 @@ object AutoLifeApi {
     suspend fun applyCalendar(request: ApplyCalendarRequest): ApplyCalendarResponse {
         return client.post("$_baseUrl/api/apply_calendar") {
             contentType(ContentType.Application.Json)
+            _authToken?.let { header("Authorization", "Bearer $it") }
             setBody(request)
         }.body()
     }
 
     suspend fun getMemory(userId: String = "default"): UserMemoryData {
         return client.get("$_baseUrl/api/memory") {
+            _authToken?.let { header("Authorization", "Bearer $it") }
             parameter("user_id", userId)
         }.body()
     }

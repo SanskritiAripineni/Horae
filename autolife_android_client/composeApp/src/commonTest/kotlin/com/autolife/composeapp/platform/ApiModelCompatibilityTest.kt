@@ -86,6 +86,50 @@ class ApiModelCompatibilityTest {
     }
 
     @Test
+    fun processJournalsResponseReadsUiSummaryAndAnalysisDetails() {
+        val response = json.decodeFromString<ProcessJournalsResponse>(
+            """
+            {
+              "status": "completed",
+              "ui_summary": {
+                "headline": "Mild sleep strain",
+                "confidence_label": "Medium confidence",
+                "summary": "Late nights are affecting recovery.",
+                "evidence_chips": [{"label": "Late screen", "kind": "concern", "icon": "moon"}],
+                "concerns": [{"label": "Late-night screen", "detail": "Repeated after 11 PM"}],
+                "protective_signals": [{"label": "Consistent journaling"}],
+                "productive_signals": [{"label": "Regular engagement"}]
+              },
+              "analysis_details": {
+                "journal_count": 10,
+                "duration_seconds": 2.5,
+                "behavioral_sensing": {"prose": "Sleep shifted later."},
+                "research_sources": [{"category": "Sleep", "content": "Sleep matters.", "source": "paper.pdf"}],
+                "tool_status": {"research": "ready"}
+              },
+              "proposed_changes": [
+                {
+                  "title": "Wind-down",
+                  "reason": "Reduce late screen use",
+                  "source": "behavioral_sensing",
+                  "change_token": "signed"
+                }
+              ]
+            }
+            """.trimIndent()
+        )
+
+        assertEquals("Mild sleep strain", response.ui_summary?.headline)
+        assertEquals("Late screen", response.ui_summary?.evidence_chips?.first()?.label)
+        assertEquals("Consistent journaling", response.ui_summary?.protective_signals?.first()?.label)
+        assertEquals(10, response.analysis_details?.journal_count)
+        assertEquals("paper.pdf", response.analysis_details?.research_sources?.first()?.source)
+        assertEquals("Reduce late screen use", response.proposed_changes.first().reason)
+        assertEquals("behavioral_sensing", response.proposed_changes.first().source)
+        assertEquals("signed", response.proposed_changes.first().change_token)
+    }
+
+    @Test
     fun memoryResponseReadsProductionMentalHealthField() {
         val memory = json.decodeFromString<UserMemoryData>(
             """

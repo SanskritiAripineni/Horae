@@ -38,5 +38,8 @@ data class ProposedChange(
     val description: String? = null,
     val category: String? = null,
     val duration_hours: Double? = null,
-    val action: String? = null
+    val action: String? = null,
+    val reason: String? = null,
+    val source: String? = null,
+    val change_token: String? = null
 )

@@ -397,6 +397,39 @@ Respond in this EXACT JSON format (no markdown, just JSON):
     "summary": "2-3 sentence overall assessment grounded in sensor data if available, otherwise journal narrative",
     "concerns": ["list of key wellbeing concerns identified"],
     "positives": ["list of positive behavioral indicators"],
+    "ui_summary": {{
+        "headline": "Short UI headline, e.g. Mild stress",
+        "confidence_label": "Short confidence label, e.g. Medium confidence",
+        "summary": "One concise sentence for the mobile hero card",
+        "evidence_chips": [
+            {{
+                "label": "Short evidence label",
+                "kind": "concern/protective/productive/neutral",
+                "icon": "moon/warning/heart/calendar/activity/book"
+            }}
+        ],
+        "concerns": [
+            {{
+                "label": "Short concern label",
+                "detail": "Optional brief explanation",
+                "severity": "low/medium/high"
+            }}
+        ],
+        "protective_signals": [
+            {{
+                "label": "Short protective signal",
+                "detail": "Optional brief explanation",
+                "severity": "positive"
+            }}
+        ],
+        "productive_signals": [
+            {{
+                "label": "Short productive signal",
+                "detail": "Optional brief explanation",
+                "severity": "positive"
+            }}
+        ]
+    }},
     "recommendations": [
         {{
             "category": "<Sleep/Stress/Social/Physical/Mindfulness>",
@@ -427,7 +460,8 @@ STRICT RULES:
 6. Durations: mindfulness 15–30 min, physical 30–45 min, study/work 60–90 min
 7. STRICTLY respect user preferences — never suggest activities the user dislikes
 8. end_time must be strictly after start_time
-9. If no sensor data is available, still produce recommendations and proposals from journal + research context alone"""
+9. If no sensor data is available, still produce recommendations and proposals from journal + research context alone
+10. ui_summary must be UI-friendly and compact; keep dense evidence in summary/recommendations/proposed_changes, not in the labels"""
 
         response = self.generate(prompt, max_tokens=8192)
         data = self._parse_json_response(response, None)
@@ -440,6 +474,7 @@ STRICT RULES:
             "summary": behavioral_prose[:200] if behavioral_prose else "Assessment unavailable.",
             "concerns": [],
             "positives": [],
+            "ui_summary": {},
             "recommendations": [{
                 "category": "General",
                 "action": "Consider taking a short break for self-care",

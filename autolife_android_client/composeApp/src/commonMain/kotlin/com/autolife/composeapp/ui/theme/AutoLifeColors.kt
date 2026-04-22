@@ -2,21 +2,21 @@ package com.autolife.composeapp.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Light mode — iOS-inspired system colors
+// Light mode - quiet wellness palette shared by Android and iOS
 object AutoLifeLight {
-    val background       = Color(0xFFF2F2F7)
+    val background       = Color(0xFFFBFCF8)
     val surface          = Color(0xFFFFFFFF)
-    val surfaceSecondary = Color(0xFFF2F2F7)
-    val onBackground     = Color(0xFF1C1C1E)
-    val onSurface        = Color(0xFF1C1C1E)
-    val onSurfaceDim     = Color(0xFF8E8E93)
-    val outline          = Color(0xFFD1D1D6)
+    val surfaceSecondary = Color(0xFFF2F5ED)
+    val onBackground     = Color(0xFF25352D)
+    val onSurface        = Color(0xFF25352D)
+    val onSurfaceDim     = Color(0xFF69736D)
+    val outline          = Color(0xFFE0E4DC)
 
-    val primary          = Color(0xFF007AFF)
+    val primary          = Color(0xFF55744C)
     val onPrimary        = Color(0xFFFFFFFF)
-    val secondary        = Color(0xFF34C759)
-    val tertiary         = Color(0xFFFF9500)
-    val error            = Color(0xFFFF3B30)
+    val secondary        = Color(0xFF4D815F)
+    val tertiary         = Color(0xFFC8802D)
+    val error            = Color(0xFFD85A4A)
 }
 
 // Dark mode
@@ -38,19 +38,19 @@ object AutoLifeDark {
 
 // Semantic colors — risk levels, categories, tools
 object AutoLifeSemantic {
-    val riskLow          = Color(0xFF34C759)
-    val riskMild         = Color(0xFFFF9500)
-    val riskModerate     = Color(0xFFFF6B00)
-    val riskSevere       = Color(0xFFFF3B30)
+    val riskLow          = Color(0xFF4D815F)
+    val riskMild         = Color(0xFFC8802D)
+    val riskModerate     = Color(0xFFB76B2B)
+    val riskSevere       = Color(0xFFD85A4A)
 
-    val categoryWork     = Color(0xFF007AFF)
-    val categoryHealth   = Color(0xFF34C759)
-    val categoryLeisure  = Color(0xFFFFCC00)
+    val categoryWork     = Color(0xFF8C95C8)
+    val categoryHealth   = Color(0xFF6F8A64)
+    val categoryLeisure  = Color(0xFFE7C77C)
 
-    val toolAutoLife     = Color(0xFFFF9500)
-    val toolKEmo         = Color(0xFFFF3B30)
-    val toolVectorDB     = Color(0xFF5AC8FA)
-    val toolCalendar     = Color(0xFF34C759)
+    val toolAutoLife     = Color(0xFF6F8A64)
+    val toolKEmo         = Color(0xFFC8802D)
+    val toolVectorDB     = Color(0xFF7395A8)
+    val toolCalendar     = Color(0xFF55744C)
 
     fun riskColor(level: String?): Color = when (level?.lowercase()) {
         "low", "minimal" -> riskLow

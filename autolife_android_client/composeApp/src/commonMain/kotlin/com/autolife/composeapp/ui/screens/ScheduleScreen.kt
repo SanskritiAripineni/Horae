@@ -13,6 +13,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.EventNote
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExpandLess
@@ -355,19 +357,13 @@ fun ScheduleScreen(viewModel: ScheduleViewModel = viewModel { ScheduleViewModel(
             // Summary card
             item {
                 SurfaceCard {
-                    Text("Weekly Schedule", style = MaterialTheme.typography.titleLarge)
-                    Spacer(Modifier.height(8.dp))
-                    DataRow("Total Hours", calSummary?.total_hours?.let { DateFormat.fmtFloat1(it) } ?: "--")
-                    DataRow("Events", "${eventBars.size}")
-                    DataRow("AI Proposals", "${proposalBars.size}")
-                    Spacer(Modifier.height(4.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                     ) {
-                        CategoryPill("Work", "${DateFormat.fmtFloat1(catHours.work)}h", AutoLifeSemantic.categoryWork)
-                        CategoryPill("Health", "${DateFormat.fmtFloat1(catHours.health)}h", AutoLifeSemantic.categoryHealth)
-                        CategoryPill("Leisure", "${DateFormat.fmtFloat1(catHours.leisure)}h", AutoLifeSemantic.categoryLeisure)
+                        SourceStatCell(Icons.Default.CalendarMonth, "Total hours", "${calSummary?.total_hours?.let { DateFormat.fmtFloat1(it) } ?: "--"}h", Modifier.weight(1f))
+                        SourceStatCell(Icons.AutoMirrored.Filled.EventNote, "Events", "${eventBars.size}", Modifier.weight(1f))
+                        SourceStatCell(Icons.Default.CheckCircle, "Proposals", "${proposalBars.size}", Modifier.weight(1f))
                     }
                 }
             }
@@ -424,7 +420,7 @@ fun ScheduleScreen(viewModel: ScheduleViewModel = viewModel { ScheduleViewModel(
                             }) { Text("Clear filters") }
                         }
                     } else {
-                        WeekBarChart(bars = weekBars, weekMondayKey = weekMondayKey, onBarClick = { selectedBar = it })
+                        WeekGridChart(bars = weekBars, weekMondayKey = weekMondayKey, onBarClick = { selectedBar = it })
                     }
                 }
             }
@@ -457,7 +453,7 @@ fun ScheduleScreen(viewModel: ScheduleViewModel = viewModel { ScheduleViewModel(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         SectionHeader(
-                            title = "AI Proposals (${clearProposals.size} clear, ${conflictProposals.size} conflicts)",
+                            title = "Selected proposals",
                         )
                         if (clearProposals.isNotEmpty()) {
                             TextButton(onClick = {
@@ -520,7 +516,7 @@ fun ScheduleScreen(viewModel: ScheduleViewModel = viewModel { ScheduleViewModel(
                     ) {
                         Text(
                             if (isApplying) "Applying..."
-                            else "Apply to Calendar (${selectedProposals.size})",
+                            else "Apply ${selectedProposals.size} change${if (selectedProposals.size == 1) "" else "s"}",
                         )
                     }
                 }
@@ -557,6 +553,119 @@ private fun assignLanes(events: List<CalendarEventBar>): Map<Int, Int> {
         }
     }
     return assignment
+}
+
+@Composable
+private fun WeekGridChart(
+    bars: List<CalendarEventBar>,
+    weekMondayKey: String,
+    onBarClick: (CalendarEventBar) -> Unit,
+) {
+    val todayKey = remember { currentDateKey() }
+    val todayMonday = remember(todayKey) { mondayOfWeek(todayKey) }
+    val isCurrentWeek = weekMondayKey == todayMonday
+    val todayP = remember(todayKey) { parseISO(todayKey) }
+    val todayName = if (todayP != null) DOW_NAMES[dayOfWeekIndex(todayP.year, todayP.month, todayP.day)] else ""
+    val dayNumbers = remember(weekMondayKey) {
+        if (weekMondayKey.isBlank()) DAYS.associateWith { "" }
+        else {
+            val p = parseISO(weekMondayKey)
+            if (p == null) DAYS.associateWith { "" }
+            else {
+                var y = p.year; var m = p.month; var d = p.day
+                DAYS.associateWith {
+                    val label = d.toString()
+                    val (ny, nm, nd) = addDays(y, m, d, 1)
+                    y = ny; m = nm; d = nd
+                    label
+                }
+            }
+        }
+    }
+    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val hitRects = remember(bars) { mutableListOf<BarHitRect>() }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(start = 44.dp)) {
+            DAYS.forEach { day ->
+                val isToday = isCurrentWeek && day == todayName
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(day, style = MaterialTheme.typography.labelMedium, color = labelColor)
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(
+                                if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
+                                RoundedCornerShape(8.dp),
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            dayNumbers[day] ?: "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (isToday) MaterialTheme.colorScheme.primary else labelColor,
+                            fontWeight = if (isToday) FontWeight.SemiBold else FontWeight.Normal,
+                        )
+                    }
+                }
+            }
+        }
+
+        Row(modifier = Modifier.fillMaxWidth().height(520.dp)) {
+            Column(
+                modifier = Modifier.width(44.dp).fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                listOf("6 AM", "8 AM", "10 AM", "12 PM", "2 PM", "4 PM", "6 PM", "8 PM", "10 PM").forEach {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = labelColor)
+                }
+            }
+            Canvas(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .pointerInput(bars) {
+                        detectTapGestures { offset ->
+                            val i = hitRects.indexOfFirst { r ->
+                                offset.x in r.startX..r.endX && offset.y in r.topY..r.bottomY
+                            }
+                            if (i in bars.indices) onBarClick(bars[i])
+                        }
+                    },
+            ) {
+                hitRects.clear()
+                val dayWidth = size.width / DAYS.size
+                DAYS.indices.forEach { index ->
+                    val x = index * dayWidth
+                    drawLine(gridColor, Offset(x, 0f), Offset(x, size.height), 1f)
+                }
+                drawLine(gridColor, Offset(size.width, 0f), Offset(size.width, size.height), 1f)
+                for (h in 6..22 step 2) {
+                    val y = ((h - DAY_START) / HOUR_SPAN) * size.height
+                    drawLine(gridColor, Offset(0f, y), Offset(size.width, y), 1f)
+                }
+
+                bars.forEach { event ->
+                    val dayIndex = DAYS.indexOf(event.dayOfWeek).coerceAtLeast(0)
+                    val top = ((event.startHour - DAY_START).coerceAtLeast(0f) / HOUR_SPAN) * size.height
+                    val height = (event.durationHours.coerceIn(0.1f, HOUR_SPAN) / HOUR_SPAN * size.height).coerceAtLeast(18f)
+                    val left = dayIndex * dayWidth + 4.dp.toPx()
+                    val width = (dayWidth - 8.dp.toPx()).coerceAtLeast(8f)
+                    hitRects.add(BarHitRect(left, left + width, top, top + height))
+                    drawRoundRect(
+                        color = event.color.copy(alpha = if (event.isProposal) 0.35f else 0.52f),
+                        topLeft = Offset(left, top),
+                        size = Size(width, height),
+                        cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

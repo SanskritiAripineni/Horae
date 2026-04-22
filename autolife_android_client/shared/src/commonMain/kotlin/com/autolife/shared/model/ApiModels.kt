@@ -2,6 +2,24 @@ package com.autolife.shared.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+
+// ── Enroll models ───────────────────────────────────────────────────
+
+@Serializable
+data class EnrollRequest(
+    val user_id: String = "default",
+    val consented_at: Long,
+    val study_id: String = "RIDE_2026"
+)
+
+@Serializable
+data class EnrollResponse(
+    val enrolled: Boolean = false,
+    val study_id: String = "",
+    val auth_token: String? = null,
+    val detail: String? = null
+)
 
 // ── Request models ──────────────────────────────────────────────────
 
@@ -57,6 +75,48 @@ data class MentalHealthAssessment(
 )
 
 @Serializable
+data class SignalItem(
+    val label: String = "",
+    val detail: String? = null,
+    val severity: String? = null,
+)
+
+@Serializable
+data class SignalChip(
+    val label: String = "",
+    val kind: String = "neutral",
+    val icon: String? = null,
+)
+
+@Serializable
+data class UiSummary(
+    val headline: String = "",
+    val confidence_label: String = "",
+    val summary: String = "",
+    val evidence_chips: List<SignalChip> = emptyList(),
+    val concerns: List<SignalItem> = emptyList(),
+    val protective_signals: List<SignalItem> = emptyList(),
+    val productive_signals: List<SignalItem> = emptyList(),
+)
+
+@Serializable
+data class ResearchSource(
+    val category: String = "",
+    val content: String = "",
+    val source: String = "",
+)
+
+@Serializable
+data class AnalysisDetails(
+    val journal_count: Int = 0,
+    val duration_seconds: Double = 0.0,
+    val behavioral_sensing: JsonElement? = null,
+    val research_sources: List<ResearchSource> = emptyList(),
+    val calendar_summary: CalendarSummary? = null,
+    val tool_status: Map<String, String> = emptyMap(),
+)
+
+@Serializable
 data class Recommendation(
     val category: String = "",
     val action: String = "",
@@ -73,6 +133,8 @@ data class ProcessJournalsResponse(
     val journal_summary: String? = null,
     val mental_health: MentalHealthAssessment? = null,
     val wellbeing: MentalHealthAssessment? = null,
+    val ui_summary: UiSummary? = null,
+    val analysis_details: AnalysisDetails? = null,
     val recommendations: List<Recommendation> = emptyList(),
     val calendar_summary: CalendarSummary? = null,
     val proposed_changes: List<ProposedChange> = emptyList(),

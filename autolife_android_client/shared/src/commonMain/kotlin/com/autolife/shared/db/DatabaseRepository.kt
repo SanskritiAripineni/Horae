@@ -112,4 +112,14 @@ object DatabaseRepository {
     fun recordConsent(studyId: String = "RIDE_2026", version: String = "1.0", consentedAt: Long) {
         queries.upsertConsent(study_id = studyId, consented_at = consentedAt, version = version)
     }
+
+    // ── Auth token ───────────────────────────────────────────────────────
+
+    fun saveAuthToken(token: String) {
+        queries.upsertAuthToken(token = token)
+    }
+
+    fun getAuthToken(): String? = try {
+        queries.getAuthToken().executeAsOneOrNull()
+    } catch (e: Exception) { null }
 }

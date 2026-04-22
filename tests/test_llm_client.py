@@ -95,6 +95,25 @@ class TestGenerateScheduleProposals:
         prompt = mock.models.generate_content.call_args.kwargs.get("contents", "")
         assert behavioral_prose in prompt
 
+    def test_prompt_requests_ui_summary_contract(self):
+        client, mock = _make_client()
+        _set_generate_response(mock, json.dumps({
+            "risk_level": "minimal", "summary": "", "concerns": [], "positives": [],
+            "ui_summary": {},
+            "recommendations": [], "proposed_changes": [],
+        }))
+        client.generate_schedule_proposals(
+            journal_narrative="normal day",
+            behavioral_prose=None,
+            risk_level="minimal",
+            calendar_summary=self._base_calendar(),
+            research_context=[],
+        )
+        prompt = mock.models.generate_content.call_args.kwargs.get("contents", "")
+        assert '"ui_summary"' in prompt
+        assert "evidence_chips" in prompt
+        assert "protective_signals" in prompt
+
     def test_none_behavioral_prose_signals_no_sensor_data(self):
         client, mock = _make_client()
         _set_generate_response(mock, json.dumps({
