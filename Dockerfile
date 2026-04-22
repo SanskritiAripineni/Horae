@@ -16,5 +16,10 @@ COPY wellbeing_pipeline/ wellbeing_pipeline/
 COPY startup.sh startup.sh
 RUN chmod +x startup.sh
 
+RUN useradd -m -u 1001 app \
+    && mkdir -p /app/data \
+    && chown -R app:app /app
+USER app
+
 EXPOSE 8000
 CMD ["/bin/sh", "startup.sh"]

@@ -41,9 +41,9 @@
 	<key>BACKEND_URL</key>
 	<string>https://ride-backend-production-a1fc.up.railway.app</string>
 	<key>GEMINI_API_KEY</key>
-	<string>AIzaSyAvC8kqUce5m1L3s6KpZgdrB8twKTGQeQA</string>
+	<string>$(GEMINI_API_KEY)</string>
 	<key>MAPS_API_KEY</key>
-	<string>AIzaSyAvC8kqUce5m1L3s6KpZgdrB8twKTGQeQA</string>
+	<string>$(MAPS_API_KEY)</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIBackgroundModes</key>

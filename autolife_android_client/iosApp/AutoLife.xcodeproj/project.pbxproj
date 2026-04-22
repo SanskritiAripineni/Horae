@@ -43,6 +43,7 @@
 		AB000021 /* IOSDataExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSDataExporter.swift; sourceTree = "<group>"; };
 		AB000013 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AB000014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AB000022 /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 		AB000019 /* AutoLife.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AutoLife.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AB000020 /* ComposeApp.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ComposeApp.framework; path = ../composeApp/build/xcode-frameworks/ComposeApp.framework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -75,6 +76,7 @@
 				AE000004 /* Services */,
 				AB000013 /* Assets.xcassets */,
 				AB000014 /* Info.plist */,
+				AB000022 /* Secrets.xcconfig */,
 			);
 			path = AutoLife;
 			sourceTree = "<group>";
@@ -333,6 +335,7 @@
 		};
 		B2000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = AB000022 /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -368,6 +371,7 @@
 		};
 		B2000004 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = AB000022 /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;

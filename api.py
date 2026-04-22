@@ -17,12 +17,20 @@ RESEARCH-READINESS NOTES (audit 2026-04-10):
 
 import asyncio
 import logging
+import re
+import secrets
+import time
+import hmac
+import hashlib
+import json
+import os
 import traceback
 from typing import List, Dict, Any, Optional
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Header, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 import uvicorn
 from contextlib import asynccontextmanager
 
@@ -43,7 +51,100 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Shutting down API...")
 
+def _sanitize_user_id(user_id: str | None) -> str | None:
+    if user_id is None:
+        return None
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", user_id[:64])
+
+
+# Short-TTL cache for OAuth state tokens: {token: (user_id, expires_at)}
+_oauth_state: dict[str, tuple[str, float]] = {}
+_OAUTH_STATE_TTL = 300  # seconds
+
+
+def _new_oauth_state(user_id: str) -> str:
+    token = secrets.token_hex(24)
+    now = time.monotonic()
+    _oauth_state[token] = (user_id, now + _OAUTH_STATE_TTL)
+    # Purge expired entries inline (bounded by number of active OAuth flows)
+    expired = [k for k, v in _oauth_state.items() if v[1] < now]
+    for k in expired:
+        del _oauth_state[k]
+    return token
+
+
+def _consume_oauth_state(token: str) -> str | None:
+    entry = _oauth_state.pop(token, None)
+    if entry is None:
+        return None
+    user_id, expires_at = entry
+    if time.monotonic() > expires_at:
+        return None
+    return user_id
+
+
+# ── Auth helpers (C1) ────────────────────────────────────────────────────────
+def _get_api_secret() -> bytes | None:
+    s = os.environ.get("API_SECRET_KEY", "")
+    return s.encode() if s else None
+
+
+def _make_user_token(user_id: str) -> str:
+    secret = _get_api_secret()
+    if not secret:
+        return ""
+    sig = hmac.new(secret, user_id.encode(), hashlib.sha256).hexdigest()[:32]
+    return f"{user_id}.{sig}"
+
+
+async def _require_auth(authorization: str = Header(default="")) -> str | None:
+    secret = _get_api_secret()
+    if not secret:
+        logger.warning("API_SECRET_KEY not set — authentication is DISABLED")
+        return None
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or malformed Authorization header")
+    token = authorization[7:]
+    try:
+        uid, sig = token.rsplit(".", 1)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid token format")
+    expected = hmac.new(secret, uid.encode(), hashlib.sha256).hexdigest()[:32]
+    if not hmac.compare_digest(expected, sig):
+        raise HTTPException(status_code=401, detail="Invalid authentication token")
+    return uid
+
+
+# ── Proposal signing helpers (C2) ────────────────────────────────────────────
+def _sign_change(change: dict) -> dict:
+    secret = _get_api_secret()
+    if not secret:
+        return change
+    payload = {k: v for k, v in change.items() if k != "change_token"}
+    sig = hmac.new(secret, json.dumps(payload, sort_keys=True, default=str).encode(), hashlib.sha256).hexdigest()[:24]
+    return {**payload, "change_token": sig}
+
+
+def _verify_change(change: dict) -> bool:
+    secret = _get_api_secret()
+    if not secret:
+        return True
+    token = change.get("change_token")
+    if not token:
+        return False
+    payload = {k: v for k, v in change.items() if k != "change_token"}
+    expected = hmac.new(secret, json.dumps(payload, sort_keys=True, default=str).encode(), hashlib.sha256).hexdigest()[:24]
+    return hmac.compare_digest(expected, token)
+
+
 app = FastAPI(title="LLM Scheduler Agent API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8501"],  # Streamlit vectordb viewer only
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
 
 
 @app.exception_handler(RequestValidationError)
@@ -81,7 +182,7 @@ class JournalEntry(BaseModel):
     entry_number: int
     created_at: str
     period: str
-    content: str
+    content: str = Field(..., max_length=10_000)
     timestamp: str
 
 
@@ -102,8 +203,8 @@ class RawDayMarkers(BaseModel):
 
 
 class ProcessJournalsRequest(BaseModel):
-    journals: List[JournalEntry]
-    raw_days: Optional[List[RawDayMarkers]] = None  # real sensor markers from device
+    journals: List[JournalEntry] = Field(..., max_length=100)
+    raw_days: Optional[List[RawDayMarkers]] = Field(None, max_length=365)
     user_id: Optional[str] = "default"
 
     @field_validator("journals")
@@ -115,15 +216,22 @@ class ProcessJournalsRequest(BaseModel):
 
     @field_validator("user_id")
     @classmethod
-    def user_id_not_blank(cls, v):
+    def user_id_valid(cls, v):
         if v is not None and not v.strip():
             raise ValueError("user_id must not be blank")
-        return v
+        return _sanitize_user_id(v)
 
 class ApplyCalendarRequest(BaseModel):
     changes: List[Dict[str, Any]]
-    user_comments: Optional[str] = ""
+    user_comments: Optional[str] = Field("", max_length=2_000)
     user_id: Optional[str] = "default"
+
+    @field_validator("user_id")
+    @classmethod
+    def user_id_valid(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError("user_id must not be blank")
+        return _sanitize_user_id(v)
 
 
 class EnrollRequest(BaseModel):
@@ -131,6 +239,13 @@ class EnrollRequest(BaseModel):
     consented_at: int  # epoch millis from the device
     study_id: str = "RIDE_2026"
     version: str = "1.0"
+
+    @field_validator("user_id")
+    @classmethod
+    def user_id_valid(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError("user_id must not be blank")
+        return _sanitize_user_id(v)
 
 
 @app.post("/api/enroll")
@@ -144,7 +259,8 @@ async def enroll_participant(req: EnrollRequest):
             version=req.version,
         )
         logger.info(f"Enrolled participant user_id={req.user_id[:8]}... study={req.study_id}")
-        return {"enrolled": True, "study_id": req.study_id}
+        token = _make_user_token(req.user_id)
+        return {"enrolled": True, "study_id": req.study_id, "auth_token": token or None}
     except Exception as e:
         logger.error(f"Enrollment error: {e}")
         # Don't fail hard — the client-side consent record is the source of truth
@@ -154,6 +270,7 @@ async def enroll_participant(req: EnrollRequest):
 @app.get("/api/oauth/authorize")
 async def oauth_authorize(user_id: str = "default"):
     """Start Google Calendar OAuth flow for a user. Returns the authorization URL."""
+    user_id = _sanitize_user_id(user_id) or "default"
     import json, os
     from pathlib import Path
     try:
@@ -177,13 +294,14 @@ async def oauth_authorize(user_id: str = "default"):
         scopes=SCOPES,
         redirect_uri=redirect_uri,
     )
-    auth_url, state = flow.authorization_url(
+    state_token = _new_oauth_state(user_id)
+    auth_url, _ = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent",
-        state=user_id,  # carry user_id through the flow as state
+        state=state_token,
     )
-    return {"auth_url": auth_url, "state": state}
+    return {"auth_url": auth_url, "state": state_token}
 
 
 @app.get("/api/oauth/callback")
@@ -216,8 +334,11 @@ async def oauth_callback(code: str, state: str = "default"):
         flow.fetch_token(code=code)
         credentials = flow.credentials
 
-        # Store per-user token
-        user_id = state  # state carries the user_id
+        # Validate state token (CSRF protection) and recover user_id
+        user_id = _consume_oauth_state(state)
+        if user_id is None:
+            raise HTTPException(status_code=400, detail="Invalid or expired OAuth state. Please restart the authorization flow.")
+        user_id = _sanitize_user_id(user_id) or "default"
         token_path = Path(f"data/tokens/{user_id}/calendar_token.json")
         token_path.parent.mkdir(parents=True, exist_ok=True)
         with open(token_path, "w") as f:
@@ -231,17 +352,20 @@ async def oauth_callback(code: str, state: str = "default"):
         }
     except Exception as e:
         logger.error(f"OAuth callback failed: {e}")
-        raise HTTPException(status_code=400, detail=f"OAuth failed: {e}")
+        raise HTTPException(status_code=400, detail="OAuth authorization failed. Please try again.")
 
 
 @app.post("/api/process_journals")
-async def process_journals(request: ProcessJournalsRequest):
+async def process_journals(request: ProcessJournalsRequest, _auth_uid: str | None = Depends(_require_auth)):
     """
     Process a list of journal entries sent directly from the Android client.
     Delegates to agent.run_from_journals() — no pipeline logic lives here.
     """
     if not agent_instance:
         raise HTTPException(status_code=503, detail="Agent not initialized — server is starting up")
+
+    if _auth_uid is not None and _auth_uid != (request.user_id or "default"):
+        raise HTTPException(status_code=403, detail="Token user does not match request user_id")
 
     # Validate that journal entries have non-empty content
     empty_content = [j.id for j in request.journals if not j.content.strip()]
@@ -269,23 +393,41 @@ async def process_journals(request: ProcessJournalsRequest):
         db.log_session(request.user_id, journals, result)
     except Exception as e:
         logger.warning(f"DB log failed (non-fatal): {e}")
+    # Sign proposed changes so apply_calendar can reject unsolicited/tampered ones (C2)
+    if isinstance(result.get("proposed_changes"), list):
+        result["proposed_changes"] = [_sign_change(c) for c in result["proposed_changes"]]
     return result
 
 
 @app.post("/api/apply_calendar")
-async def apply_calendar(request: ApplyCalendarRequest):
+async def apply_calendar(request: ApplyCalendarRequest, _auth_uid: str | None = Depends(_require_auth)):
     """
     Applies confirmed changes to the user's calendar.
     """
     if not agent_instance:
         raise HTTPException(status_code=503, detail="Agent not initialized — server is starting up")
 
+    if _auth_uid is not None and _auth_uid != (request.user_id or "default"):
+        raise HTTPException(status_code=403, detail="Token user does not match request user_id")
+
     if not request.changes:
         raise HTTPException(status_code=422, detail="No calendar changes provided")
 
+    # Reject changes that weren't signed by process_journals (C2)
+    if _get_api_secret():
+        invalid_idx = [i for i, c in enumerate(request.changes) if not _verify_change(c)]
+        if invalid_idx:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Unsigned or tampered calendar changes at positions {invalid_idx}. Re-fetch proposals from /api/process_journals."
+            )
+
     try:
         results = await asyncio.to_thread(
-            agent_instance.apply_calendar_changes, request.changes, request.user_comments
+            agent_instance.apply_calendar_changes,
+            request.changes,
+            request.user_comments,
+            user_id=request.user_id or "default",
         )
     except Exception as e:
         logger.error(f"Calendar apply error for user {db.anon_id(request.user_id)[:12]}: {e}")
@@ -301,13 +443,16 @@ async def apply_calendar(request: ApplyCalendarRequest):
     return results
 
 @app.get("/api/memory")
-async def get_memory(user_id: str = "default"):
+async def get_memory(user_id: str = "default", _auth_uid: str | None = Depends(_require_auth)):
     """
     Returns user preferences and mental health history from the memory module.
     Used by the Android Memory screen to display stored context.
     """
     if not agent_instance:
         raise HTTPException(status_code=503, detail="Agent not initialized — server is starting up")
+
+    if _auth_uid is not None and _auth_uid != (user_id or "default"):
+        raise HTTPException(status_code=403, detail="Token user does not match requested user_id")
 
     try:
         ctx = agent_instance.memory.get_user_context(user_id)

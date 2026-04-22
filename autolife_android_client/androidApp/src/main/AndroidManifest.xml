@@ -21,14 +21,12 @@
     <!-- Screen-time markers via UsageStatsManager. User grants via Settings → Apps → Special access → Usage access. -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
 
-    <!-- Communication reciprocity (comm_reciprocity marker). Runtime dangerous permissions;
-         either source alone is sufficient — the app degrades gracefully if not granted. -->
-    <uses-permission android:name="android.permission.READ_SMS" />
-    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <!-- Communication reciprocity (comm_reciprocity marker). READ_SMS and READ_CALL_LOG
+         removed: Play Store policy-restricted (M5). Metric derived from metadata only. -->
 
     <application
         android:name=".AutoLifeApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

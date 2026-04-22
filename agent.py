@@ -99,9 +99,10 @@ class LLMSchedulerAgent:
             journal_narrative = self.autolife_reader.get_context_for_prompt(journals)
             results['journal_count'] = len(journals)
 
-            # 2. Calendar
+            # 2. Calendar — use per-request CalendarAPI keyed to the actual user
             logger.info("Getting calendar information...")
-            calendar_summary = self.calendar_api.get_schedule_summary(days=7)
+            request_calendar = CalendarAPI(suggest_only=True, user_id=effective_user_id)
+            calendar_summary = request_calendar.get_schedule_summary(days=7)
             results['calendar_summary'] = calendar_summary
             calendar_events = calendar_summary.get('events', []) if calendar_summary else []
 
@@ -200,8 +201,12 @@ class LLMSchedulerAgent:
                         return True
                 return False
 
-            filtered_changes = [p for p in proposed_changes if not _has_server_conflict(p)]
-            conflict_count = len(proposed_changes) - len(filtered_changes)
+            safe_changes = [p for p in proposed_changes if p.get("action", "add") == "add"]
+            unsafe_count = len(proposed_changes) - len(safe_changes)
+            if unsafe_count:
+                logger.warning("Dropped %d non-add proposal(s) from LLM output (prompt injection guard)", unsafe_count)
+            filtered_changes = [p for p in safe_changes if not _has_server_conflict(p)]
+            conflict_count = len(safe_changes) - len(filtered_changes)
             if conflict_count:
                 logger.info(f"Filtered {conflict_count} conflicting proposal(s) server-side")
 
@@ -319,6 +324,7 @@ class LLMSchedulerAgent:
         user_comments: str = "",
         proposed_changes: Optional[List[Dict[str, Any]]] = None,
         behavioral_state_summary: str = "",
+        user_id: str = "default",
     ) -> Dict[str, Any]:
         """
         Apply proposed calendar changes.
@@ -355,9 +361,9 @@ class LLMSchedulerAgent:
 
         feedback = WellbeingFeedback()
 
-        # Lock to prevent concurrent requests from interleaving suggest_only state
+        # Per-request CalendarAPI avoids shared suggest_only state mutation
         with self._calendar_lock:
-            self.calendar_api.suggest_only = False
+            request_calendar = CalendarAPI(suggest_only=False, user_id=user_id)
             try:
                 applied_titles: set = set()
 
@@ -378,7 +384,7 @@ class LLMSchedulerAgent:
                                 end_time=end_time
                             )
 
-                            event_id = self.calendar_api.create_event(event)
+                            event_id = request_calendar.create_event(event)
                             if event_id:
                                 results['applied'].append({
                                     'action': 'created',
@@ -387,7 +393,7 @@ class LLMSchedulerAgent:
                                 })
                                 applied_titles.add(change_title.strip().lower())
                                 feedback.record(
-                                    self.user_id,
+                                    user_id,
                                     suggestion=change_title,
                                     action='accept',
                                     behavioral_state_summary=behavioral_state_summary,
@@ -399,7 +405,7 @@ class LLMSchedulerAgent:
                             event_id = change.get('event_id')
                             updates = change.get('updates', {})
 
-                            if self.calendar_api.update_event(event_id, updates):
+                            if request_calendar.update_event(event_id, updates):
                                 results['applied'].append({
                                     'action': 'updated',
                                     'event_id': event_id,
@@ -407,7 +413,7 @@ class LLMSchedulerAgent:
                                 })
                                 applied_titles.add(change_title.strip().lower())
                                 feedback.record(
-                                    self.user_id,
+                                    user_id,
                                     suggestion=change_title,
                                     action='accept',
                                     behavioral_state_summary=behavioral_state_summary,
@@ -418,14 +424,14 @@ class LLMSchedulerAgent:
                         elif action == 'delete':
                             event_id = change.get('event_id')
 
-                            if self.calendar_api.delete_event(event_id):
+                            if request_calendar.delete_event(event_id):
                                 results['applied'].append({
                                     'action': 'deleted',
                                     'event_id': event_id
                                 })
                                 applied_titles.add(change_title.strip().lower())
                                 feedback.record(
-                                    self.user_id,
+                                    user_id,
                                     suggestion=change_title,
                                     action='accept',
                                     behavioral_state_summary=behavioral_state_summary,
@@ -441,7 +447,7 @@ class LLMSchedulerAgent:
                         results['failed'].append(change)
 
             finally:
-                self.calendar_api.suggest_only = True
+                pass  # request_calendar is local; no teardown needed
 
         # Best-effort: record proposals that were NOT in the applied set as
         # rejected (only if the caller passed the full proposed_changes list).
@@ -450,7 +456,7 @@ class LLMSchedulerAgent:
                 title = proposal.get('title', '').strip().lower()
                 if title and title not in applied_titles:
                     feedback.record(
-                        self.user_id,
+                        user_id,
                         suggestion=proposal.get('title', ''),
                         action='reject',
                         behavioral_state_summary=behavioral_state_summary,

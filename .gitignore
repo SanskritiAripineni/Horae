@@ -71,6 +71,7 @@ credentials.json
 .env
 .DS_Store
 .vscode/
+**/Secrets.xcconfig
 
 # Project Specific
 memory/data/
