@@ -57,30 +57,33 @@ def _sanitize_user_id(user_id: str | None) -> str | None:
     return re.sub(r"[^a-zA-Z0-9_-]", "_", user_id[:64])
 
 
-# Short-TTL cache for OAuth state tokens: {token: (user_id, expires_at)}
-_oauth_state: dict[str, tuple[str, float]] = {}
+# Short-TTL cache for OAuth state tokens: {token: (user_id, code_verifier, expires_at)}
+_oauth_state: dict[str, tuple[str, str, float]] = {}
 _OAUTH_STATE_TTL = 300  # seconds
 
 
-def _new_oauth_state(user_id: str) -> str:
+def _new_oauth_state(user_id: str) -> tuple[str, str]:
+    """Returns (state_token, code_verifier)."""
+    import hashlib, base64
     token = secrets.token_hex(24)
+    code_verifier = secrets.token_urlsafe(48)
     now = time.monotonic()
-    _oauth_state[token] = (user_id, now + _OAUTH_STATE_TTL)
-    # Purge expired entries inline (bounded by number of active OAuth flows)
-    expired = [k for k, v in _oauth_state.items() if v[1] < now]
+    _oauth_state[token] = (user_id, code_verifier, now + _OAUTH_STATE_TTL)
+    expired = [k for k, v in _oauth_state.items() if v[2] < now]
     for k in expired:
         del _oauth_state[k]
-    return token
+    return token, code_verifier
 
 
-def _consume_oauth_state(token: str) -> str | None:
+def _consume_oauth_state(token: str) -> tuple[str, str] | None:
+    """Returns (user_id, code_verifier) or None if missing/expired."""
     entry = _oauth_state.pop(token, None)
     if entry is None:
         return None
-    user_id, expires_at = entry
+    user_id, code_verifier, expires_at = entry
     if time.monotonic() > expires_at:
         return None
-    return user_id
+    return user_id, code_verifier
 
 
 # ── Auth helpers (C1) ────────────────────────────────────────────────────────
@@ -289,17 +292,23 @@ async def oauth_authorize(user_id: str = "default"):
     # Use a redirect_uri that comes back to this server
     redirect_uri = os.environ.get("OAUTH_REDIRECT_URI", "http://localhost:8000/api/oauth/callback")
 
+    import hashlib, base64
     flow = Flow.from_client_secrets_file(
         str(credentials_path),
         scopes=SCOPES,
         redirect_uri=redirect_uri,
     )
-    state_token = _new_oauth_state(user_id)
+    state_token, code_verifier = _new_oauth_state(user_id)
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode()).digest()
+    ).rstrip(b"=").decode()
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent",
         state=state_token,
+        code_challenge=code_challenge,
+        code_challenge_method="S256",
     )
     return {"auth_url": auth_url, "state": state_token}
 
@@ -309,50 +318,95 @@ async def oauth_callback(code: str, state: str = "default"):
     """Handle Google OAuth callback. Exchanges code for tokens and stores per-user."""
     import json, os
     from pathlib import Path
-    try:
-        from google_auth_oauthlib.flow import Flow
-    except ImportError:
-        raise HTTPException(status_code=500, detail="google_auth_oauthlib not installed")
 
     credentials_path = Path("credentials.json")
     if not credentials_path.exists():
         raise HTTPException(status_code=500, detail="OAuth credentials not configured on server")
 
-    SCOPES = [
-        "https://www.googleapis.com/auth/calendar",
-        "https://www.googleapis.com/auth/tasks",
-    ]
     redirect_uri = os.environ.get("OAUTH_REDIRECT_URI", "http://localhost:8000/api/oauth/callback")
 
     try:
-        flow = Flow.from_client_secrets_file(
-            str(credentials_path),
-            scopes=SCOPES,
-            redirect_uri=redirect_uri,
-            state=state,
-        )
-        flow.fetch_token(code=code)
-        credentials = flow.credentials
-
-        # Validate state token (CSRF protection) and recover user_id
-        user_id = _consume_oauth_state(state)
-        if user_id is None:
+        # Recover user_id + code_verifier before fetching token (state is consumed here)
+        result = _consume_oauth_state(state)
+        if result is None:
             raise HTTPException(status_code=400, detail="Invalid or expired OAuth state. Please restart the authorization flow.")
+        user_id, code_verifier = result
+
+        # Exchange code for tokens directly — bypasses google_auth_oauthlib's
+        # strict scope-equality check (Google often returns extra scopes).
+        import httpx
+        with open(credentials_path) as f:
+            client_config = json.load(f).get("web", {})
+        token_resp = httpx.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": client_config["client_id"],
+                "client_secret": client_config["client_secret"],
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+                "code_verifier": code_verifier,
+            },
+        )
+        token_data = token_resp.json()
+        if "error" in token_data:
+            logger.error(f"Token exchange error: {token_data}")
+            raise HTTPException(status_code=400, detail=f"Token exchange failed: {token_data.get('error_description', token_data['error'])}")
+
         user_id = _sanitize_user_id(user_id) or "default"
         token_path = Path(f"data/tokens/{user_id}/calendar_token.json")
         token_path.parent.mkdir(parents=True, exist_ok=True)
+        # Store in the format google.oauth2.credentials.Credentials.from_authorized_user_info expects
+        scopes = token_data.get("scope", "")
+        token_file = {
+            "token": token_data.get("access_token"),
+            "refresh_token": token_data.get("refresh_token"),
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "client_id": client_config["client_id"],
+            "client_secret": client_config["client_secret"],
+            "scopes": scopes.split() if isinstance(scopes, str) else scopes,
+        }
         with open(token_path, "w") as f:
-            json.dump(json.loads(credentials.to_json()), f)
+            json.dump(token_file, f)
 
         logger.info(f"OAuth token stored for user_id={user_id[:8]}...")
-        return {
-            "status": "connected",
-            "user_id": user_id,
-            "message": "Calendar connected successfully. You can close this window.",
-        }
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse(content="""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>AutoLife</title></head>
+<body>
+<script>try { window.location.href = 'autolife://oauth/success'; } catch(e) {}</script>
+<p style="font-family:sans-serif;text-align:center;margin-top:60px;font-size:18px;">
+  &#x2705; Google Calendar connected!<br><br>
+  <span style="font-size:14px;color:#666;">You can close this tab and return to AutoLife.</span>
+</p>
+</body></html>""")
     except Exception as e:
         logger.error(f"OAuth callback failed: {e}")
         raise HTTPException(status_code=400, detail="OAuth authorization failed. Please try again.")
+
+
+@app.get("/api/oauth/status")
+async def oauth_status(user_id: str = "default"):
+    """Check if a user has a stored Google Calendar OAuth token."""
+    from pathlib import Path
+    user_id = _sanitize_user_id(user_id) or "default"
+    if user_id == "default" and os.environ.get("CALENDAR_TOKEN_B64", "").strip():
+        return {"connected": True}
+    token_path = Path(f"data/tokens/{user_id}/calendar_token.json")
+    return {"connected": token_path.exists()}
+
+
+@app.delete("/api/oauth/token")
+async def oauth_reset(user_id: str = "default"):
+    """Delete stored OAuth token for a user, forcing re-authentication."""
+    from pathlib import Path
+    user_id = _sanitize_user_id(user_id) or "default"
+    token_path = Path(f"data/tokens/{user_id}/calendar_token.json")
+    if token_path.exists():
+        token_path.unlink()
+        logger.info(f"OAuth token deleted for user_id={user_id[:8]}...")
+        return {"message": "Token deleted. OAuth flow will restart on next authorize."}
+    return {"message": "No token found for this user."}
 
 
 @app.post("/api/process_journals")

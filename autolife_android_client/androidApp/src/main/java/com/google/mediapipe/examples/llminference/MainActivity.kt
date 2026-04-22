@@ -3,9 +3,11 @@ package com.google.mediapipe.examples.llminference
 import android.os.Build
 import android.Manifest
 import android.content.ComponentCallbacks2
+import android.graphics.Color
 import android.os.Bundle
 import android.os.StrictMode
 import android.util.Log
+import android.view.View
 import android.view.Choreographer
 import androidx.activity.ComponentActivity
 import android.content.Intent
@@ -56,6 +58,7 @@ class MainActivity : ComponentActivity() {
             )
         }
         setupFrameMonitor()
+        configureSystemBars()
 
         // Build the permission list based on OS version
         val perms = mutableListOf(
@@ -121,6 +124,16 @@ class MainActivity : ComponentActivity() {
             }
         }
         choreographer.postFrameCallback(frameCallback!!)
+    }
+
+    private fun configureSystemBars() {
+        window.statusBarColor = Color.rgb(251, 252, 248)
+        window.navigationBarColor = Color.rgb(251, 252, 248)
+        var flags = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            flags = flags or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        }
+        window.decorView.systemUiVisibility = flags
     }
 
     override fun onDestroy() {

@@ -1,6 +1,7 @@
 package com.autolife.composeapp.ui.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -152,39 +153,54 @@ fun AgentScreen(viewModel: AgentViewModel = viewModel { AgentViewModel() }) {
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
+            ScreenIntro(
+                title = "Today",
+                subtitle = "Review collection readiness and turn recent context into a wellbeing plan.",
+            )
+        }
+
+        item {
             SurfaceCard {
-                Text("Current wellbeing", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(6.dp))
-                SerifHeadline(
-                    text = ui?.headline?.takeIf { it.isNotBlank() } ?: riskHeadline(riskLevel),
-                    color = if (result == null) MaterialTheme.colorScheme.onSurface else riskColor,
-                )
-                Spacer(Modifier.height(8.dp))
-                StatusPill(
-                    text = when {
-                        isLoading -> "Running analysis"
-                        error != null -> "Needs attention"
-                        else -> ui?.confidence_label?.takeIf { it.isNotBlank() } ?: "Awaiting analysis"
-                    },
-                    color = when {
-                        isLoading -> MaterialTheme.colorScheme.primary
-                        error != null -> MaterialTheme.colorScheme.error
-                        else -> AutoLifeSemantic.riskMild
-                    },
-                    showDot = false,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Current wellbeing", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(6.dp))
+                        SerifHeadline(
+                            text = ui?.headline?.takeIf { it.isNotBlank() } ?: riskHeadline(riskLevel),
+                            color = if (result == null) MaterialTheme.colorScheme.onSurface else riskColor,
+                        )
+                    }
+                    StatusPill(
+                        text = when {
+                            isLoading -> "Running"
+                            error != null -> "Attention"
+                            result != null -> ui?.confidence_label?.takeIf { it.isNotBlank() } ?: "Ready"
+                            else -> "Ready"
+                        },
+                        color = when {
+                            isLoading -> MaterialTheme.colorScheme.primary
+                            error != null -> MaterialTheme.colorScheme.error
+                            result != null -> riskColor
+                            else -> MaterialTheme.colorScheme.secondary
+                        },
+                        showDot = true,
+                    )
+                }
                 Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(sourceCounts.dataWindow, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.width(16.dp))
-                    Text("|", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
-                    Spacer(Modifier.width(16.dp))
-                    Text(
-                        "Last analysis ${lastRunMs?.let { DateFormat.time(it) } ?: "--"}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    ReadinessChip(
+                        icon = Icons.AutoMirrored.Filled.Article,
+                        label = sourceCounts.dataWindow,
+                        modifier = Modifier.weight(1f),
+                    )
+                    ReadinessChip(
+                        icon = Icons.Default.CalendarMonth,
+                        label = "Last ${lastRunMs?.let { DateFormat.time(it) } ?: "--"}",
+                        modifier = Modifier.weight(1f),
                     )
                 }
                 Spacer(Modifier.height(12.dp))
@@ -192,7 +208,7 @@ fun AgentScreen(viewModel: AgentViewModel = viewModel { AgentViewModel() }) {
                     text = ui?.summary?.takeIf { it.isNotBlank() }
                         ?: mh?.behavioral_context?.takeIf { it.isNotBlank() }
                         ?: result?.journal_summary?.takeIf { it.isNotBlank() }
-                        ?: "Run analysis to turn recent journals, sensor markers, research, and calendar context into a focused wellbeing plan.",
+                        ?: "Run analysis when you want AutoLife to combine journals, sensor markers, research, and calendar context into one focused plan.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -376,6 +392,29 @@ private fun riskHeadline(riskLevel: String): String = when (riskLevel.lowercase(
     "moderate" -> "Moderate stress"
     "severe", "high" -> "High stress"
     else -> "Ready to analyze"
+}
+
+@Composable
+private fun ReadinessChip(
+    icon: ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        }
+    }
 }
 
 private fun iconForSignalChip(chip: SignalChip): ImageVector = when (chip.kind.lowercase()) {

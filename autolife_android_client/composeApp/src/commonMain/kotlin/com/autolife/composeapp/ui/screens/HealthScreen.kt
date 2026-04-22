@@ -28,7 +28,7 @@ import com.autolife.shared.repository.AnalysisRepository
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HealthScreen() {
+fun HealthScreen(onOpenAgent: () -> Unit = {}) {
     val result by AnalysisRepository.result.collectAsState()
     val isLoading by AnalysisRepository.loading.collectAsState()
     var showSources by remember { mutableStateOf(false) }
@@ -46,11 +46,32 @@ fun HealthScreen() {
     }
 
     if (result == null) {
-        EmptyState(
-            icon = Icons.Default.FavoriteBorder,
-            title = "No Health Data",
-            description = "Run analysis from the Agent tab to see your wellbeing assessment.",
-        )
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            item {
+                ScreenIntro(
+                    title = "Health",
+                    subtitle = "Your wellbeing assessment appears here after AutoLife analyzes recent context.",
+                )
+            }
+            item {
+                SurfaceCard {
+                    ActionableEmptyState(
+                        icon = Icons.Default.FavoriteBorder,
+                        title = "No health assessment yet",
+                        description = "Run an analysis to turn journals, sensor markers, and schedule context into a participant-friendly wellbeing read.",
+                        action = {
+                            Button(onClick = onOpenAgent) {
+                                Text("Go to Agent")
+                            }
+                        },
+                    )
+                }
+            }
+        }
         return
     }
 
@@ -71,6 +92,13 @@ fun HealthScreen() {
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        item {
+            ScreenIntro(
+                title = "Health",
+                subtitle = "Understand the signals behind the current wellbeing assessment.",
+            )
+        }
+
         item {
             SurfaceCard {
                 Text("Wellbeing assessment", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
