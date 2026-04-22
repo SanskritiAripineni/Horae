@@ -4,6 +4,7 @@ Full OAuth 2.0 authentication with event and task management.
 """
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional, TypedDict
