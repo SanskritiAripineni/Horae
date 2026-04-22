@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -55,15 +56,10 @@ fun MemoryScreen(viewModel: MemoryViewModel = viewModel { MemoryViewModel() }) {
     ) {
         // Header with loading/error state
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Memory",
-                    style = MaterialTheme.typography.headlineMedium,
-                )
+            ScreenIntro(
+                title = "Memory",
+                subtitle = "Stored preferences and wellbeing history used to personalize analysis.",
+                action = {
                 if (viewModel.isLoading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
@@ -74,7 +70,8 @@ fun MemoryScreen(viewModel: MemoryViewModel = viewModel { MemoryViewModel() }) {
                         Text("Refresh")
                     }
                 }
-            }
+                },
+            )
             if (viewModel.fetchError != null) {
                 Spacer(Modifier.height(8.dp))
                 ErrorCard(
@@ -94,6 +91,16 @@ fun MemoryScreen(viewModel: MemoryViewModel = viewModel { MemoryViewModel() }) {
         if (memory != null) {
             val prefs = memory!!.preferences
             val mh = memory!!.health
+
+            item {
+                InfoStatusCard(
+                    icon = Icons.Default.CheckCircle,
+                    title = "Memory loaded",
+                    subtitle = "${prefs.goals.size} goals · ${mh.history.size} wellbeing entries",
+                    status = "Synced",
+                    statusColor = MaterialTheme.colorScheme.secondary,
+                )
+            }
 
             // User preferences
             item {
@@ -116,11 +123,10 @@ fun MemoryScreen(viewModel: MemoryViewModel = viewModel { MemoryViewModel() }) {
                         )
                         Spacer(Modifier.height(4.dp))
                         prefs.goals.forEach { goal ->
-                            Text(
-                                text = "  •  $goal",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(vertical = 2.dp),
+                            IconBulletItem(
+                                icon = Icons.Default.CheckCircle,
+                                text = goal,
+                                iconTint = MaterialTheme.colorScheme.secondary,
                             )
                         }
                     }
@@ -170,16 +176,21 @@ fun MemoryScreen(viewModel: MemoryViewModel = viewModel { MemoryViewModel() }) {
             }
         } else if (!viewModel.isLoading) {
             item {
-                EmptyState(
+                SurfaceCard {
+                    ActionableEmptyState(
                     icon = Icons.Default.Storage,
-                    title = "No Memory Data",
-                    description = "Run analysis or ensure the backend is reachable.",
+                    title = if (viewModel.fetchError == null) "No memory data yet" else "Memory is unavailable",
+                    description = if (viewModel.fetchError == null)
+                        "Run analysis to create personalized preferences and wellbeing history."
+                    else
+                        "The backend could not be reached. Retry when the connection is available.",
                     action = {
                         Button(onClick = { viewModel.fetch() }) {
                             Text("Refresh")
                         }
                     },
-                )
+                    )
+                }
             }
         }
     }

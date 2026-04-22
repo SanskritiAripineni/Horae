@@ -15,10 +15,18 @@ private val LightColorScheme = lightColorScheme(
     onSurfaceVariant = AutoLifeLight.onSurfaceDim,
     outline = AutoLifeLight.outline,
     primary = AutoLifeLight.primary,
+    primaryContainer = AutoLifeLight.primaryContainer,
+    onPrimaryContainer = AutoLifeLight.onPrimaryContainer,
     onPrimary = AutoLifeLight.onPrimary,
     secondary = AutoLifeLight.secondary,
+    secondaryContainer = AutoLifeLight.secondaryContainer,
+    onSecondaryContainer = AutoLifeLight.onSecondaryContainer,
     tertiary = AutoLifeLight.tertiary,
+    tertiaryContainer = AutoLifeLight.tertiaryContainer,
+    onTertiaryContainer = AutoLifeLight.onTertiaryContainer,
     error = AutoLifeLight.error,
+    errorContainer = AutoLifeLight.errorContainer,
+    onErrorContainer = AutoLifeLight.onErrorContainer,
 )
 
 private val DarkColorScheme = darkColorScheme(
@@ -30,10 +38,18 @@ private val DarkColorScheme = darkColorScheme(
     onSurfaceVariant = AutoLifeDark.onSurfaceDim,
     outline = AutoLifeDark.outline,
     primary = AutoLifeDark.primary,
+    primaryContainer = AutoLifeDark.primaryContainer,
+    onPrimaryContainer = AutoLifeDark.onPrimaryContainer,
     onPrimary = AutoLifeDark.onPrimary,
     secondary = AutoLifeDark.secondary,
+    secondaryContainer = AutoLifeDark.secondaryContainer,
+    onSecondaryContainer = AutoLifeDark.onSecondaryContainer,
     tertiary = AutoLifeDark.tertiary,
+    tertiaryContainer = AutoLifeDark.tertiaryContainer,
+    onTertiaryContainer = AutoLifeDark.onTertiaryContainer,
     error = AutoLifeDark.error,
+    errorContainer = AutoLifeDark.errorContainer,
+    onErrorContainer = AutoLifeDark.onErrorContainer,
 )
 
 @Composable

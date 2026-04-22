@@ -9,6 +9,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -37,7 +40,10 @@ class JournalViewModel : ViewModel() {
 }
 
 @Composable
-fun JournalScreen(viewModel: JournalViewModel = viewModel { JournalViewModel() }) {
+fun JournalScreen(
+    onServiceToggle: (Boolean) -> Unit = {},
+    viewModel: JournalViewModel = viewModel { JournalViewModel() },
+) {
     val journals by viewModel.journals.collectAsState(initial = emptyList())
     val logs by viewModel.recentLogs.collectAsState(initial = emptyList())
     val serviceState by PlatformStateProvider.serviceState.collectAsState()
@@ -47,37 +53,30 @@ fun JournalScreen(viewModel: JournalViewModel = viewModel { JournalViewModel() }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Status bar
-        SurfaceCard(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
-                    Text(
-                        text = "Journal",
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    Text(
-                        text = if (serviceState.isRunning) "Service active" else "Service stopped",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (serviceState.isRunning) MaterialTheme.colorScheme.secondary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ScreenIntro(
+                title = "Journal",
+                subtitle = "Review generated day summaries and live collection logs.",
+            )
+            InfoStatusCard(
+                icon = if (serviceState.isRunning) Icons.Default.CheckCircle else Icons.Default.PlayArrow,
+                title = if (serviceState.isRunning) "Collection is active" else "Collection is paused",
+                subtitle = "${logs.size} logs · ${journals.size} journals · ${motionState.detectedClass}",
+                status = if (serviceState.isRunning) "Collecting" else "Paused",
+                statusColor = if (serviceState.isRunning) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
+                action = if (!serviceState.isRunning) {
+                    {
+                        TextButton(onClick = { onServiceToggle(true) }) {
+                            Text("Start")
+                        }
+                    }
+                } else {
+                    null
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = motionState.detectedClass,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        text = "${logs.size} logs  ·  ${journals.size} journals",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            )
         }
 
         // Tabs
@@ -143,8 +142,8 @@ private fun JournalsList(journals: List<JournalEntry>, viewModel: JournalViewMod
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = { showClearDialog = true }) {
-                    Text("Clear All", color = MaterialTheme.colorScheme.error)
+                OutlinedButton(onClick = { showClearDialog = true }) {
+                    Text("Clear all")
                 }
             }
         }
@@ -161,27 +160,47 @@ private fun JournalEntryCard(entry: JournalEntry) {
     SurfaceCard(
         modifier = Modifier.clickable { expanded = !expanded }
     ) {
+        val hasError = entry.content.contains("No response", ignoreCase = true) ||
+            entry.content.contains("failed", ignoreCase = true)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
         ) {
-            Text(
-                text = DateFormat.dateTime(entry.createdTimestamp),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = if (expanded) "Hide" else "Show",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
+            Column {
+                Text(
+                    text = DateFormat.dateTime(entry.createdTimestamp),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = "${DateFormat.time(entry.periodStart)} - ${DateFormat.time(entry.periodEnd)}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            StatusPill(
+                text = if (hasError) "Needs retry" else if (expanded) "Open" else "Generated",
+                color = if (hasError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
+                showDot = true,
             )
         }
-        Text(
-            text = "${DateFormat.time(entry.periodStart)} – ${DateFormat.time(entry.periodEnd)}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         Spacer(Modifier.height(8.dp))
+        if (hasError) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                Text(
+                    text = "The generator did not return a summary for this window.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        }
         AnimatedVisibility(
             visible = expanded,
             enter = expandVertically(),
@@ -197,8 +216,14 @@ private fun JournalEntryCard(entry: JournalEntry) {
             Text(
                 text = entry.content,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = if (hasError) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                 maxLines = 3,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Tap to ${if (expanded) "hide" else "expand"}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
             )
         }
     }
@@ -240,8 +265,8 @@ private fun LogsList(logs: List<SensorLog>, viewModel: JournalViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = { showClearDialog = true }) {
-                    Text("Clear All", color = MaterialTheme.colorScheme.error)
+                OutlinedButton(onClick = { showClearDialog = true }) {
+                    Text("Clear all")
                 }
             }
         }

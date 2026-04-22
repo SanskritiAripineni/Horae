@@ -51,6 +51,12 @@ fun AutoLifeNavHost(
                 title = {
                     Text("AutoLife", style = MaterialTheme.typography.titleLarge)
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
                 navigationIcon = {
                     if (!isTopLevel) {
                         IconButton(onClick = { navController.popBackStack() }) {
@@ -81,7 +87,11 @@ fun AutoLifeNavHost(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         bottomBar = {
             if (isTopLevel) {
-                NavigationBar {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tonalElevation = 0.dp,
+                ) {
                     topLevelScreens.forEach { screen ->
                         val selected = currentRoute == screen.route
                         NavigationBarItem(
@@ -93,8 +103,15 @@ fun AutoLifeNavHost(
                                     restoreState = true
                                 }
                             },
-                            icon = { Icon(screen.icon, screen.label) },
+                            icon = { Icon(screen.icon, screen.label, modifier = Modifier.size(24.dp)) },
                             label = { Text(screen.label, style = MaterialTheme.typography.labelSmall) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
                             modifier = Modifier.testTag("nav_${screen.route}"),
                         )
                     }
@@ -134,9 +151,9 @@ fun AutoLifeNavHost(
             popExitTransition = tabExit,
         ) {
             composable(Screen.Agent.route) { AgentScreen() }
-            composable(Screen.Health.route) { HealthScreen() }
-            composable(Screen.Schedule.route) { ScheduleScreen() }
-            composable(Screen.Journal.route) { JournalScreen() }
+            composable(Screen.Health.route) { HealthScreen(onOpenAgent = { navController.navigate(Screen.Agent.route) }) }
+            composable(Screen.Schedule.route) { ScheduleScreen(onOpenAgent = { navController.navigate(Screen.Agent.route) }) }
+            composable(Screen.Journal.route) { JournalScreen(onServiceToggle = onServiceToggle) }
             composable(Screen.Memory.route) { MemoryScreen() }
             composable(
                 "dev_dashboard",

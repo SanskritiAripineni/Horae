@@ -13,10 +13,18 @@ object AutoLifeLight {
     val outline          = Color(0xFFE0E4DC)
 
     val primary          = Color(0xFF55744C)
+    val primaryContainer = Color(0xFFE8EFE3)
+    val onPrimaryContainer = Color(0xFF25352D)
     val onPrimary        = Color(0xFFFFFFFF)
     val secondary        = Color(0xFF4D815F)
+    val secondaryContainer = Color(0xFFE6F0E8)
+    val onSecondaryContainer = Color(0xFF25352D)
     val tertiary         = Color(0xFFC8802D)
+    val tertiaryContainer = Color(0xFFF8E8D5)
+    val onTertiaryContainer = Color(0xFF3A2710)
     val error            = Color(0xFFD85A4A)
+    val errorContainer   = Color(0xFFFBE7E4)
+    val onErrorContainer = Color(0xFF5E1710)
 }
 
 // Dark mode
@@ -30,10 +38,18 @@ object AutoLifeDark {
     val outline          = Color(0xFF38383A)
 
     val primary          = Color(0xFF0A84FF)
+    val primaryContainer = Color(0xFF17324A)
+    val onPrimaryContainer = Color(0xFFE7F1FF)
     val onPrimary        = Color(0xFFFFFFFF)
     val secondary        = Color(0xFF30D158)
+    val secondaryContainer = Color(0xFF173820)
+    val onSecondaryContainer = Color(0xFFE8F8EC)
     val tertiary         = Color(0xFFFF9F0A)
+    val tertiaryContainer = Color(0xFF442B08)
+    val onTertiaryContainer = Color(0xFFFFE9C8)
     val error            = Color(0xFFFF453A)
+    val errorContainer   = Color(0xFF4A1714)
+    val onErrorContainer = Color(0xFFFFE6E3)
 }
 
 // Semantic colors — risk levels, categories, tools

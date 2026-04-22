@@ -392,7 +392,10 @@ private fun CalendarConnectCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScheduleScreen(viewModel: ScheduleViewModel = viewModel { ScheduleViewModel() }) {
+fun ScheduleScreen(
+    onOpenAgent: () -> Unit = {},
+    viewModel: ScheduleViewModel = viewModel { ScheduleViewModel() },
+) {
     val result by AnalysisRepository.result.collectAsState()
     val selectedProposals by AnalysisRepository.selectedProposals.collectAsState()
     val uriHandler = LocalUriHandler.current
@@ -420,22 +423,62 @@ fun ScheduleScreen(viewModel: ScheduleViewModel = viewModel { ScheduleViewModel(
     }
 
     if (result == null) {
-        EmptyState(
-            icon = Icons.AutoMirrored.Filled.EventNote,
-            title = "No Schedule Data",
-            description = "Run analysis from the Agent tab to see your weekly schedule.",
-            action = {
-                Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
-                    CalendarConnectCard(
-                        connected = viewModel.calendarConnected,
-                        loading = viewModel.oauthLoading,
-                        error = viewModel.oauthError,
-                        onConnect = { viewModel.requestAuthUrl() },
-                        onRefresh = { viewModel.checkCalendarStatus() },
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            item {
+                ScreenIntro(
+                    title = "Schedule",
+                    subtitle = "Connect calendar context, then run analysis to review proposed changes.",
+                )
+            }
+            item {
+                SurfaceCard {
+                    ActionableEmptyState(
+                        icon = Icons.AutoMirrored.Filled.EventNote,
+                        title = "No schedule plan yet",
+                        description = "Calendar connection gives AutoLife context. Analysis turns that context into weekly schedule suggestions.",
+                        action = {
+                            Button(onClick = onOpenAgent) {
+                                Text("Run analysis")
+                            }
+                        },
                     )
                 }
             }
-        )
+            item {
+                CalendarConnectCard(
+                    connected = viewModel.calendarConnected,
+                    loading = viewModel.oauthLoading,
+                    error = viewModel.oauthError,
+                    onConnect = { viewModel.requestAuthUrl() },
+                    onRefresh = { viewModel.checkCalendarStatus() },
+                )
+            }
+            item {
+                SurfaceCard {
+                    SectionHeader(title = "Weekly preview")
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        repeat(3) {
+                            SkeletonBox(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(18.dp),
+                                cornerRadius = 6,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Proposals will appear here after analysis.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
         return
     }
 
@@ -485,6 +528,13 @@ fun ScheduleScreen(viewModel: ScheduleViewModel = viewModel { ScheduleViewModel(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item {
+                ScreenIntro(
+                    title = "Schedule",
+                    subtitle = "Review weekly calendar context and participant-safe proposals.",
+                )
+            }
+
             // Calendar connect card
             item {
                 CalendarConnectCard(
