@@ -9,7 +9,9 @@ import android.util.Log
 import com.autolife.shared.analyzer.MotionClassifier
 import com.autolife.shared.model.WindowFeatures
 import com.autolife.shared.platform.MotionSensorProvider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlin.math.sqrt
 
 class MotionDetector(private val context: Context) : SensorEventListener, MotionSensorProvider {
@@ -86,7 +88,9 @@ class MotionDetector(private val context: Context) : SensorEventListener, Motion
                 altitudeChange = windowFeatures.altitudeDelta,
                 speed = speedMps ?: 0.0
             )
-            motionStorage.saveMotionDetection(motions)
+            withContext(Dispatchers.IO) {
+                motionStorage.saveMotionDetection(motions)
+            }
             onClassified?.invoke(motions)
 
             return windowFeatures

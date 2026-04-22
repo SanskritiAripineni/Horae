@@ -9,10 +9,13 @@ import android.os.StrictMode
 import android.util.Log
 import android.view.View
 import android.view.Choreographer
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
@@ -60,38 +63,16 @@ class MainActivity : ComponentActivity() {
         setupFrameMonitor()
         configureSystemBars()
 
-        // Build the permission list based on OS version
-        val perms = mutableListOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACTIVITY_RECOGNITION,
-            Manifest.permission.POST_NOTIFICATIONS,
-            Manifest.permission.FOREGROUND_SERVICE,
-            Manifest.permission.FOREGROUND_SERVICE_LOCATION
-        )
-        if (Build.VERSION.SDK_INT >= 33) {
-            perms += Manifest.permission.NEARBY_WIFI_DEVICES
-        }
-
-        requestPermissionLauncher.launch(perms.toTypedArray())
-
         handleDeepLink(intent)
 
         setContent {
             AutoLifeApp(
                 modifier = Modifier.semantics { testTagsAsResourceId = true },
                 onServiceToggle = { shouldStart ->
-                    val intent = Intent(this, AutoLifeService::class.java)
-                    if (shouldStart) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            startForegroundService(intent)
-                        } else {
-                            startService(intent)
-                        }
-                    } else {
-                        stopService(intent)
-                    }
+                    toggleAutoLifeService(shouldStart)
                 },
                 onDecline = { finishAffinity() },
+                onConsentReady = { requestMissingRuntimePermissions() },
             )
         }
     }
@@ -134,6 +115,58 @@ class MainActivity : ComponentActivity() {
             flags = flags or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         }
         window.decorView.systemUiVisibility = flags
+    }
+
+    private fun runtimePermissions(): Array<String> {
+        val perms = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            perms += Manifest.permission.ACTIVITY_RECOGNITION
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            perms += Manifest.permission.POST_NOTIFICATIONS
+            perms += Manifest.permission.NEARBY_WIFI_DEVICES
+        }
+        return perms.toTypedArray()
+    }
+
+    private fun missingRuntimePermissions(): Array<String> =
+        runtimePermissions().filter { permission ->
+            ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED
+        }.toTypedArray()
+
+    private fun requestMissingRuntimePermissions() {
+        val missing = missingRuntimePermissions()
+        if (missing.isNotEmpty()) {
+            requestPermissionLauncher.launch(missing)
+        }
+    }
+
+    private fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    private fun toggleAutoLifeService(shouldStart: Boolean) {
+        val intent = Intent(this, AutoLifeService::class.java)
+        if (!shouldStart) {
+            stopService(intent)
+            return
+        }
+
+        if (!hasLocationPermission()) {
+            requestMissingRuntimePermissions()
+            Toast.makeText(
+                this,
+                "Location permission is required before AutoLife can record in the background.",
+                Toast.LENGTH_LONG,
+            ).show()
+            return
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
     }
 
     override fun onDestroy() {

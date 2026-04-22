@@ -1,14 +1,17 @@
 package com.google.mediapipe.examples.llminference
 
+import android.Manifest
 import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import androidx.core.content.ContextCompat
 import com.autolife.composeapp.platform.AppContextHolder
 import com.autolife.composeapp.platform.PlatformStateProvider
 import com.autolife.composeapp.platform.BatteryDeviceInfo
@@ -126,7 +129,17 @@ class AutoLifeApp : Application() {
         PlatformStateProvider.onServiceToggleRequested = { shouldStart ->
             val intent = Intent(appContext, AutoLifeService::class.java)
             if (shouldStart) {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                if (!hasLocationPermission()) {
+                    Toast.makeText(
+                        appContext,
+                        "Location permission is required before AutoLife can record in the background.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    appScope.launch {
+                        kotlinx.coroutines.delay(100)
+                        PlatformStateProvider.updateServiceState(false)
+                    }
+                } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                     appContext.startForegroundService(intent)
                 } else {
                     appContext.startService(intent)
@@ -179,6 +192,10 @@ class AutoLifeApp : Application() {
         PlatformStateProvider.loadBatteryAssessments()
         PlatformStateProvider.refreshBatteryLevel()
     }
+
+    private fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
     private fun currentBatteryPercent(): Int? {
         val batteryIntent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return null

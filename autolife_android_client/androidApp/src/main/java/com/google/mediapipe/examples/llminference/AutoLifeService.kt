@@ -1,5 +1,6 @@
 package com.google.mediapipe.examples.llminference
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,10 +8,12 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -64,6 +67,14 @@ class AutoLifeService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!hasLocationPermission()) {
+            Log.w("AutoLifeService", "Cannot start AutoLife service without location permission")
+            isRunning = false
+            com.google.mediapipe.examples.llminference.data.DebugRepository.setServiceRunning(false)
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
+
         if (!isRunning) {
             isRunning = true
             startForegroundService()
@@ -73,6 +84,10 @@ class AutoLifeService : Service() {
         com.google.mediapipe.examples.llminference.data.DebugRepository.setServiceRunning(true)
         return START_STICKY
     }
+
+    private fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
     private fun startForegroundService() {
         val pendingIntent: PendingIntent = Intent(this, MainActivity::class.java).let { notificationIntent ->

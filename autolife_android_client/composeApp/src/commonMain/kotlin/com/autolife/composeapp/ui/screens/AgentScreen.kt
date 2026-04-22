@@ -44,8 +44,11 @@ import com.autolife.shared.network.AutoLifeApi
 import com.autolife.shared.repository.AnalysisRepository
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class AgentViewModel : ViewModel() {
     private val repo = AnalysisRepository
@@ -70,7 +73,9 @@ class AgentViewModel : ViewModel() {
             repo.setLoading(true)
             repo.setError(null)
             try {
-                val dbJournals = DatabaseRepository.getAllJournals().takeLast(10)
+                val dbJournals = withContext(Dispatchers.IO) {
+                    DatabaseRepository.getAllJournals().takeLast(10)
+                }
                 if (dbJournals.isEmpty()) {
                     repo.setError("No journals found. Start the AutoLife service to collect data first.")
                     return@launch
@@ -176,10 +181,11 @@ fun AgentScreen(viewModel: AgentViewModel = viewModel { AgentViewModel() }) {
                     }
                     StatusPill(
                         text = when {
-                            isLoading -> "Running"
-                            error != null -> "Attention"
+                            isLoading -> "Running analysis"
+                            error != null && result != null -> "Needs attention"
+                            error != null -> "Analysis unavailable"
                             result != null -> ui?.confidence_label?.takeIf { it.isNotBlank() } ?: "Ready"
-                            else -> "Ready"
+                            else -> "Awaiting analysis"
                         },
                         color = when {
                             isLoading -> MaterialTheme.colorScheme.primary

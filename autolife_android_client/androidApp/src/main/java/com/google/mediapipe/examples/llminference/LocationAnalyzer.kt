@@ -175,16 +175,22 @@ class LocationAnalyzer(private val context: Context) : Closeable {
     }
 
     private suspend fun generateSsidContext(ssids: List<String>): String? {
-        val response = extractSummary(
-            AiClientProvider.client.generate(PromptBuilder.buildWifiLocationPrompt(ssids))
-        )
+        val response = runCatching {
+            extractSummary(AiClientProvider.client.generate(PromptBuilder.buildWifiLocationPrompt(ssids)))
+        }.getOrElse { error ->
+            Log.w(TAG, "SSID context generation failed", error)
+            null
+        }
         return response?.takeUnless { it.equals("SSID context unavailable", ignoreCase = true) }
     }
 
     private suspend fun fuseLocationContexts(mapContext: String?, ssidContext: String?): String? {
-        val response = extractSummary(
-            AiClientProvider.client.generate(PromptBuilder.buildLocationFusionPrompt(mapContext, ssidContext))
-        )
+        val response = runCatching {
+            extractSummary(AiClientProvider.client.generate(PromptBuilder.buildLocationFusionPrompt(mapContext, ssidContext)))
+        }.getOrElse { error ->
+            Log.w(TAG, "Location fusion failed", error)
+            null
+        }
         return response ?: ssidContext ?: mapContext
     }
 
