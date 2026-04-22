@@ -132,3 +132,60 @@ def sample_proposed_changes():
 def temp_data_dir(tmp_path):
     """Provide a temporary directory for file-based storage tests."""
     return str(tmp_path / "test_memory")
+
+
+# Fixtures: wellbeing pipeline inputs
+
+def _typical_markers(day_obj):
+    """One day of average markers. Shared by warm/cold fixtures."""
+    return {
+        "date": day_obj,
+        "sleep_onset_hour": 23.5,
+        "sleep_duration_hours": 7.5,
+        "sleep_regularity_index": 82.0,
+        "late_night_screen_min": 30.0,
+        "total_screen_min": 240.0,
+        "app_switching_rate": 2.0,
+        "mobility_entropy": 2.5,
+        "location_revisit_ratio": 0.65,
+        "social_rhythm_metric": 0.78,
+        "comm_reciprocity": 0.55,
+    }
+
+
+@pytest.fixture
+def cold_raw_days():
+    """5 days of markers — below the 10-day warmup threshold."""
+    from datetime import date, timedelta
+    start = date(2024, 5, 1)
+    return [_typical_markers(start + timedelta(days=i)) for i in range(5)]
+
+
+@pytest.fixture
+def warm_raw_days():
+    """14 days of stable markers — baseline is warm."""
+    from datetime import date, timedelta
+    start = date(2024, 5, 1)
+    return [_typical_markers(start + timedelta(days=i)) for i in range(14)]
+
+
+@pytest.fixture
+def deviation_raw_days():
+    """30 days of stable markers followed by 4 days of pronounced sleep loss.
+
+    Baseline window picks up the stable ~7.5h sleep duration; the final 4
+    days drop to ~4h, which Layer 2 should flag as a sustained deviation.
+    """
+    from datetime import date, timedelta
+    start = date(2024, 5, 1)
+    records = []
+    for i in range(30):
+        m = _typical_markers(start + timedelta(days=i))
+        records.append(m)
+    for i in range(30, 34):
+        m = _typical_markers(start + timedelta(days=i))
+        m["sleep_duration_hours"] = 4.0
+        m["sleep_onset_hour"] = 2.5  # 2:30 AM, very late
+        m["late_night_screen_min"] = 180.0
+        records.append(m)
+    return records
