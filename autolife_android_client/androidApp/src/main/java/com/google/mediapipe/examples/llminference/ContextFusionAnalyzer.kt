@@ -14,9 +14,11 @@ class ContextFusionAnalyzer(private val context: Context) : Closeable {
                 return@withContext motionCandidates.firstOrNull() ?: "stationary"
             }
 
-            val response = AiClientProvider.client.generate(
-                PromptBuilder.buildMotionCalibrationPrompt(motionCandidates, locationContext)
-            )
+            val response = runCatching {
+                AiClientProvider.client.generate(
+                    PromptBuilder.buildMotionCalibrationPrompt(motionCandidates, locationContext)
+                )
+            }.getOrNull()
             extractSummary(response) ?: motionCandidates.first()
         }
 

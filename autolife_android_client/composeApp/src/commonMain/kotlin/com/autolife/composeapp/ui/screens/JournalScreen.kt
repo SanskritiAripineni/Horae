@@ -24,16 +24,25 @@ import com.autolife.composeapp.ui.DateFormat
 import com.autolife.composeapp.ui.SnackbarBus
 import com.autolife.composeapp.ui.components.*
 import com.autolife.shared.db.DatabaseRepository
+import com.autolife.shared.model.ContextLogCodec
 import com.autolife.shared.model.JournalEntry
 import com.autolife.shared.model.SensorLog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class JournalViewModel : ViewModel() {
     val journals = DatabaseRepository.observeJournals()
     val recentLogs = DatabaseRepository.observeRecentLogs()
 
-    fun clearJournals() = viewModelScope.launch { DatabaseRepository.deleteAllJournals() }
-    fun clearLogs() = viewModelScope.launch { DatabaseRepository.deleteAllLogs() }
+    fun clearJournals() = viewModelScope.launch {
+        withContext(Dispatchers.IO) { DatabaseRepository.deleteAllJournals() }
+    }
+
+    fun clearLogs() = viewModelScope.launch {
+        withContext(Dispatchers.IO) { DatabaseRepository.deleteAllLogs() }
+    }
 }
 
 @Composable
@@ -297,10 +306,27 @@ private fun LogCard(log: SensorLog) {
         }
         Spacer(Modifier.height(6.dp))
         Text(
-            text = log.content,
+            text = log.displayContent(),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 4,
         )
     }
+}
+
+private fun SensorLog.displayContent(): String {
+    if (type.equals("CONTEXT", ignoreCase = true)) {
+        val contextLog = ContextLogCodec.decode(content)
+        if (contextLog != null) {
+            val location = contextLog.fusedLocationContext
+                ?: contextLog.ssidContext
+                ?: contextLog.mapContext
+                ?: "Unknown location"
+            val motion = contextLog.calibratedMotion.ifBlank {
+                contextLog.motionCandidates.firstOrNull() ?: "stationary"
+            }
+            return "$motion at $location"
+        }
+    }
+    return content
 }

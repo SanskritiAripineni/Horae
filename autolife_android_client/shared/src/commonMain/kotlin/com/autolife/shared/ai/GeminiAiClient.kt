@@ -82,6 +82,9 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
 
     private fun extractText(responseBody: String): String {
         val obj = json.parseToJsonElement(responseBody).jsonObject
+        obj["error"]?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull?.let { message ->
+            throw IllegalStateException("Gemini request failed: $message")
+        }
         return obj["candidates"]
             ?.jsonArray?.firstOrNull()
             ?.jsonObject?.get("content")
@@ -89,6 +92,7 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
             ?.jsonArray?.firstOrNull()
             ?.jsonObject?.get("text")
             ?.jsonPrimitive?.content
-            ?: "No response from Gemini"
+            ?.takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("Gemini returned no text")
     }
 }

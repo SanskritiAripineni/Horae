@@ -9,50 +9,66 @@ import com.autolife.shared.db.DatabaseRepository
 import com.autolife.shared.model.EnrollRequest
 import com.autolife.shared.network.AutoLifeApi
 import com.autolife.shared.platform.currentTimeMillis
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun AutoLifeApp(
     onServiceToggle: (Boolean) -> Unit = {},
     onDecline: () -> Unit = {},
+    onConsentReady: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    var consented by remember { mutableStateOf(DatabaseRepository.hasConsented()) }
+    var consented by remember { mutableStateOf<Boolean?>(null) }
     val scope = rememberCoroutineScope()
 
-    // Restore stored auth token into the API client on startup
     LaunchedEffect(Unit) {
-        DatabaseRepository.getAuthToken()?.let { token ->
+        val hasConsented = withContext(Dispatchers.IO) { DatabaseRepository.hasConsented() }
+        consented = hasConsented
+        if (hasConsented) onConsentReady()
+
+        withContext(Dispatchers.IO) { DatabaseRepository.getAuthToken() }?.let { token ->
             AutoLifeApi.setAuthToken(token)
         }
     }
 
     AutoLifeTheme {
-        if (consented) {
-            AutoLifeNavHost(
-                onServiceToggle = onServiceToggle,
-                modifier = modifier,
-            )
-        } else {
-            ConsentScreen(
-                onConsented = {
-                    val now = currentTimeMillis()
-                    DatabaseRepository.recordConsent(consentedAt = now)
-                    consented = true
-                    scope.launch {
-                        try {
-                            val resp = AutoLifeApi.enroll(EnrollRequest(consented_at = now))
-                            resp.auth_token?.let { token ->
-                                DatabaseRepository.saveAuthToken(token)
-                                AutoLifeApi.setAuthToken(token)
+        when (consented) {
+            null -> Unit
+            true -> {
+                AutoLifeNavHost(
+                    onServiceToggle = onServiceToggle,
+                    modifier = modifier,
+                )
+            }
+            false -> {
+                ConsentScreen(
+                    onConsented = {
+                        val now = currentTimeMillis()
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                DatabaseRepository.recordConsent(consentedAt = now)
                             }
-                        } catch (_: Exception) {
-                            // Enrollment failure is non-fatal — consent is recorded locally
+                            consented = true
+                            onConsentReady()
+                            try {
+                                val resp = AutoLifeApi.enroll(EnrollRequest(consented_at = now))
+                                resp.auth_token?.let { token ->
+                                    withContext(Dispatchers.IO) {
+                                        DatabaseRepository.saveAuthToken(token)
+                                    }
+                                    AutoLifeApi.setAuthToken(token)
+                                }
+                            } catch (_: Exception) {
+                                // Enrollment failure is non-fatal — consent is recorded locally
+                            }
                         }
-                    }
-                },
-                onDeclined = onDecline,
-            )
+                    },
+                    onDeclined = onDecline,
+                )
+            }
         }
     }
 }

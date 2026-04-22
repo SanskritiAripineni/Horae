@@ -43,7 +43,13 @@ class JournalGenerator(private val context: Context) {
         }
 
         val prompt = PromptBuilder.buildJournalPrompt(ContextLogRefiner.formatForPrompt(refinedSegments))
-        val journalContent = AiClientProvider.client.generate(prompt)
+        val journalContent = runCatching { AiClientProvider.client.generate(prompt).trim() }
+            .getOrElse { error ->
+                Log.w(TAG, "Journal generation failed", error)
+                return@withContext false
+            }
+            .takeIf { it.isNotBlank() }
+            ?: return@withContext false
 
         com.google.mediapipe.examples.llminference.data.DebugRepository.updateLastJournal(journalContent)
         DatabaseRepository.insertJournal(
