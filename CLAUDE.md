@@ -183,7 +183,7 @@ adb reverse tcp:8000 tcp:8000    # Forward emulator port to host for local backe
 ## Git Workflow
 
 - **Main branch:** `main`
-- **Current work branch:** `android-app-integration`
+- **Current work branch:** `ride-app`
 - **Remote:** `origin` → `https://github.com/SanskritiAripineni/Multi-Agent-LLM.git`
 - **Historical branches:** `autolife_rishi` (original Android app), `framework_rishi` (agent framework), `Formatted_VectorDB`
 - **Commit style:** Conventional commits (`feat:`, `fix:`, `refactor:`, `chore:`, `docs:`)
