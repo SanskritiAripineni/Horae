@@ -81,6 +81,9 @@ class TestRunFromJournals:
         assert result["user_id"] == "test"
         assert result["journal_count"] == 2
         assert result["wellbeing"]["risk_level"] == "mild"
+        assert result["ui_summary"]["headline"] == "Mild stress"
+        assert result["analysis_details"]["journal_count"] == 2
+        assert result["analysis_details"]["research_sources"][0]["source"] == "sleep_study.pdf"
         assert isinstance(result["recommendations"], list)
         assert isinstance(result["proposed_changes"], list)
         assert "duration_seconds" in result
@@ -178,6 +181,33 @@ class TestRunFromJournals:
         agent = _make_agent()
         result = agent.run_from_journals(sample_journals)
         assert result["mental_health"] == result["wellbeing"]
+
+    def test_ui_summary_falls_back_when_model_omits_it(self, sample_journals):
+        agent = _make_agent()
+        agent.llm_client.generate_schedule_proposals.return_value["ui_summary"] = "not a dict"
+
+        result = agent.run_from_journals(sample_journals)
+
+        assert result["ui_summary"]["headline"] == "Mild stress"
+        assert result["ui_summary"]["concerns"][0]["label"] == "irregular sleep"
+        assert result["ui_summary"]["protective_signals"][0]["label"] == "regular exercise"
+
+    def test_ui_summary_uses_model_structured_fields(self, sample_journals):
+        agent = _make_agent()
+        agent.llm_client.generate_schedule_proposals.return_value["ui_summary"] = {
+            "headline": "Mild sleep strain",
+            "confidence_label": "Medium confidence",
+            "summary": "Late nights are nudging recovery down.",
+            "evidence_chips": [{"label": "Late screen", "kind": "concern", "icon": "moon"}],
+            "concerns": [{"label": "Late-night screen", "detail": "Repeated after 11 PM"}],
+            "protective_signals": [{"label": "Still active"}],
+        }
+
+        result = agent.run_from_journals(sample_journals)
+
+        assert result["ui_summary"]["headline"] == "Mild sleep strain"
+        assert result["ui_summary"]["confidence_label"] == "Medium confidence"
+        assert result["ui_summary"]["evidence_chips"][0]["label"] == "Late screen"
 
 
 # Conflict filtering

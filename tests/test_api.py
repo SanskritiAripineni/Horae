@@ -199,7 +199,7 @@ class TestApplyCalendar:
 
         assert response.status_code == 200
         assert response.json()["applied"][0]["event_id"] == "e1"
-        mock_agent.apply_calendar_changes.assert_called_once_with(changes, "thanks")
+        mock_agent.apply_calendar_changes.assert_called_once_with(changes, "thanks", user_id="u1")
         log_cal.assert_called_once()
 
     def test_empty_changes_is_422(self, client):

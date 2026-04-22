@@ -34,6 +34,201 @@ def _infer_risk_from_prose(prose: str) -> str:
     return "minimal"
 
 
+def _compact_text(value: Any, max_len: int = 96) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 3].rstrip() + "..."
+
+
+def _risk_headline(risk_level: str) -> str:
+    return {
+        "minimal": "Stable wellbeing",
+        "low": "Stable wellbeing",
+        "mild": "Mild stress",
+        "moderate": "Moderate stress",
+        "severe": "High stress",
+        "high": "High stress",
+    }.get((risk_level or "").lower(), "Wellbeing assessment")
+
+
+def _default_confidence_label(results: Dict[str, Any]) -> str:
+    sensing = results.get("behavioral_sensing")
+    if not sensing:
+        return "Context confidence"
+    if isinstance(sensing, dict) and sensing.get("baseline_note"):
+        return "Low confidence"
+    return "Medium confidence"
+
+
+def _icon_for_signal(label: str, kind: str) -> str:
+    lower = label.lower()
+    if any(word in lower for word in ["sleep", "night", "screen", "wind"]):
+        return "moon"
+    if any(word in lower for word in ["walk", "activity", "movement", "exercise", "run"]):
+        return "activity"
+    if any(word in lower for word in ["journal", "research", "paper", "evidence"]):
+        return "book"
+    if any(word in lower for word in ["calendar", "schedule", "event"]):
+        return "calendar"
+    if kind == "concern":
+        return "warning"
+    if kind in {"protective", "productive"}:
+        return "heart"
+    return "dot"
+
+
+def _normalize_signal_items(
+    raw_items: Any,
+    fallback_severity: str = "",
+    limit: int = 5,
+) -> List[Dict[str, str]]:
+    if not isinstance(raw_items, list):
+        return []
+
+    normalized: List[Dict[str, str]] = []
+    for item in raw_items:
+        if isinstance(item, dict):
+            label = _compact_text(
+                item.get("label")
+                or item.get("title")
+                or item.get("name")
+                or item.get("text")
+                or item.get("detail")
+                or item.get("description")
+            )
+            if not label:
+                continue
+            detail = _compact_text(
+                item.get("detail") or item.get("description") or item.get("rationale"),
+                160,
+            )
+            severity = _compact_text(item.get("severity") or item.get("priority") or fallback_severity, 32)
+        else:
+            label = _compact_text(item)
+            if not label:
+                continue
+            detail = ""
+            severity = fallback_severity
+
+        signal = {"label": label}
+        if detail and detail != label:
+            signal["detail"] = detail
+        if severity:
+            signal["severity"] = severity
+        normalized.append(signal)
+        if len(normalized) >= limit:
+            break
+    return normalized
+
+
+def _normalize_evidence_chips(
+    raw_chips: Any,
+    concerns: List[Dict[str, str]],
+    protective: List[Dict[str, str]],
+    productive: List[Dict[str, str]],
+    limit: int = 5,
+) -> List[Dict[str, str]]:
+    chips: List[Dict[str, str]] = []
+    if isinstance(raw_chips, list):
+        for item in raw_chips:
+            if isinstance(item, dict):
+                label = _compact_text(item.get("label") or item.get("title") or item.get("text"), 44)
+                kind = _compact_text(item.get("kind") or item.get("type") or "neutral", 24).lower()
+                icon = _compact_text(item.get("icon"), 24)
+            else:
+                label = _compact_text(item, 44)
+                kind = "neutral"
+                icon = ""
+            if not label:
+                continue
+            chips.append({
+                "label": label,
+                "kind": kind if kind in {"concern", "protective", "productive", "neutral"} else "neutral",
+                "icon": icon or _icon_for_signal(label, kind),
+            })
+            if len(chips) >= limit:
+                return chips
+
+    for kind, signals in (
+        ("concern", concerns),
+        ("protective", protective),
+        ("productive", productive),
+    ):
+        for signal in signals:
+            label = _compact_text(signal.get("label"), 44)
+            if not label or any(c["label"].lower() == label.lower() for c in chips):
+                continue
+            chips.append({
+                "label": label,
+                "kind": kind,
+                "icon": _icon_for_signal(label, kind),
+            })
+            if len(chips) >= limit:
+                return chips
+    return chips
+
+
+def _build_ui_summary(
+    proposals: Dict[str, Any],
+    results: Dict[str, Any],
+    risk_level: str,
+) -> Dict[str, Any]:
+    raw_ui = proposals.get("ui_summary")
+    ui = raw_ui if isinstance(raw_ui, dict) else {}
+
+    concerns = _normalize_signal_items(ui.get("concerns"), fallback_severity="medium")
+    if not concerns:
+        concerns = _normalize_signal_items(proposals.get("concerns"), fallback_severity="medium")
+
+    protective = _normalize_signal_items(ui.get("protective_signals"), fallback_severity="positive")
+    if not protective:
+        protective = _normalize_signal_items(proposals.get("positives"), fallback_severity="positive")
+
+    productive = _normalize_signal_items(ui.get("productive_signals"), fallback_severity="positive")
+
+    return {
+        "headline": _compact_text(ui.get("headline"), 48) or _risk_headline(risk_level),
+        "confidence_label": _compact_text(ui.get("confidence_label"), 40) or _default_confidence_label(results),
+        "summary": (
+            _compact_text(ui.get("summary"), 180)
+            or _compact_text(proposals.get("summary"), 180)
+            or _compact_text(results.get("journal_summary"), 180)
+        ),
+        "evidence_chips": _normalize_evidence_chips(
+            ui.get("evidence_chips"),
+            concerns=concerns,
+            protective=protective,
+            productive=productive,
+        ),
+        "concerns": concerns,
+        "protective_signals": protective,
+        "productive_signals": productive,
+    }
+
+
+def _build_analysis_details(
+    results: Dict[str, Any],
+    research_suggestions: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    calendar_summary = results.get("calendar_summary") or {}
+    behavioral_sensing = results.get("behavioral_sensing")
+    return {
+        "journal_count": results.get("journal_count", 0),
+        "duration_seconds": results.get("duration_seconds", 0),
+        "behavioral_sensing": behavioral_sensing,
+        "research_sources": research_suggestions,
+        "calendar_summary": calendar_summary,
+        "tool_status": {
+            "behavioral_sensing": "ready" if behavioral_sensing else "unavailable",
+            "research": "ready" if research_suggestions else "empty",
+            "calendar": "ready" if calendar_summary else "unavailable",
+        },
+    }
+
+
 class LLMSchedulerAgent:
     """
     Main agent that orchestrates the mental health analysis and calendar optimization.
@@ -82,26 +277,37 @@ class LLMSchedulerAgent:
             'user_id': effective_user_id,
             'journal_summary': None,
             'wellbeing': None,
+            'ui_summary': None,
             'recommendations': [],
             'calendar_summary': None,
             'proposed_changes': [],
             'behavioral_sensing': None,
+            'analysis_details': None,
             'errors': []
         }
+        research_suggestions: List[Dict[str, Any]] = []
 
         try:
             if not journals:
                 results['errors'].append("No journal entries provided")
                 results['status'] = 'completed_with_warnings'
+                results['ui_summary'] = _build_ui_summary({}, results, "unknown")
+                results['duration_seconds'] = (datetime.now() - start_time).total_seconds()
+                results['analysis_details'] = _build_analysis_details(results, research_suggestions)
                 return results
 
             # 1. Journal narrative — context only, not assessment
             journal_narrative = self.autolife_reader.get_context_for_prompt(journals)
             results['journal_count'] = len(journals)
 
-            # 2. Calendar — use per-request CalendarAPI keyed to the actual user
+            # 2. Calendar - use the injected default calendar client when possible,
+            # otherwise create a per-user client for the request.
             logger.info("Getting calendar information...")
-            request_calendar = CalendarAPI(suggest_only=True, user_id=effective_user_id)
+            if effective_user_id == self.user_id:
+                request_calendar = self.calendar_api
+                request_calendar.suggest_only = True
+            else:
+                request_calendar = CalendarAPI(suggest_only=True, user_id=effective_user_id)
             calendar_summary = request_calendar.get_schedule_summary(days=7)
             results['calendar_summary'] = calendar_summary
             calendar_events = calendar_summary.get('events', []) if calendar_summary else []
@@ -174,6 +380,7 @@ class LLMSchedulerAgent:
                 'positive_indicators': proposals.get('positives', []),
                 'behavioral_context': behavioral_prose or "",
             }
+            results['ui_summary'] = _build_ui_summary(proposals, results, final_risk)
             results['recommendations'] = proposals.get('recommendations', [])
             proposed_changes = proposals.get('proposed_changes', [])
 
@@ -303,6 +510,9 @@ class LLMSchedulerAgent:
             results['status'] = 'failed'
 
         results['duration_seconds'] = (datetime.now() - start_time).total_seconds()
+        if not isinstance(results.get('ui_summary'), dict):
+            results['ui_summary'] = _build_ui_summary({}, results, "unknown")
+        results['analysis_details'] = _build_analysis_details(results, research_suggestions)
         return results
 
     def run(self, mode: str = "daily") -> Dict[str, Any]:
@@ -361,9 +571,16 @@ class LLMSchedulerAgent:
 
         feedback = WellbeingFeedback()
 
-        # Per-request CalendarAPI avoids shared suggest_only state mutation
+        # Reuse the injected default calendar client when possible; create a
+        # per-user client for non-default accounts.
         with self._calendar_lock:
-            request_calendar = CalendarAPI(suggest_only=False, user_id=user_id)
+            previous_suggest_only: Optional[bool] = None
+            if user_id == self.user_id:
+                request_calendar = self.calendar_api
+                previous_suggest_only = request_calendar.suggest_only
+                request_calendar.suggest_only = False
+            else:
+                request_calendar = CalendarAPI(suggest_only=False, user_id=user_id)
             try:
                 applied_titles: set = set()
 
@@ -447,7 +664,8 @@ class LLMSchedulerAgent:
                         results['failed'].append(change)
 
             finally:
-                pass  # request_calendar is local; no teardown needed
+                if previous_suggest_only is not None:
+                    request_calendar.suggest_only = previous_suggest_only
 
         # Best-effort: record proposals that were NOT in the applied set as
         # rejected (only if the caller passed the full proposed_changes list).
