@@ -140,85 +140,45 @@ fun AgentScreen(viewModel: AgentViewModel = viewModel { AgentViewModel() }) {
     val error by AnalysisRepository.error.collectAsState()
     val lastRunMs by AnalysisRepository.lastRunMs.collectAsState()
     val memory by AnalysisRepository.memory.collectAsState()
-    val serviceState by PlatformStateProvider.serviceState.collectAsState()
 
     var expandedTool by remember { mutableStateOf<ExpandedTool?>(null) }
-    val mh = result?.health
-    val ui = result?.ui_summary
-    val riskLevel = mh?.risk_level ?: "unknown"
-    val riskColor = AutoLifeSemantic.riskColor(riskLevel)
-    val evidence = remember(ui, mh) { displayEvidence(ui, mh) }
-    val sourceCounts = remember(result, viewModel.lastJournalCount, serviceState.isRunning) {
-        sourceCounts(result, viewModel.lastJournalCount, serviceState.isRunning)
-    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item {
-            ScreenIntro(
-                title = "Today",
-                subtitle = "Review collection readiness and turn recent context into a wellbeing plan.",
-            )
-        }
-
+        // Agent control card
         item {
             SurfaceCard {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Current wellbeing", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(6.dp))
-                        SerifHeadline(
-                            text = ui?.headline?.takeIf { it.isNotBlank() } ?: riskHeadline(riskLevel),
-                            color = if (result == null) MaterialTheme.colorScheme.onSurface else riskColor,
-                        )
-                    }
+                    Text(
+                        text = "Life Agent",
+                        style = MaterialTheme.typography.headlineMedium,
+                    )
                     StatusPill(
-                        text = when {
-                            isLoading -> "Running analysis"
-                            error != null && result != null -> "Needs attention"
-                            error != null -> "Analysis unavailable"
-                            result != null -> ui?.confidence_label?.takeIf { it.isNotBlank() } ?: "Ready"
-                            else -> "Awaiting analysis"
+                        kind = when {
+                            isLoading -> StatusKind.Running
+                            error != null -> StatusKind.Error
+                            result != null -> StatusKind.Ready
+                            else -> StatusKind.Idle
                         },
-                        color = when {
-                            isLoading -> MaterialTheme.colorScheme.primary
-                            error != null -> MaterialTheme.colorScheme.error
-                            result != null -> riskColor
-                            else -> MaterialTheme.colorScheme.secondary
-                        },
-                        showDot = true,
                     )
                 }
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    ReadinessChip(
-                        icon = Icons.AutoMirrored.Filled.Article,
-                        label = sourceCounts.dataWindow,
-                        modifier = Modifier.weight(1f),
-                    )
-                    ReadinessChip(
-                        icon = Icons.Default.CalendarMonth,
-                        label = "Last ${lastRunMs?.let { DateFormat.time(it) } ?: "--"}",
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = ui?.summary?.takeIf { it.isNotBlank() }
-                        ?: mh?.behavioral_context?.takeIf { it.isNotBlank() }
-                        ?: result?.journal_summary?.takeIf { it.isNotBlank() }
-                        ?: "Run analysis when you want AutoLife to combine journals, sensor markers, research, and calendar context into one focused plan.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Spacer(Modifier.height(8.dp))
+                DataRow(
+                    label = "Last Run",
+                    value = lastRunMs?.let { DateFormat.time(it) } ?: "—",
                 )
-                Spacer(Modifier.height(18.dp))
+                DataRow(
+                    label = "Journals Sent",
+                    value = if (viewModel.lastJournalCount > 0) "${viewModel.lastJournalCount}" else "—",
+                )
+                Spacer(Modifier.height(12.dp))
                 if (isLoading) {
                     Button(
                         onClick = { viewModel.cancelAnalysis() },
@@ -228,11 +188,11 @@ fun AgentScreen(viewModel: AgentViewModel = viewModel { AgentViewModel() }) {
                         ),
                     ) {
                         Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Cancel Analysis")
-                }
-                Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Spacer(Modifier.width(8.dp))
+                        Text("Cancel Analysis")
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 } else {
                     Button(
                         onClick = { viewModel.runAnalysis() },
@@ -240,7 +200,7 @@ fun AgentScreen(viewModel: AgentViewModel = viewModel { AgentViewModel() }) {
                     ) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(if (result == null) "Run analysis" else "Refresh analysis")
+                        Text("Run Analysis")
                     }
                 }
                 if (error != null) {
@@ -256,75 +216,139 @@ fun AgentScreen(viewModel: AgentViewModel = viewModel { AgentViewModel() }) {
             }
         }
 
-        if (evidence.isNotEmpty()) {
-            item {
-                SectionHeader(title = "Key evidence")
-                EvidenceGrid(evidence)
-            }
-        }
-
+        // Tools grid
         item {
-            SectionHeader(title = "Recommended next step")
-            val rec = result?.recommendations?.firstOrNull()
-            PracticeRow(
-                icon = iconForRecommendation(rec?.category),
-                title = recommendationTitle(rec),
-                subtitle = rec?.action ?: "Refresh analysis to get the next best practice from your current context.",
-                tags = recommendationTags(rec),
-                accent = colorForCategory(rec?.category),
-            )
-        }
-
-        if (!result?.proposed_changes.isNullOrEmpty()) {
-            item {
+            SectionHeader(title = "Tools", action = {
+                Text(
+                    text = "Tap to expand",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            })
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    SectionHeader(title = "Upcoming proposals", modifier = Modifier.weight(1f))
-                    TextButton(onClick = { expandedTool = ExpandedTool.LAST_RESULT }) {
-                        Text("View all")
-                        Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp))
-                    }
+                    LiveAutoLifeCard(
+                        modifier = Modifier.weight(1f),
+                        onClick = { expandedTool = ExpandedTool.AUTOLIFE },
+                    )
+                    ToolCard(
+                        modifier = Modifier.weight(1f),
+                        accentColor = AutoLifeSemantic.toolKEmo,
+                        title = "Wellbeing",
+                        subtitle = "Behavioral State",
+                        dataLines = listOf(
+                            "State" to (result?.health?.risk_level?.replaceFirstChar { it.uppercase() } ?: "—"),
+                            "Signals" to (result?.health?.let { "${it.key_concerns.size + it.positive_indicators.size}" } ?: "—"),
+                        ),
+                        status = if (result?.health != null) "Ready" else "Idle",
+                        onClick = { expandedTool = ExpandedTool.WELLBEING },
+                    )
                 }
-                SurfaceCard {
-                    result!!.proposed_changes.take(3).forEachIndexed { index, change ->
-                        ProposalPreviewRow(change)
-                        if (index < result!!.proposed_changes.take(3).lastIndex) {
-                            Spacer(Modifier.height(10.dp))
-                            MutedDivider()
-                            Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    val vectorErr = result?.errors?.any {
+                        it.contains("vector", ignoreCase = true) || it.contains("chroma", ignoreCase = true)
+                    } == true
+                    ToolCard(
+                        modifier = Modifier.weight(1f),
+                        accentColor = AutoLifeSemantic.toolVectorDB,
+                        title = "VectorDB",
+                        subtitle = "Wellness Research",
+                        dataLines = listOf(
+                            "Status" to if (result != null && !vectorErr) "OK" else "—",
+                            "Top-K" to "5",
+                        ),
+                        status = if (vectorErr) "Error" else if (result != null) "Ready" else "Idle",
+                        onClick = { expandedTool = ExpandedTool.VECTORDB },
+                    )
+                    ToolCard(
+                        modifier = Modifier.weight(1f),
+                        accentColor = AutoLifeSemantic.toolCalendar,
+                        title = "Calendar",
+                        subtitle = "Events & Tasks",
+                        dataLines = listOf(
+                            "Events" to (result?.calendar_summary?.event_count?.toString() ?: "—"),
+                            "Tasks" to (result?.calendar_summary?.task_count?.toString() ?: "—"),
+                        ),
+                        status = if (result?.calendar_summary?.event_count != null) "Ready" else "Idle",
+                        onClick = { expandedTool = ExpandedTool.CALENDAR },
+                    )
+                }
+            }
+        }
+
+        // Memory section
+        item {
+            SectionHeader(title = "Memory")
+            SurfaceCard {
+                DataRow(
+                    label = "Preferences",
+                    value = if (memory != null) "Loaded · ${memory!!.preferences.goals.size} goals" else "—",
+                )
+                DataRow(
+                    label = "Health History",
+                    value = if (memory != null)
+                        "${memory!!.health.history.size} entries · ${memory!!.health.trend.replaceFirstChar { it.uppercase() }}"
+                    else "—",
+                )
+            }
+        }
+
+        // Last result summary
+        if (result != null) {
+            item {
+                SectionHeader(title = "Last Result", action = {
+                    TextButton(onClick = { expandedTool = ExpandedTool.LAST_RESULT }) {
+                        Text("Details")
+                    }
+                })
+                val mh = result!!.health
+                val rc = AutoLifeSemantic.riskColor(mh?.risk_level)
+                SurfaceCard(modifier = Modifier.clickable { expandedTool = ExpandedTool.LAST_RESULT }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = mh?.risk_level?.replaceFirstChar { it.uppercase() } ?: "—",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = rc,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text("State", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "${result!!.recommendations.size}",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text("Recs", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "${result!!.proposed_changes.size}",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text("Changes", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedButton(
-                        onClick = { expandedTool = ExpandedTool.LAST_RESULT },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Review in Schedule")
+                    if (result!!.errors.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "${result!!.errors.size} error(s)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
                     }
-                }
-            }
-        }
-
-        item {
-            SectionHeader(title = "System sources")
-            SurfaceCard {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    SourceStatCell(Icons.Default.Home, "Sensors", if (sourceCounts.sensorsLive) "Live" else "Idle", Modifier.weight(1f).clickable { expandedTool = ExpandedTool.AUTOLIFE })
-                    SourceStatCell(Icons.AutoMirrored.Filled.Article, "Journals", sourceCounts.journals, Modifier.weight(1f))
-                    SourceStatCell(Icons.Default.Storage, "Research", sourceCounts.research, Modifier.weight(1f).clickable { expandedTool = ExpandedTool.VECTORDB })
-                    SourceStatCell(Icons.Default.CalendarMonth, "Calendar", sourceCounts.calendar, Modifier.weight(1f).clickable { expandedTool = ExpandedTool.CALENDAR })
-                }
-            }
-        }
-
-        if (memory != null) {
-            item {
-                SurfaceCard {
-                    DataRow("Memory", "${memory!!.preferences.goals.size} goals")
-                    DataRow("Health history", "${memory!!.health.history.size} entries")
                 }
             }
         }
