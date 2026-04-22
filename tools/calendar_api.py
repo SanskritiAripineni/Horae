@@ -252,8 +252,15 @@ class CalendarAPI:
             time_min = week_start.isoformat() + 'Z'
             time_max = (today + timedelta(days=days)).isoformat() + 'Z'
 
-            target_cal_id = self.get_target_calendar_id()
-            calendar_ids = list(dict.fromkeys(['primary', target_cal_id]))  # deduplicate
+            # Fetch all calendars the user has access to
+            try:
+                cal_list = self.calendar_service.calendarList().list().execute()
+                calendar_ids = [c['id'] for c in cal_list.get('items', []) if c.get('id')]
+                logger.info(f"Fetching events from {len(calendar_ids)} calendars")
+            except Exception as e:
+                logger.warning(f"Failed to list calendars, falling back to primary: {e}")
+                target_cal_id = self.get_target_calendar_id()
+                calendar_ids = list(dict.fromkeys(['primary', target_cal_id]))
 
             seen_ids: set = set()
             all_events: List[CalendarEvent] = []
