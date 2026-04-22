@@ -53,10 +53,10 @@ object AutoLifeSemantic {
     val toolCalendar     = Color(0xFF34C759)
 
     fun riskColor(level: String?): Color = when (level?.lowercase()) {
-        "low"      -> riskLow
-        "mild"     -> riskMild
-        "moderate" -> riskModerate
+        "low", "minimal" -> riskLow
+        "mild"           -> riskMild
+        "moderate"       -> riskModerate
         "severe", "high" -> riskSevere
-        else       -> riskLow
+        else             -> riskLow
     }
 }
