@@ -131,6 +131,17 @@ def init_schema() -> None:
                     ON raw_journals(user_anon_id, journal_id)
                     WHERE journal_id IS NOT NULL;
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS enrollments (
+                    id SERIAL PRIMARY KEY,
+                    anon_id TEXT NOT NULL,
+                    consented_at BIGINT NOT NULL,
+                    study_id TEXT NOT NULL DEFAULT 'RIDE_2026',
+                    version TEXT NOT NULL DEFAULT '1.0',
+                    enrolled_at TIMESTAMPTZ DEFAULT NOW(),
+                    UNIQUE(anon_id, study_id)
+                );
+            """)
         conn.commit()
         logger.info("DB schema initialized")
     except Exception as e:
@@ -239,6 +250,34 @@ def log_session(user_id: str, journals: List[Dict], result: Dict) -> Optional[st
         return None
     finally:
         p.putconn(conn)
+
+
+def log_enrollment(user_id: str, consented_at: int, study_id: str = "RIDE_2026", version: str = "1.0"):
+    """Record study enrollment. Uses ON CONFLICT DO NOTHING — idempotent."""
+    p = get_pool()
+    if not p:
+        return
+    conn = None
+    try:
+        conn = p.getconn()
+        with conn.cursor() as cur:
+            aid = anon_id(user_id)
+            cur.execute("INSERT INTO users (anon_id) VALUES (%s) ON CONFLICT DO NOTHING", (aid,))
+            cur.execute(
+                """INSERT INTO enrollments (anon_id, consented_at, study_id, version)
+                   VALUES (%s, %s, %s, %s)
+                   ON CONFLICT (anon_id, study_id) DO NOTHING""",
+                (aid, consented_at, study_id, version),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"DB enrollment log failed (non-fatal): {e}")
+        if conn:
+            try: conn.rollback()
+            except: pass
+    finally:
+        if conn:
+            p.putconn(conn)
 
 
 def log_calendar_accepted(user_id: str, user_comments: str) -> None:

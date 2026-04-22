@@ -102,4 +102,14 @@ object DatabaseRepository {
     fun deleteAllJournals() {
         queries.deleteAllJournals()
     }
+
+    // ── Consent ─────────────────────────────────────────────────────────
+
+    fun hasConsented(): Boolean = try {
+        queries.getConsent().executeAsOneOrNull() != null
+    } catch (e: Exception) { false }
+
+    fun recordConsent(studyId: String = "RIDE_2026", version: String = "1.0", consentedAt: Long) {
+        queries.upsertConsent(study_id = studyId, consented_at = consentedAt, version = version)
+    }
 }

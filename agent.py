@@ -45,7 +45,7 @@ class LLMSchedulerAgent:
 
         self.autolife_reader = AutoLifeReader()
         self.vectordb = VectorDBClient()
-        self.calendar_api = CalendarAPI(suggest_only=suggest_only)
+        self.calendar_api = CalendarAPI(suggest_only=suggest_only, user_id=self.user_id)
         self.llm_client = LLMClient()
         self.wellbeing_sensor = WellbeingSensor()
         self.memory = MemoryModule()

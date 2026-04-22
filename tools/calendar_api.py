@@ -104,14 +104,21 @@ class CalendarAPI:
     """Google Calendar & Tasks API integration with OAuth 2.0."""
     
     def __init__(
-        self, 
+        self,
         credentials_path: str = "credentials.json",
         token_path: str = "data/tokens/calendar_token.json",
         suggest_only: bool = True,
-        target_calendar_name: str = "RIDE Agent"
+        target_calendar_name: str = "RIDE Agent",
+        user_id: str = "default",
     ):
         self.credentials_path = Path(credentials_path)
-        self.token_path = Path(token_path)
+        # Per-user token path: data/tokens/{user_id}/calendar_token.json
+        # Falls back to the provided token_path for the legacy "default" user
+        if user_id != "default":
+            self.token_path = Path(f"data/tokens/{user_id}/calendar_token.json")
+        else:
+            self.token_path = Path(token_path)
+        self.user_id = user_id
         self.suggest_only = suggest_only
         self.target_calendar_name = target_calendar_name
         self.target_calendar_id = None  # Will be resolved on first use

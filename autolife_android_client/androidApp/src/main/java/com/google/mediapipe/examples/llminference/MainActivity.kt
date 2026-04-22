@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
                         stopService(intent)
                     }
                 },
+                onDecline = { finishAffinity() },
             )
         }
     }

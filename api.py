@@ -126,6 +126,114 @@ class ApplyCalendarRequest(BaseModel):
     user_id: Optional[str] = "default"
 
 
+class EnrollRequest(BaseModel):
+    user_id: str = "default"
+    consented_at: int  # epoch millis from the device
+    study_id: str = "RIDE_2026"
+    version: str = "1.0"
+
+
+@app.post("/api/enroll")
+async def enroll_participant(req: EnrollRequest):
+    """Record study enrollment / consent server-side for IRB audit trail."""
+    try:
+        db.log_enrollment(
+            user_id=req.user_id,
+            consented_at=req.consented_at,
+            study_id=req.study_id,
+            version=req.version,
+        )
+        logger.info(f"Enrolled participant user_id={req.user_id[:8]}... study={req.study_id}")
+        return {"enrolled": True, "study_id": req.study_id}
+    except Exception as e:
+        logger.error(f"Enrollment error: {e}")
+        # Don't fail hard — the client-side consent record is the source of truth
+        return {"enrolled": False, "detail": str(e)}
+
+
+@app.get("/api/oauth/authorize")
+async def oauth_authorize(user_id: str = "default"):
+    """Start Google Calendar OAuth flow for a user. Returns the authorization URL."""
+    import json, os
+    from pathlib import Path
+    try:
+        from google_auth_oauthlib.flow import Flow
+    except ImportError:
+        raise HTTPException(status_code=500, detail="google_auth_oauthlib not installed")
+
+    credentials_path = Path("credentials.json")
+    if not credentials_path.exists():
+        raise HTTPException(status_code=500, detail="OAuth credentials not configured on server")
+
+    SCOPES = [
+        "https://www.googleapis.com/auth/calendar",
+        "https://www.googleapis.com/auth/tasks",
+    ]
+    # Use a redirect_uri that comes back to this server
+    redirect_uri = os.environ.get("OAUTH_REDIRECT_URI", "http://localhost:8000/api/oauth/callback")
+
+    flow = Flow.from_client_secrets_file(
+        str(credentials_path),
+        scopes=SCOPES,
+        redirect_uri=redirect_uri,
+    )
+    auth_url, state = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="true",
+        prompt="consent",
+        state=user_id,  # carry user_id through the flow as state
+    )
+    return {"auth_url": auth_url, "state": state}
+
+
+@app.get("/api/oauth/callback")
+async def oauth_callback(code: str, state: str = "default"):
+    """Handle Google OAuth callback. Exchanges code for tokens and stores per-user."""
+    import json, os
+    from pathlib import Path
+    try:
+        from google_auth_oauthlib.flow import Flow
+    except ImportError:
+        raise HTTPException(status_code=500, detail="google_auth_oauthlib not installed")
+
+    credentials_path = Path("credentials.json")
+    if not credentials_path.exists():
+        raise HTTPException(status_code=500, detail="OAuth credentials not configured on server")
+
+    SCOPES = [
+        "https://www.googleapis.com/auth/calendar",
+        "https://www.googleapis.com/auth/tasks",
+    ]
+    redirect_uri = os.environ.get("OAUTH_REDIRECT_URI", "http://localhost:8000/api/oauth/callback")
+
+    try:
+        flow = Flow.from_client_secrets_file(
+            str(credentials_path),
+            scopes=SCOPES,
+            redirect_uri=redirect_uri,
+            state=state,
+        )
+        flow.fetch_token(code=code)
+        credentials = flow.credentials
+
+        # Store per-user token
+        user_id = state  # state carries the user_id
+        token_path = Path(f"data/tokens/{user_id}/calendar_token.json")
+        token_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(token_path, "w") as f:
+            json.dump(json.loads(credentials.to_json()), f)
+
+        logger.info(f"OAuth token stored for user_id={user_id[:8]}...")
+        return {
+            "status": "connected",
+            "user_id": user_id,
+            "message": "Calendar connected successfully. You can close this window.",
+        }
+    except Exception as e:
+        logger.error(f"OAuth callback failed: {e}")
+        raise HTTPException(status_code=400, detail=f"OAuth failed: {e}")
+
+
 @app.post("/api/process_journals")
 async def process_journals(request: ProcessJournalsRequest):
     """

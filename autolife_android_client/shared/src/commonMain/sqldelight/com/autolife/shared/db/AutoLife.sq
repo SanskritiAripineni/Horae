@@ -41,3 +41,17 @@ DELETE FROM sensor_logs;
 
 deleteAllJournals:
 DELETE FROM journal_entries;
+
+CREATE TABLE user_consent (
+    id INTEGER NOT NULL PRIMARY KEY,
+    study_id TEXT NOT NULL,
+    consented_at INTEGER NOT NULL,
+    version TEXT NOT NULL
+);
+
+upsertConsent:
+INSERT OR REPLACE INTO user_consent (id, study_id, consented_at, version)
+VALUES (1, ?, ?, ?);
+
+getConsent:
+SELECT * FROM user_consent WHERE id = 1;
