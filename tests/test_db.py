@@ -102,7 +102,7 @@ class TestInitSchema:
 
         db.init_schema()
 
-        mock_cursor.execute.assert_called_once()
+        assert mock_cursor.execute.call_count >= 2  # main schema + enrollments table
         mock_conn.commit.assert_called_once()
         mock_pool.putconn.assert_called_once_with(mock_conn)
 

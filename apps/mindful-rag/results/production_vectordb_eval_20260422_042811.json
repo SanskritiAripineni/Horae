@@ -1,0 +1,619 @@
+{
+  "timestamp": "20260422T042811Z",
+  "chroma_dir": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/vectordb/chroma_db",
+  "collection": "wellness_papers_gemini",
+  "embedding_model": "gemini-embedding-2-preview",
+  "top_k": 4,
+  "query_count": 25,
+  "total_docs_in_collection": 29,
+  "present_categories": [
+    "Sleep Hygiene",
+    "Stress Management",
+    "Social connection",
+    "Physical Activity"
+  ],
+  "missing_categories": [
+    "Mindfulness"
+  ],
+  "macro_precision_at_k": 0.52,
+  "macro_precision_at_k_present_only": 0.65,
+  "category_summary": {
+    "Sleep Hygiene": {
+      "precision_at_k_mean": 0.95,
+      "query_count": 5
+    },
+    "Stress Management": {
+      "precision_at_k_mean": 0.65,
+      "query_count": 5
+    },
+    "Social connection": {
+      "precision_at_k_mean": 0.75,
+      "query_count": 5
+    },
+    "Physical Activity": {
+      "precision_at_k_mean": 0.25,
+      "query_count": 5
+    },
+    "Mindfulness": {
+      "precision_at_k_mean": 0.0,
+      "query_count": 5
+    }
+  },
+  "per_query": [
+    {
+      "query": "I have been struggling to fall asleep and waking up frequently at night.",
+      "expected_category": "Sleep Hygiene",
+      "retrieved_categories": [
+        "Sleep Hygiene",
+        "Sleep Hygiene",
+        "Sleep Hygiene",
+        "Sleep Hygiene"
+      ],
+      "precision_at_k": 1.0,
+      "hits": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "retrieved_sources": [
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf"
+      ]
+    },
+    {
+      "query": "Tips for improving sleep quality and establishing a healthy bedtime routine.",
+      "expected_category": "Sleep Hygiene",
+      "retrieved_categories": [
+        "Sleep Hygiene",
+        "Sleep Hygiene",
+        "Sleep Hygiene",
+        "Sleep Hygiene"
+      ],
+      "precision_at_k": 1.0,
+      "hits": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "retrieved_sources": [
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf"
+      ]
+    },
+    {
+      "query": "How does screen time before bed affect sleep?",
+      "expected_category": "Sleep Hygiene",
+      "retrieved_categories": [
+        "Sleep Hygiene",
+        "Sleep Hygiene",
+        "Sleep Hygiene",
+        "Sleep Hygiene"
+      ],
+      "precision_at_k": 1.0,
+      "hits": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "retrieved_sources": [
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "Circadian rhythm disruption and mental health.pdf",
+        "The protective effect of daytime sleep on planning and risk-related decision-making in emerging adults.pdf",
+        "Circadian rhythm disruption and mental health.pdf"
+      ]
+    },
+    {
+      "query": "I keep staying up until 2am and feel exhausted during the day.",
+      "expected_category": "Sleep Hygiene",
+      "retrieved_categories": [
+        "Sleep Hygiene",
+        "Sleep Hygiene",
+        "Sleep Hygiene",
+        "Sleep Hygiene"
+      ],
+      "precision_at_k": 1.0,
+      "hits": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "retrieved_sources": [
+        "Circadian rhythm disruption and mental health.pdf",
+        "Circadian rhythm disruption and mental health.pdf",
+        "The protective effect of daytime sleep on planning and risk-related decision-making in emerging adults.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf"
+      ]
+    },
+    {
+      "query": "Strategies for managing insomnia and sleep deprivation.",
+      "expected_category": "Sleep Hygiene",
+      "retrieved_categories": [
+        "Sleep Hygiene",
+        "Sleep Hygiene",
+        "Sleep Hygiene",
+        "Stress Management"
+      ],
+      "precision_at_k": 0.75,
+      "hits": [
+        1,
+        1,
+        1,
+        0
+      ],
+      "retrieved_sources": [
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "The protective effect of daytime sleep on planning and risk-related decision-making in emerging adults.pdf",
+        "Strategies for Coping with Time-Related and Productivity Challenges of Young People  with Learning Disabilities and Attention- Deficit_Hyperactivity Disorder.pdf"
+      ]
+    },
+    {
+      "query": "I feel overwhelmed by deadlines and constant work pressure.",
+      "expected_category": "Stress Management",
+      "retrieved_categories": [
+        "Stress Management",
+        "Social connection",
+        "Stress Management",
+        "Social connection"
+      ],
+      "precision_at_k": 0.5,
+      "hits": [
+        1,
+        0,
+        1,
+        0
+      ],
+      "retrieved_sources": [
+        "Strategies for Coping with Time-Related and Productivity Challenges of Young People  with Learning Disabilities and Attention- Deficit_Hyperactivity Disorder.pdf",
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf",
+        "Implementation Intentions.pdf",
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf"
+      ]
+    },
+    {
+      "query": "Techniques for reducing anxiety and managing academic stress.",
+      "expected_category": "Stress Management",
+      "retrieved_categories": [
+        "Stress Management",
+        "Stress Management",
+        "Stress Management",
+        "Stress Management"
+      ],
+      "precision_at_k": 1.0,
+      "hits": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "retrieved_sources": [
+        "Strategies for Coping with Time-Related and Productivity Challenges of Young People  with Learning Disabilities and Attention- Deficit_Hyperactivity Disorder.pdf",
+        "The Role of Academic Motivation in Self-Regulation, Goal Orientation, and Passion Among Medical Students with Self-Handicapping Behaviors.pdf",
+        "Implementation Intentions.pdf",
+        "The Role of Academic Motivation in Self-Regulation, Goal Orientation, and Passion Among Medical Students with Self-Handicapping Behaviors.pdf"
+      ]
+    },
+    {
+      "query": "How can I decompress after a stressful day at work?",
+      "expected_category": "Stress Management",
+      "retrieved_categories": [
+        "Stress Management",
+        "Stress Management",
+        "Stress Management",
+        "Sleep Hygiene"
+      ],
+      "precision_at_k": 0.75,
+      "hits": [
+        1,
+        1,
+        1,
+        0
+      ],
+      "retrieved_sources": [
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf",
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf",
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf"
+      ]
+    },
+    {
+      "query": "I am experiencing burnout from back-to-back responsibilities.",
+      "expected_category": "Stress Management",
+      "retrieved_categories": [
+        "Stress Management",
+        "Stress Management",
+        "Stress Management",
+        "Stress Management"
+      ],
+      "precision_at_k": 1.0,
+      "hits": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "retrieved_sources": [
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf",
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf",
+        "Strategies for Coping with Time-Related and Productivity Challenges of Young People  with Learning Disabilities and Attention- Deficit_Hyperactivity Disorder.pdf",
+        "Implementation Intentions.pdf"
+      ]
+    },
+    {
+      "query": "Evidence-based approaches for coping with chronic stress.",
+      "expected_category": "Stress Management",
+      "retrieved_categories": [
+        "Social connection",
+        "Sleep Hygiene",
+        "Social connection",
+        "Social connection"
+      ],
+      "precision_at_k": 0.0,
+      "hits": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "retrieved_sources": [
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf",
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf"
+      ]
+    },
+    {
+      "query": "I have been feeling isolated and lonely recently.",
+      "expected_category": "Social connection",
+      "retrieved_categories": [
+        "Social connection",
+        "Social connection",
+        "Social connection",
+        "Stress Management"
+      ],
+      "precision_at_k": 0.75,
+      "hits": [
+        1,
+        1,
+        1,
+        0
+      ],
+      "retrieved_sources": [
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf",
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf",
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf",
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf"
+      ]
+    },
+    {
+      "query": "How does social support affect mental health and wellbeing?",
+      "expected_category": "Social connection",
+      "retrieved_categories": [
+        "Social connection",
+        "Social connection",
+        "Sleep Hygiene",
+        "Sleep Hygiene"
+      ],
+      "precision_at_k": 0.5,
+      "hits": [
+        1,
+        1,
+        0,
+        0
+      ],
+      "retrieved_sources": [
+        "peer-support-groups-through-an-experiential-lens.pdf",
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf"
+      ]
+    },
+    {
+      "query": "I rarely see friends due to my busy schedule and it is affecting my mood.",
+      "expected_category": "Social connection",
+      "retrieved_categories": [
+        "Social connection",
+        "Social connection",
+        "Social connection",
+        "Stress Management"
+      ],
+      "precision_at_k": 0.75,
+      "hits": [
+        1,
+        1,
+        1,
+        0
+      ],
+      "retrieved_sources": [
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf",
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf",
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf",
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf"
+      ]
+    },
+    {
+      "query": "Interventions for improving social connectedness in daily life.",
+      "expected_category": "Social connection",
+      "retrieved_categories": [
+        "Social connection",
+        "Social connection",
+        "Social connection",
+        "Stress Management"
+      ],
+      "precision_at_k": 0.75,
+      "hits": [
+        1,
+        1,
+        1,
+        0
+      ],
+      "retrieved_sources": [
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf",
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf",
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf",
+        "Implementation Intentions.pdf"
+      ]
+    },
+    {
+      "query": "The role of community and belonging in reducing depression.",
+      "expected_category": "Social connection",
+      "retrieved_categories": [
+        "Social connection",
+        "Social connection",
+        "Social connection",
+        "Social connection"
+      ],
+      "precision_at_k": 1.0,
+      "hits": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "retrieved_sources": [
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf",
+        "peer-support-groups-through-an-experiential-lens.pdf",
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf",
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf"
+      ]
+    },
+    {
+      "query": "I have been sedentary all week and feel sluggish.",
+      "expected_category": "Physical Activity",
+      "retrieved_categories": [
+        "Physical Activity",
+        "Stress Management",
+        "Stress Management",
+        "Stress Management"
+      ],
+      "precision_at_k": 0.25,
+      "hits": [
+        1,
+        0,
+        0,
+        0
+      ],
+      "retrieved_sources": [
+        "Time to Form a Habit_ A Systematic Review and Meta-Analysis of Health Behaviour Habit Formation and Its Determinants.pdf",
+        "Implementation Intentions.pdf",
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf",
+        "Implementation Intentions.pdf"
+      ]
+    },
+    {
+      "query": "What are the mental health benefits of regular exercise?",
+      "expected_category": "Physical Activity",
+      "retrieved_categories": [
+        "Sleep Hygiene",
+        "Sleep Hygiene",
+        "Sleep Hygiene",
+        "Sleep Hygiene"
+      ],
+      "precision_at_k": 0.0,
+      "hits": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "retrieved_sources": [
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf"
+      ]
+    },
+    {
+      "query": "I want to incorporate short physical activity breaks during my workday.",
+      "expected_category": "Physical Activity",
+      "retrieved_categories": [
+        "Stress Management",
+        "Physical Activity",
+        "Physical Activity",
+        "Physical Activity"
+      ],
+      "precision_at_k": 0.75,
+      "hits": [
+        0,
+        1,
+        1,
+        1
+      ],
+      "retrieved_sources": [
+        "Implementation Intentions.pdf",
+        "Time to Form a Habit_ A Systematic Review and Meta-Analysis of Health Behaviour Habit Formation and Its Determinants.pdf",
+        "Time to Form a Habit_ A Systematic Review and Meta-Analysis of Health Behaviour Habit Formation and Its Determinants.pdf",
+        "Time to Form a Habit_ A Systematic Review and Meta-Analysis of Health Behaviour Habit Formation and Its Determinants.pdf"
+      ]
+    },
+    {
+      "query": "Evidence for walking as an effective stress-reduction intervention.",
+      "expected_category": "Physical Activity",
+      "retrieved_categories": [
+        "Stress Management",
+        "Social connection",
+        "Sleep Hygiene",
+        "Social connection"
+      ],
+      "precision_at_k": 0.0,
+      "hits": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "retrieved_sources": [
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf",
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf",
+        "Circadian rhythm disruption and mental health.pdf",
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf"
+      ]
+    },
+    {
+      "query": "How to motivate myself to exercise when feeling low energy.",
+      "expected_category": "Physical Activity",
+      "retrieved_categories": [
+        "Stress Management",
+        "Stress Management",
+        "Stress Management",
+        "Physical Activity"
+      ],
+      "precision_at_k": 0.25,
+      "hits": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "retrieved_sources": [
+        "Implementation Intentions.pdf",
+        "Implementation Intentions.pdf",
+        "Implementation Intentions.pdf",
+        "Time to Form a Habit_ A Systematic Review and Meta-Analysis of Health Behaviour Habit Formation and Its Determinants.pdf"
+      ]
+    },
+    {
+      "query": "I cannot stop ruminating on negative thoughts.",
+      "expected_category": "Mindfulness",
+      "retrieved_categories": [
+        "Stress Management",
+        "Sleep Hygiene",
+        "Sleep Hygiene",
+        "Social connection"
+      ],
+      "precision_at_k": 0.0,
+      "hits": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "retrieved_sources": [
+        "Implementation Intentions.pdf",
+        "Circadian rhythm disruption and mental health.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "Loneliness, Social Isolation, and Cardiovascular Health.pdf"
+      ]
+    },
+    {
+      "query": "Mindfulness and meditation techniques for improving focus.",
+      "expected_category": "Mindfulness",
+      "retrieved_categories": [
+        "Stress Management",
+        "Stress Management",
+        "Stress Management",
+        "Sleep Hygiene"
+      ],
+      "precision_at_k": 0.0,
+      "hits": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "retrieved_sources": [
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf",
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf",
+        "Strategies for Coping with Time-Related and Productivity Challenges of Young People  with Learning Disabilities and Attention- Deficit_Hyperactivity Disorder.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf"
+      ]
+    },
+    {
+      "query": "Breathing exercises and grounding techniques for anxiety.",
+      "expected_category": "Mindfulness",
+      "retrieved_categories": [
+        "Stress Management",
+        "Stress Management",
+        "Sleep Hygiene",
+        "Stress Management"
+      ],
+      "precision_at_k": 0.0,
+      "hits": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "retrieved_sources": [
+        "Implementation Intentions.pdf",
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf"
+      ]
+    },
+    {
+      "query": "How does mindfulness-based stress reduction (MBSR) work?",
+      "expected_category": "Mindfulness",
+      "retrieved_categories": [
+        "Stress Management",
+        "Sleep Hygiene",
+        "Stress Management",
+        "Sleep Hygiene"
+      ],
+      "precision_at_k": 0.0,
+      "hits": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "retrieved_sources": [
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf",
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf",
+        "Improving sleep quality leads to better mental health_ A meta-analysis of randomised controlled trials.pdf"
+      ]
+    },
+    {
+      "query": "Brief mindfulness practices that can be done in under 10 minutes.",
+      "expected_category": "Mindfulness",
+      "retrieved_categories": [
+        "Stress Management",
+        "Stress Management",
+        "Stress Management",
+        "Stress Management"
+      ],
+      "precision_at_k": 0.0,
+      "hits": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "retrieved_sources": [
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf",
+        "Implementation Intentions.pdf",
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf",
+        "Human Attention Restoration, Flow, and Creativity_ A Conceptual Integration.pdf"
+      ]
+    }
+  ]
+}
