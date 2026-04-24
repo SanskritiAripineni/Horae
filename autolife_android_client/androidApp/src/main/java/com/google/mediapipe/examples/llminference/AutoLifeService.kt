@@ -44,7 +44,7 @@ class AutoLifeService : Service() {
         private const val NOTIFICATION_ID = 1
         private const val LOG_INTERVAL = 60_000L // 1 minute
         private const val DEMO_LOG_INTERVAL = 30_000L // 30 seconds
-        private const val JOURNAL_INTERVAL = 15 * 60_000L // 15 minutes
+        private const val JOURNAL_INTERVAL = 30 * 60_000L // 30 minutes
         private const val DEMO_JOURNAL_INTERVAL = 2 * 60_000L // 2 minutes
         private const val JOURNAL_RETRY_BACKOFF = 5 * 60_000L // 5 minutes
         private const val DEMO_JOURNAL_RETRY_BACKOFF = 60_000L // 1 minute

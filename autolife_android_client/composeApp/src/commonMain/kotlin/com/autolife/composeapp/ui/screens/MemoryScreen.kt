@@ -22,8 +22,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import com.autolife.composeapp.ui.components.withSerif
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -300,10 +300,7 @@ private fun MemoryPageIntro(
             ) {
                 Text(
                     text = "Memory",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontFamily = FontFamily.Serif,
-                        fontWeight = FontWeight.Normal,
-                    ),
+                    style = MaterialTheme.typography.headlineMedium.withSerif(),
                     color = MaterialTheme.colorScheme.onBackground,
                 )
                 Text(
@@ -523,10 +520,7 @@ private fun WellbeingSummaryCard(
         )
         Text(
             text = mainText,
-            style = MaterialTheme.typography.titleLarge.copy(
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Normal,
-            ),
+            style = MaterialTheme.typography.titleLarge.withSerif(),
             color = accent,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,

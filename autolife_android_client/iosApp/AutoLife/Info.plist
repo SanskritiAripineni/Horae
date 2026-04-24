@@ -38,6 +38,8 @@
 	<string>AutoLife uses background location to continuously track your movements for life journaling.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>AutoLife uses motion sensors to detect your activity (walking, driving, etc.) for context-aware journaling.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>AutoLife reads your sleep data from Apple Health to analyze sleep patterns and provide wellbeing insights.</string>
 	<key>BACKEND_URL</key>
 	<string>https://ride-backend-production-a1fc.up.railway.app</string>
 	<key>GEMINI_API_KEY</key>

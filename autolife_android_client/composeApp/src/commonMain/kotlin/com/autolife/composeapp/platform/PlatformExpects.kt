@@ -25,3 +25,6 @@ expect fun rememberLocationPreviewImage(imageBytes: ByteArray?): ImageBitmap?
  * social_rhythm_metric from ContextLog records. iOS: returns empty list (stub).
  */
 expect suspend fun getBehavioralMarkers(nDays: Int): List<RawDayMarkers>
+
+/** Opens the user's default system calendar app. Android: Calendar intent. iOS: calshow:// */
+expect fun openNativeCalendar()

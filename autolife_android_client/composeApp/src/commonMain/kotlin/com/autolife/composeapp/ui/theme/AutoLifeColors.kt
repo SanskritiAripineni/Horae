@@ -63,6 +63,8 @@ object AutoLifeSemantic {
     val categoryHealth   = Color(0xFF6F8A64)
     val categoryLeisure  = Color(0xFFE7C77C)
 
+    val eventBar         = Color(0xFF8C95C8)  // neutral color for all calendar events
+
     val toolAutoLife     = Color(0xFF6F8A64)
     val toolKEmo         = Color(0xFFC8802D)
     val toolVectorDB     = Color(0xFF7395A8)

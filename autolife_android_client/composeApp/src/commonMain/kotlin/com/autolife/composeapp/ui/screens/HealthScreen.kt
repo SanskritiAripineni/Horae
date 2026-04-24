@@ -16,10 +16,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.autolife.composeapp.ui.DateFormat
 import com.autolife.composeapp.ui.components.*
 import com.autolife.composeapp.ui.theme.AutoLifeSemantic
 import com.autolife.shared.model.*
@@ -29,7 +27,6 @@ import com.autolife.shared.repository.AnalysisRepository
 @Composable
 fun HealthScreen(
     onOpenAgent: () -> Unit = {},
-    onOpenSchedule: () -> Unit = {},
 ) {
     val result by AnalysisRepository.result.collectAsState()
     val isLoading by AnalysisRepository.loading.collectAsState()
@@ -58,7 +55,7 @@ fun HealthScreen(
                     ActionableEmptyState(
                         icon = Icons.Default.FavoriteBorder,
                         title = "No health assessment yet",
-                        description = "Run an analysis to turn journals, sensor markers, and schedule context into a participant-friendly wellbeing read.",
+                        description = "Run an analysis to turn your journals, sensor data, and calendar context into a personalized wellbeing read.",
                         action = {
                             Button(onClick = onOpenAgent) {
                                 Text("Go to Agent")
@@ -80,10 +77,10 @@ fun HealthScreen(
         ?: ui?.productive_signals?.takeIf { it.isNotEmpty() }
         ?: mh?.positive_indicators?.map { SignalItem(label = it, severity = "positive") }
         ?: emptyList()
-    val sourceTitles = result!!.analysis_details?.research_sources
+    val researchSources = result!!.analysis_details?.research_sources
         .orEmpty()
-        .mapNotNull { it.source.takeIf(String::isNotBlank) }
-        .distinct()
+        .filter { it.source.isNotBlank() }
+        .distinctBy { it.source }
     val wellbeingNarrative = wellbeingNarrative(
         uiSummary = ui?.summary,
         behavioralContext = mh?.behavioral_context,
@@ -126,41 +123,14 @@ fun HealthScreen(
             BoxWithConstraints {
                 if (maxWidth > 520.dp) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        SignalPanel("Concerns", concerns, "concern", Icons.Default.Warning, Modifier.weight(1f))
-                        SignalPanel("Positive signals", positiveSignals, "positive", Icons.Default.CheckCircle, Modifier.weight(1f))
+                        SignalPanel("Concerns", concerns, "concern", Icons.Default.Warning, Modifier.weight(1f), onClick = { showSources = true })
+                        SignalPanel("Positive signals", positiveSignals, "positive", Icons.Default.CheckCircle, Modifier.weight(1f), onClick = { showSources = true })
                     }
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        SignalPanel("Concerns", concerns, "concern", Icons.Default.Warning)
-                        SignalPanel("Positive signals", positiveSignals, "positive", Icons.Default.CheckCircle)
+                        SignalPanel("Concerns", concerns, "concern", Icons.Default.Warning, onClick = { showSources = true })
+                        SignalPanel("Positive signals", positiveSignals, "positive", Icons.Default.CheckCircle, onClick = { showSources = true })
                     }
-                }
-            }
-        }
-
-        if (result!!.recommendations.isNotEmpty()) {
-            item { SectionHeader(title = "Recommended practices") }
-            items(result!!.recommendations) { rec ->
-                PracticeRow(
-                    icon = healthPracticeIcon(rec.category),
-                    title = rec.category.ifBlank { "Wellbeing" }.replaceFirstChar { it.uppercase() },
-                    subtitle = rec.action,
-                    tags = listOfNotNull(
-                        rec.category.takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercase() }?.let {
-                            it to healthCategoryColor(rec.category)
-                        },
-                        rec.source?.takeIf { it.isNotBlank() }?.let { "Research-backed" to AutoLifeSemantic.toolVectorDB },
-                    ),
-                    accent = healthCategoryColor(rec.category),
-                    showChevron = false,
-                )
-            }
-            item {
-                Button(
-                    onClick = onOpenSchedule,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Implement these practices")
                 }
             }
         }
@@ -190,7 +160,7 @@ fun HealthScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -202,23 +172,68 @@ fun HealthScreen(
                         Icon(Icons.Default.Close, contentDescription = "Close")
                     }
                 }
+
+                // Sources section
                 SurfaceCard {
                     SectionHeader(title = "Sources")
-                    if (sourceTitles.isEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    if (researchSources.isEmpty()) {
                         Text(
                             "No source titles were returned for this run.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     } else {
-                        sourceTitles.forEachIndexed { index, title ->
-                            if (index > 0) {
-                                Spacer(Modifier.height(10.dp))
+                        researchSources.forEachIndexed { index, source ->
+                            if (index > 0) MutedDivider()
+                            Column(
+                                modifier = Modifier.padding(vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                if (source.category.isNotBlank()) {
+                                    CategoryBadge(
+                                        text = source.category,
+                                        color = AutoLifeSemantic.toolVectorDB,
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                }
+                                Text(
+                                    text = source.source,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                if (source.content.isNotBlank()) {
+                                    Text(
+                                        text = source.content.take(120) + if (source.content.length > 120) "…" else "",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
+                        }
+                    }
+                }
+
+                // Sensor signals section
+                SectionHeader(title = "Data powering this read")
+                SurfaceCard {
+                    val markerDomains = listOf(
+                        Triple("Sleep",    "Bedtime · Duration · Regularity",               MaterialTheme.colorScheme.tertiary),
+                        Triple("Screen",   "Late-night use · Daily screen time · App focus", MaterialTheme.colorScheme.primary),
+                        Triple("Movement", "Movement variety · Familiar places",             MaterialTheme.colorScheme.secondary),
+                        Triple("Social",   "Daily rhythm · Communication balance",           AutoLifeSemantic.categoryLeisure),
+                    )
+                    markerDomains.forEachIndexed { index, (domain, markers, color) ->
+                        if (index > 0) MutedDivider()
+                        Column(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            CategoryBadge(text = domain, color = color)
                             Text(
-                                title,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                text = markers,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -248,20 +263,4 @@ private fun wellbeingNarrative(
     return parts.take(2).joinToString("\n\n").ifBlank {
         "Assessment is ready, but no summary was returned."
     }
-}
-
-private fun healthPracticeIcon(category: String?): ImageVector = when (category?.lowercase()) {
-    "sleep" -> Icons.Default.FavoriteBorder
-    "physical", "movement" -> Icons.Default.CalendarMonth
-    "mindfulness", "stress" -> Icons.Default.FavoriteBorder
-    else -> Icons.Default.FavoriteBorder
-}
-
-@Composable
-private fun healthCategoryColor(category: String?): Color = when (category?.lowercase()) {
-    "sleep" -> AutoLifeSemantic.categoryWork
-    "physical", "movement" -> AutoLifeSemantic.categoryHealth
-    "mindfulness", "stress" -> AutoLifeSemantic.toolVectorDB
-    "social" -> AutoLifeSemantic.categoryLeisure
-    else -> MaterialTheme.colorScheme.primary
 }

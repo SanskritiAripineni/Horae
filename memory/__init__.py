@@ -73,6 +73,20 @@ class MemoryModule:
     def get_prompt_preferences(self, user_id: str = "default") -> list[str]:
         return self.preferences.get_prompt_preferences(user_id)
 
+    def get_wellbeing_context(self, user_id: str = "default") -> dict:
+        latest = self.wellbeing_tracker.get_latest(user_id)
+        trend = self.wellbeing_tracker.get_trend(user_id)
+        history = self.wellbeing_tracker.get_history(user_id)
+        return {
+            "latest_risk": latest.risk_level if latest else None,
+            "latest_timestamp": (latest.timestamp[:10] if latest else None),
+            "trend": trend.direction if trend else "insufficient_data",
+            "history": [
+                {"risk_level": h.get("risk_level"), "timestamp": h.get("timestamp", "")[:10]}
+                for h in history[-7:]
+            ],
+        }
+
     def record_suggestion_feedback(
         self,
         user_id: str,

@@ -309,6 +309,9 @@ STRICT RULES — follow every one exactly:
         research_context: List[Dict[str, Any]],
         user_preferences: Optional[List[str]] = None,
         feedback_history: Optional[List[Dict[str, Any]]] = None,
+        wellbeing_history: Optional[Dict[str, Any]] = None,
+        behavioral_state: Optional[Dict[str, Any]] = None,
+        raw_days: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Orchestrator call: compose journal narrative + behavioral sensing + calendar
         + research evidence into a complete schedule proposal.
@@ -379,11 +382,118 @@ STRICT RULES — follow every one exactly:
 
         behavioral_text = self._text(behavioral_prose)
         journal_text = self._text(journal_narrative)
-        sensing_section = (
-            f"BEHAVIORAL SENSING (objective phone sensor assessment from Layer 1-4 pipeline):\n{behavioral_text[:3000]}"
-            if behavioral_text
-            else "BEHAVIORAL SENSING: No sensor data available for this period."
-        )
+        has_sensor_data = bool(behavioral_text)
+
+        # Build raw sensor values section (absolute numbers, not z-scores)
+        raw_values_section = ""
+        if raw_days:
+            lines = []
+            for day in raw_days[-7:]:  # last 7 days
+                d = day.get("date", "?")
+                onset = day.get("sleep_onset_hour")
+                dur = day.get("sleep_duration_hours")
+                sri = day.get("sleep_regularity_index")
+                screen_late = day.get("late_night_screen_min")
+                screen_total = day.get("total_screen_min")
+                app_sw = day.get("app_switching_rate")
+                mob = day.get("mobility_entropy")
+                revisit = day.get("location_revisit_ratio")
+                social = day.get("social_rhythm_metric")
+                comm = day.get("comm_reciprocity")
+
+                onset_str = f"{onset:.1f}h ({int(onset)}:{int((onset%1)*60):02d})" if onset is not None else "—"
+                dur_str = f"{dur:.1f}h" if dur is not None else "—"
+                sri_str = f"{sri:.0f}/100" if sri is not None else "—"
+                screen_late_str = f"{screen_late:.0f}min" if screen_late is not None else "—"
+                screen_total_str = f"{screen_total:.0f}min" if screen_total is not None else "—"
+                app_sw_str = f"{app_sw:.1f}/hr" if app_sw is not None else "—"
+                mob_str = f"{mob:.2f}" if mob is not None else "—"
+                revisit_str = f"{revisit:.2f}" if revisit is not None else "—"
+                social_str = f"{social:.2f}" if social is not None else "—"
+                comm_str = f"{comm:.2f}" if comm is not None else "—"
+
+                lines.append(
+                    f"  {d}: sleep_onset={onset_str}, sleep_duration={dur_str}, "
+                    f"sleep_regularity={sri_str}, late_night_screen={screen_late_str}, "
+                    f"total_screen={screen_total_str}, app_switching={app_sw_str}, "
+                    f"mobility_entropy={mob_str}, location_revisit={revisit_str}, "
+                    f"social_rhythm={social_str}, comm_reciprocity={comm_str}"
+                )
+            raw_values_section = (
+                "RAW SENSOR VALUES (absolute daily measurements — judge sleep health by these absolute values, "
+                "not just relative deviation from baseline; e.g. sleep_onset >2h = late regardless of baseline):\n"
+                + "\n".join(lines)
+            )
+
+        # Build structured deviations section from Layer 2/3 output
+        deviations_section = ""
+        if behavioral_state and isinstance(behavioral_state, dict):
+            devs = behavioral_state.get("deviations", [])
+            patterns = behavioral_state.get("coherent_patterns", [])
+            baseline_info = behavioral_state.get("baseline_state", {})
+            coverage_notes = behavioral_state.get("coverage_notes", [])
+
+            dev_lines = []
+            for dv in devs:
+                marker = dv.get("marker", "?")
+                direction = dv.get("direction", "?")
+                magnitude = dv.get("magnitude", "?")
+                description = dv.get("description", "")
+                recent_val = dv.get("recent_value")
+                baseline = dv.get("baseline_typical", {})
+                baseline_mean = baseline.get("mean")
+                dev_lines.append(
+                    f"  • {marker}: {direction} ({magnitude}) — {description}"
+                    + (f" | recent={recent_val:.2f}, baseline_mean={baseline_mean:.2f}" if recent_val is not None and baseline_mean is not None else "")
+                )
+
+            pattern_lines = [f"  • {p.get('description', '')} [{p.get('confidence', '?')} confidence]" for p in patterns]
+
+            days_history = baseline_info.get("days_of_history", 0)
+            confidence = baseline_info.get("overall_confidence", "unknown")
+            deviations_section = (
+                f"BEHAVIORAL DEVIATIONS (z-score analysis vs {days_history}-day personal baseline, confidence={confidence}):\n"
+                + ("\n".join(dev_lines) if dev_lines else "  No significant deviations detected vs personal baseline.")
+                + ("\n\nCoherent patterns:\n" + "\n".join(pattern_lines) if pattern_lines else "")
+                + ("\n\nCoverage notes: " + "; ".join(coverage_notes) if coverage_notes else "")
+            )
+
+        sensing_section = ""
+        if has_sensor_data:
+            sensing_section = f"BEHAVIORAL SENSING PROSE (Layer 3 narrative summary):\n{behavioral_text[:2000]}"
+            if raw_values_section:
+                sensing_section = raw_values_section + "\n\n" + sensing_section
+            if deviations_section:
+                sensing_section = sensing_section + "\n\n" + deviations_section
+        else:
+            sensing_section = (
+                "BEHAVIORAL SENSING: No sensor data available for this period. "
+                "Do NOT infer or assume any behavioral patterns. "
+                "Set confidence_label to 'Low confidence — no sensor data'. "
+                "Only report positives/protective_signals explicitly mentioned in the journal narrative."
+            )
+            if raw_values_section:
+                sensing_section = raw_values_section + "\n\n" + sensing_section
+
+        history_section = ""
+        if wellbeing_history and wellbeing_history.get("history"):
+            _trend_labels = {
+                "rising": "worsening over time",
+                "falling": "improving over time",
+                "stable": "stable over time",
+                "insufficient_data": "not enough data yet to determine trend",
+            }
+            trend_dir = wellbeing_history.get("trend", "insufficient_data")
+            trend_label = _trend_labels.get(trend_dir, trend_dir)
+            recent = " → ".join(
+                f"{e['timestamp']} ({e['risk_level']})"
+                for e in wellbeing_history["history"][-5:]
+            )
+            history_section = (
+                f"\nWELLBEING HISTORY (stored across past sessions):\n"
+                f"  Trend: {trend_label}\n"
+                f"  Recent assessments: {recent}\n"
+            )
 
         prompt = f"""You are a wellness scheduling agent. Use ALL context below to produce a structured schedule proposal.
 
@@ -393,7 +503,7 @@ JOURNAL NARRATIVE (contextual record of the user's recent activities — not a w
 {journal_text[:3000]}
 
 {sensing_section}
-
+{history_section}
 PRELIMINARY RISK ESTIMATE (from behavioral sensing heuristic): {risk_level}
 Risk guide: minimal=healthy normal functioning | mild=some stress indicators | moderate=intervention recommended | severe=immediate support needed
 
@@ -475,7 +585,10 @@ STRICT RULES:
 7. STRICTLY respect user preferences — never suggest activities the user dislikes
 8. end_time must be strictly after start_time
 9. If no sensor data is available, still produce recommendations and proposals from journal + research context alone
-10. ui_summary must be UI-friendly and compact; keep dense evidence in summary/recommendations/proposed_changes, not in the labels"""
+10. ui_summary must be UI-friendly and compact; keep dense evidence in summary/recommendations/proposed_changes, not in the labels
+11. positives and protective_signals MUST be grounded in sensor data (coverage ≥ 0.5) or an explicit journal mention — do NOT infer or assume positive signals not evidenced in the data
+12. When judging sleep health from RAW SENSOR VALUES, use absolute standards (sleep_onset >2h = late, sleep_duration <6h = short) even if the deviation from personal baseline is small
+13. If no sensor data is available, confidence_label MUST be "Low confidence — no sensor data" """
 
         response = self.generate(prompt, max_tokens=8192)
         data = self._parse_json_response(response, None)

@@ -17,15 +17,13 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.autolife.composeapp.ui.components.withSerif
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -37,7 +35,6 @@ import com.autolife.composeapp.ui.SnackbarBus
 import com.autolife.composeapp.ui.components.*
 import com.autolife.composeapp.ui.theme.AutoLifeSemantic
 import com.autolife.shared.db.DatabaseRepository
-import com.autolife.shared.model.ContextLogCodec
 import com.autolife.shared.model.JournalEntry
 import com.autolife.shared.model.SensorLog
 import kotlinx.coroutines.Dispatchers
@@ -67,25 +64,16 @@ fun JournalScreen(
     val logs by viewModel.recentLogs.collectAsState(initial = emptyList())
     val serviceState by PlatformStateProvider.serviceState.collectAsState()
 
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showClearDialog by remember { mutableStateOf(false) }
-
-    val clearCount = if (selectedTab == 0) journals.size else logs.size
-    val clearLabel = if (selectedTab == 0) "journals" else "live logs"
 
     if (showClearDialog) {
         ConfirmClearDialog(
-            title = "Clear all $clearLabel?",
-            body = "This deletes $clearCount ${if (clearCount == 1) clearLabel.dropLast(1) else clearLabel} from the local database. This cannot be undone.",
+            title = "Clear all journals?",
+            body = "This deletes ${journals.size} ${if (journals.size == 1) "journal" else "journals"} from the local database. This cannot be undone.",
             onConfirm = {
                 showClearDialog = false
-                if (selectedTab == 0) {
-                    viewModel.clearJournals()
-                    SnackbarBus.tryEmit("Cleared $clearCount journal${if (clearCount == 1) "" else "s"}")
-                } else {
-                    viewModel.clearLogs()
-                    SnackbarBus.tryEmit("Cleared $clearCount log${if (clearCount == 1) "" else "s"}")
-                }
+                viewModel.clearJournals()
+                SnackbarBus.tryEmit("Cleared ${journals.size} journal${if (journals.size == 1) "" else "s"}")
             },
             onDismiss = { showClearDialog = false },
         )
@@ -103,18 +91,13 @@ fun JournalScreen(
                 onStartCollection = { onServiceToggle(true) },
             )
 
-            JournalTabRow(
-                selectedTab = selectedTab,
-                onSelectTab = { selectedTab = it },
-                clearEnabled = clearCount > 0,
+            JournalActionRow(
+                clearEnabled = journals.isNotEmpty(),
                 onClear = { showClearDialog = true },
             )
         }
 
-        when (selectedTab) {
-            0 -> JournalsList(journals)
-            1 -> LogsList(logs)
-        }
+        JournalsList(journals)
     }
 }
 
@@ -130,12 +113,6 @@ private fun JournalOverviewCard(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OverviewStatusCell(
-                modifier = Modifier.weight(1.15f),
-                title = if (serviceRunning) "Active" else "Collection is Paused",
-                tint = if (serviceRunning) AutoLifeSemantic.categoryHealth else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            OverviewDivider()
             OverviewMetricCell(
                 modifier = Modifier.weight(1f),
                 icon = Icons.AutoMirrored.Filled.TrendingUp,
@@ -163,32 +140,6 @@ private fun JournalOverviewCard(
 }
 
 @Composable
-private fun OverviewStatusCell(
-    title: String,
-    tint: Color,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(12.dp)
-                .background(tint.copy(alpha = 0.95f), shape = MaterialTheme.shapes.small),
-        )
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
 private fun OverviewMetricCell(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     value: String,
@@ -208,10 +159,7 @@ private fun OverviewMetricCell(
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Normal,
-            ),
+            style = MaterialTheme.typography.headlineMedium.withSerif(),
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
@@ -234,84 +182,20 @@ private fun OverviewDivider() {
 }
 
 @Composable
-private fun JournalTabRow(
-    selectedTab: Int,
-    onSelectTab: (Int) -> Unit,
+private fun JournalActionRow(
     clearEnabled: Boolean,
     onClear: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.End,
     ) {
-        Surface(
-            modifier = Modifier.weight(1f),
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = androidx.compose.foundation.BorderStroke(
-                1.dp,
-                MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-            ),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                JournalTabButton(
-                    label = "Journals",
-                    selected = selectedTab == 0,
-                    onClick = { onSelectTab(0) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("tab_journals"),
-                )
-                JournalTabButton(
-                    label = "Live Logs",
-                    selected = selectedTab == 1,
-                    onClick = { onSelectTab(1) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("tab_live_logs"),
-                )
-            }
-        }
-
         FilledTonalIconButton(
             onClick = onClear,
             enabled = clearEnabled,
             modifier = Modifier.size(42.dp),
         ) {
-            Icon(Icons.Default.DeleteOutline, contentDescription = "Clear current tab")
-        }
-    }
-}
-
-@Composable
-private fun JournalTabButton(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
-        color = if (selected) AutoLifeSemantic.categoryHealth else Color.Transparent,
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleMedium,
-                color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Icon(Icons.Default.DeleteOutline, contentDescription = "Clear journals")
         }
     }
 }
@@ -455,42 +339,6 @@ private fun JournalEntryRow(entry: JournalEntry) {
 }
 
 @Composable
-private fun LogsList(logs: List<SensorLog>) {
-    if (logs.isEmpty()) {
-        EmptyState(
-            icon = Icons.AutoMirrored.Filled.Article,
-            title = "No Logs Yet",
-            description = "Sensor logs will appear here when the service is running.",
-        )
-        return
-    }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        groupedByDay(logs) { it.timestamp }.forEach { (day, entries) ->
-            item(day) {
-                DaySectionHeader(day)
-            }
-            item("${day}_card") {
-                GroupedSurfaceCard {
-                    entries.forEachIndexed { index, log ->
-                        LogRow(log)
-                        if (index != entries.lastIndex) {
-                            Spacer(Modifier.height(14.dp))
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
-                            Spacer(Modifier.height(14.dp))
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun DaySectionHeader(label: String) {
     Text(
         text = label,
@@ -505,86 +353,6 @@ private fun GroupedSurfaceCard(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     SurfaceCard(content = content)
-}
-
-@Composable
-private fun LogRow(log: SensorLog) {
-    var expanded by rememberSaveable(log.id) { mutableStateOf(false) }
-    val details = log.displayContent()
-    val arrowRotation by animateFloatAsState(targetValue = if (expanded) 180f else 0f, label = "arrow")
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { expanded = !expanded }
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                Text(
-                    text = DateFormat.time(log.timestamp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = logTitle(log),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = if (expanded) Int.MAX_VALUE else 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = details,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = if (expanded) Int.MAX_VALUE else 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Spacer(Modifier.width(6.dp))
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                StatusPill(
-                    text = log.type.replaceFirstChar { it.uppercase() },
-                    color = logTypeColor(log.type),
-                )
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier
-                        .size(20.dp)
-                        .rotate(arrowRotation),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        AnimatedVisibility(
-            visible = expanded,
-            enter = expandVertically(),
-            exit = shrinkVertically(),
-        ) {
-            Column {
-                Spacer(Modifier.height(12.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f))
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = log.content,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontFamily = FontFamily.Monospace,
-                )
-            }
-        }
-    }
 }
 
 @Composable
@@ -627,44 +395,7 @@ private fun journalSubtitle(entry: JournalEntry, hasError: Boolean): String {
     }
 }
 
-private fun logTitle(log: SensorLog): String {
-    return when (log.type.lowercase()) {
-        "motion" -> "Motion update"
-        "location" -> "Location update"
-        "wifi" -> "Network context"
-        "context" -> "Context snapshot"
-        else -> "${log.type.replaceFirstChar { it.uppercase() }} log"
-    }
-}
-
-@Composable
-private fun logTypeColor(type: String): Color {
-    return when (type.lowercase()) {
-        "motion" -> MaterialTheme.colorScheme.secondary
-        "location" -> MaterialTheme.colorScheme.primary
-        "wifi" -> MaterialTheme.colorScheme.tertiary
-        "context" -> AutoLifeSemantic.categoryHealth
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-}
-
 private fun <T> groupedByDay(items: List<T>, timestamp: (T) -> Long): List<Pair<String, List<T>>> {
     return items.groupBy { DateFormat.monthDayYear(timestamp(it)) }.toList()
 }
 
-private fun SensorLog.displayContent(): String {
-    if (type.equals("CONTEXT", ignoreCase = true)) {
-        val contextLog = ContextLogCodec.decode(content)
-        if (contextLog != null) {
-            val location = contextLog.fusedLocationContext
-                ?: contextLog.ssidContext
-                ?: contextLog.mapContext
-                ?: "Unknown location"
-            val motion = contextLog.calibratedMotion.ifBlank {
-                contextLog.motionCandidates.firstOrNull() ?: "stationary"
-            }
-            return "$motion at $location"
-        }
-    }
-    return content
-}

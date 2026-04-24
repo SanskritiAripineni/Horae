@@ -71,3 +71,12 @@ actual fun rememberLocationPreviewImage(imageBytes: ByteArray?): ImageBitmap? {
 
 actual suspend fun getBehavioralMarkers(nDays: Int): List<RawDayMarkers> =
     BehavioralMarkerAggregator.aggregate(nDays)
+
+actual fun openNativeCalendar() {
+    val ctx = AppContextHolder.context ?: return
+    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+        data = android.provider.CalendarContract.CONTENT_URI
+        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+    }
+    runCatching { ctx.startActivity(intent) }
+}

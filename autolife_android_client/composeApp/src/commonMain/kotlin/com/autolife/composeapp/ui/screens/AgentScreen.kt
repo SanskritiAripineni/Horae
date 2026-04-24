@@ -136,6 +136,7 @@ private enum class ExpandedTool { AUTOLIFE, WELLBEING, VECTORDB, CALENDAR, LAST_
 @Composable
 fun AgentScreen(
     onOpenHealth: () -> Unit = {},
+    onServiceToggle: (Boolean) -> Unit = {},
     viewModel: AgentViewModel = viewModel { AgentViewModel() },
 ) {
     val result by AnalysisRepository.result.collectAsState()
@@ -153,11 +154,19 @@ fun AgentScreen(
         sensorsLive = serviceState.isRunning,
     )
 
+    val showGettingStarted = result == null && !isLoading && !serviceState.isRunning
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        if (showGettingStarted) {
+            item {
+                GettingStartedCard(onStartService = { onServiceToggle(true) })
+            }
+        }
+
         item {
             SurfaceCard {
                 Row(
@@ -374,6 +383,57 @@ private fun recommendationTags(rec: Recommendation?): List<Pair<String, Color>> 
         },
         rec.source?.takeIf { it.isNotBlank() }?.let { "Research-backed" to AutoLifeSemantic.toolVectorDB },
     )
+}
+
+@Composable
+private fun GettingStartedCard(onStartService: () -> Unit) {
+    SurfaceCard {
+        Text(
+            "Get started",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(12.dp))
+        listOf(
+            "Start the AutoLife service below to begin collecting data",
+            "Check the Journal tab — entries appear as data accumulates",
+            "Come back here and tap Run Analysis",
+        ).forEachIndexed { i, step ->
+            Row(
+                modifier = Modifier.padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Surface(
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            "${i + 1}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
+                }
+                Text(
+                    step,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        Button(
+            onClick = onStartService,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Start service")
+        }
+    }
 }
 
 @Composable

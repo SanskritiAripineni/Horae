@@ -32,6 +32,8 @@ data class LocationContextCacheEntry(
     val mapSourceLon: Double,
     val updatedAtMs: Long,
     val osmContext: String? = null,
+    val ssidContext: String? = null,
+    val fusedLocationContext: String? = null,
 )
 
 @Serializable

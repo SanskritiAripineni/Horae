@@ -6,15 +6,14 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.autolife.composeapp.ui.components.withSerif
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -74,10 +73,7 @@ fun AutoLifeNavHost(
                 title = {
                     Text(
                         topBarTitle,
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontFamily = FontFamily.Serif,
-                            fontWeight = FontWeight.Normal,
-                        )
+                        style = MaterialTheme.typography.titleLarge.withSerif(),
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -103,8 +99,8 @@ fun AutoLifeNavHost(
                     if (isTopLevel) {
                         IconButton(onClick = { navController.navigate("dev_dashboard") }) {
                             Icon(
-                                Icons.Default.Settings,
-                                "Settings",
+                                Icons.Default.BugReport,
+                                "Dev tools",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(20.dp),
                             )
@@ -217,12 +213,14 @@ fun AutoLifeNavHost(
             popExitTransition = topLevelExit,
         ) {
             composable(Screen.Agent.route) {
-                AgentScreen(onOpenHealth = { navigateTopLevel(Screen.Health.route) })
+                AgentScreen(
+                    onOpenHealth = { navigateTopLevel(Screen.Health.route) },
+                    onServiceToggle = onServiceToggle,
+                )
             }
             composable(Screen.Health.route) {
                 HealthScreen(
                     onOpenAgent = { navigateTopLevel(Screen.Agent.route) },
-                    onOpenSchedule = { navigateTopLevel(Screen.Schedule.route) },
                 )
             }
             composable(Screen.Schedule.route) { ScheduleScreen(onOpenAgent = { navigateTopLevel(Screen.Agent.route) }) }

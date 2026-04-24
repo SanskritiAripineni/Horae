@@ -79,6 +79,7 @@ fun isUsableLocation(location: Location, maxAccuracyMeters: Float = 50f): Boolea
 class LocationAnalyzer(private val context: Context) : Closeable {
     companion object {
         private const val TAG = "LocationAnalyzer"
+        private const val LOCATION_LLM_CACHE_TTL_MS = 24 * 60 * 60 * 1000L // 24 hours
     }
 
     private val fileStorage = FileStorage(context)
@@ -106,14 +107,10 @@ class LocationAnalyzer(private val context: Context) : Closeable {
         val previousGridMatches = previousLog?.locationGridKey == gridKey
         val previousSsidMatches = previousLog?.ssidFingerprint == ssidFingerprint
 
-        val ssidContext = when {
-            sanitizedSsids.isEmpty() -> null
-            previousGridMatches && previousSsidMatches && !previousLog?.ssidContext.isNullOrBlank() -> previousLog?.ssidContext
-            else -> generateSsidContext(sanitizedSsids)
-        }
-        val reusedSsidContext = sanitizedSsids.isNotEmpty() && previousGridMatches && previousSsidMatches && !previousLog?.ssidContext.isNullOrBlank()
         val cachedMap = gridKey?.let(cacheStorage::get)
         val reusedMapContext = cachedMap != null
+        val cachedLlmFresh = cachedMap != null &&
+            (System.currentTimeMillis() - cachedMap.updatedAtMs) < LOCATION_LLM_CACHE_TTL_MS
         val mapContext = when {
             cachedMap != null -> cachedMap.mapContext
             location != null -> generateGeocoderContext(location, gridKey)
@@ -125,7 +122,20 @@ class LocationAnalyzer(private val context: Context) : Closeable {
             else -> null
         }
 
+        // Use persistent grid-keyed cache for ssidContext and fusedLocationContext if fresh,
+        // before falling back to the single-previous-log check or a fresh Gemini call.
+        val ssidContext = when {
+            sanitizedSsids.isEmpty() -> null
+            cachedLlmFresh && !cachedMap?.ssidContext.isNullOrBlank() -> cachedMap?.ssidContext
+            previousGridMatches && previousSsidMatches && !previousLog?.ssidContext.isNullOrBlank() -> previousLog?.ssidContext
+            else -> generateSsidContext(sanitizedSsids)
+        }
+        val reusedSsidContext = sanitizedSsids.isNotEmpty() &&
+            ((cachedLlmFresh && !cachedMap?.ssidContext.isNullOrBlank()) ||
+                (previousGridMatches && previousSsidMatches && !previousLog?.ssidContext.isNullOrBlank()))
+
         val fusedLocationContext = when {
+            cachedLlmFresh && !cachedMap?.fusedLocationContext.isNullOrBlank() -> cachedMap?.fusedLocationContext
             previousGridMatches && previousSsidMatches && !previousLog?.fusedLocationContext.isNullOrBlank() -> previousLog?.fusedLocationContext
             listOf(mapContext, osmContext, ssidContext).count { !it.isNullOrBlank() } >= 2 -> fuseLocationContexts(mapContext, osmContext, ssidContext)
             !ssidContext.isNullOrBlank() -> ssidContext
@@ -158,6 +168,26 @@ class LocationAnalyzer(private val context: Context) : Closeable {
         )
 
         fusedLocationContext?.let { fileStorage.saveLLMResponseIfChanged(it) }
+
+        // Persist ssidContext and fusedLocationContext into the grid-keyed cache so future
+        // cycles at the same location skip Gemini entirely.
+        if (gridKey != null && mapContext != null &&
+            (!ssidContext.isNullOrBlank() || !fusedLocationContext.isNullOrBlank()) &&
+            (cachedMap?.ssidContext.isNullOrBlank() || cachedMap?.fusedLocationContext.isNullOrBlank())
+        ) {
+            cacheStorage.put(
+                LocationContextCacheEntry(
+                    gridKey = gridKey,
+                    mapContext = mapContext,
+                    mapSourceLat = snapshot?.latitude ?: cachedMap?.mapSourceLat ?: 0.0,
+                    mapSourceLon = snapshot?.longitude ?: cachedMap?.mapSourceLon ?: 0.0,
+                    updatedAtMs = System.currentTimeMillis(),
+                    osmContext = osmContext ?: cachedMap?.osmContext,
+                    ssidContext = ssidContext ?: cachedMap?.ssidContext,
+                    fusedLocationContext = fusedLocationContext ?: cachedMap?.fusedLocationContext,
+                )
+            )
+        }
 
         LocationResolutionResult(
             snapshot = snapshot,

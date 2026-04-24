@@ -31,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +52,7 @@ import com.autolife.composeapp.platform.BatteryAssessmentRecord
 import com.autolife.composeapp.platform.BatteryScreenIntent
 import com.autolife.composeapp.platform.BatteryTestProfile
 import com.autolife.composeapp.platform.PlatformStateProvider
+import com.autolife.shared.db.DatabaseRepository
 import com.autolife.composeapp.platform.rememberLocationPreviewImage
 import com.autolife.composeapp.ui.components.DataRow
 import com.autolife.composeapp.ui.components.DataTextBlock
@@ -517,6 +519,22 @@ fun DevDashboardScreen() {
             }
         }
 
+        val logs by DatabaseRepository.observeRecentLogs().collectAsState(initial = emptyList())
+        if (logs.isNotEmpty()) {
+            SectionHeader("Sensor Logs")
+            SurfaceCard {
+                logs.take(30).forEachIndexed { index, log ->
+                    if (index > 0) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                        )
+                    }
+                    DevLogRow(log)
+                }
+            }
+        }
+
         Spacer(Modifier.height(16.dp))
     }
 }
@@ -526,6 +544,65 @@ private fun formatRemainingTime(remainingMs: Long): String {
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return "${minutes}:${seconds.toString().padStart(2, '0')} remaining"
+}
+
+@Composable
+private fun DevLogRow(log: com.autolife.shared.model.SensorLog) {
+    var expanded by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (log.content.isNotBlank())
+                    Modifier.clickable { expanded = !expanded }
+                else Modifier
+            ),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = com.autolife.composeapp.ui.DateFormat.time(log.timestamp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            StatusPill(
+                text = log.type.replaceFirstChar { it.uppercase() },
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Text(
+            text = devLogSummary(log),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = if (expanded) Int.MAX_VALUE else 2,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
+        if (expanded && log.content.isNotBlank()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = log.content,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            )
+        }
+    }
+}
+
+private fun devLogSummary(log: com.autolife.shared.model.SensorLog): String {
+    if (log.type.equals("CONTEXT", ignoreCase = true)) {
+        val ctx = com.autolife.shared.model.ContextLogCodec.decode(log.content)
+        if (ctx != null) {
+            val location = ctx.fusedLocationContext ?: ctx.ssidContext ?: ctx.mapContext ?: "unknown"
+            val motion = ctx.calibratedMotion.ifBlank { ctx.motionCandidates.firstOrNull() ?: "stationary" }
+            return "$motion at $location"
+        }
+    }
+    return log.content.take(120)
 }
 
 @Composable

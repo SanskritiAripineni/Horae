@@ -14,12 +14,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.autolife.shared.model.SignalItem
+
+/** Apply serif to any typography style. Used for titles, display numbers, and key headlines only. */
+@Composable
+fun TextStyle.withSerif(): TextStyle = copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Normal)
 
 @Composable
 fun SerifHeadline(
@@ -30,10 +35,7 @@ fun SerifHeadline(
     Text(
         text = text,
         modifier = modifier,
-        style = MaterialTheme.typography.displayLarge.copy(
-            fontFamily = FontFamily.Serif,
-            fontWeight = FontWeight.Normal,
-        ),
+        style = MaterialTheme.typography.displayLarge.withSerif(),
         color = color,
     )
 }
@@ -95,9 +97,10 @@ fun SignalPanel(
     tone: String,
     icon: ImageVector,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     val color = signalToneColor(tone)
-    SurfaceCard(modifier = modifier) {
+    SurfaceCard(modifier = modifier.then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)) {
         Text(title, style = MaterialTheme.typography.titleMedium, color = color)
         Spacer(Modifier.height(12.dp))
         if (items.isEmpty()) {

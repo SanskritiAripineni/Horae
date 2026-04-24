@@ -21,7 +21,7 @@ class IOSSensorServiceManager {
 
     // Intervals matching Android AutoLifeService
     private let LOG_INTERVAL: TimeInterval = 60           // 1 minute
-    private let JOURNAL_INTERVAL: Int64 = 15 * 60_000     // 15 minutes in ms
+    private let JOURNAL_INTERVAL: Int64 = 30 * 60_000     // 30 minutes in ms
     private let DEMO_JOURNAL_INTERVAL: Int64 = 2 * 60_000 // 2 minutes in ms
 
     private init() {}

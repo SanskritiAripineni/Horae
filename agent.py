@@ -335,6 +335,7 @@ class LLMSchedulerAgent:
             feedback_history: List[Dict[str, Any]] = []
             llm_analysis: Dict[str, Any] = {}
             memory_preferences = self.memory.get_prompt_preferences(effective_user_id)
+            wellbeing_context = self.memory.get_wellbeing_context(effective_user_id)
             sensor_user_prefs = (
                 {"preferences": memory_preferences}
                 if memory_preferences else None
@@ -392,6 +393,9 @@ class LLMSchedulerAgent:
                 research_context=research_suggestions,
                 user_preferences=memory_preferences,
                 feedback_history=feedback_history,
+                wellbeing_history=wellbeing_context,
+                behavioral_state=sensing_result.get("behavioral_state") if raw_days else None,
+                raw_days=raw_days,
             ))
 
             final_risk = proposals.get('risk_level', risk_level)

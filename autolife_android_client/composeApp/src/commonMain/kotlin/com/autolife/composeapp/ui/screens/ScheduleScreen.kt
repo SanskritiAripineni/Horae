@@ -3,6 +3,7 @@ package com.autolife.composeapp.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -29,11 +31,18 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
@@ -41,8 +50,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.autolife.composeapp.platform.currentDateKey
+import com.autolife.composeapp.platform.openNativeCalendar
 import com.autolife.composeapp.ui.DateFormat
 import com.autolife.composeapp.ui.ProposalApplier
+import com.autolife.composeapp.ui.SnackbarBus
 import com.autolife.composeapp.ui.components.*
 import com.autolife.composeapp.ui.theme.AutoLifeSemantic
 import com.autolife.shared.model.*
@@ -137,8 +148,8 @@ private fun parseDateLabel(s: String): String {
 
 private fun mondayOfWeek(key: String): String {
     val p = parseISO(key) ?: return ""
-    val dow = dayOfWeekIndex(p.year, p.month, p.day) // 0=Sun..6=Sat
-    val offset = (dow - 1 + 7) % 7 // days to subtract to reach Monday
+    val dow = dayOfWeekIndex(p.year, p.month, p.day)
+    val offset = (dow - 1 + 7) % 7
     val (y, m, d) = subtractDays(p.year, p.month, p.day, offset)
     return dateKey(y, m, d)
 }
@@ -170,19 +181,6 @@ private data class CalendarEventBar(
     val fullDate: String = "",
 )
 
-private fun eventColor(title: String): Color {
-    val lower = title.lowercase()
-    return when {
-        lower.containsAny("walk", "gym", "exercise", "health", "wellness", "meditation",
-            "yoga", "run", "therapy", "break", "rest") -> AutoLifeSemantic.categoryHealth
-        lower.containsAny("meet", "work", "focus", "project", "standup", "review",
-            "call", "interview", "deadline", "report") -> AutoLifeSemantic.categoryWork
-        else -> AutoLifeSemantic.categoryLeisure
-    }
-}
-
-private fun String.containsAny(vararg kw: String) = kw.any { this.contains(it) }
-
 private fun buildEventBars(cal: CalendarSummary?): List<CalendarEventBar> {
     if (cal == null) return emptyList()
     return cal.events.mapNotNull { ev ->
@@ -193,7 +191,7 @@ private fun buildEventBars(cal: CalendarSummary?): List<CalendarEventBar> {
             dayOfWeek = parseDayOfWeek(start),
             startHour = parseStartHour(start),
             durationHours = ev.duration_hours.toFloat().takeIf { it > 0f } ?: 1f,
-            color = eventColor(title),
+            color = AutoLifeSemantic.eventBar,
             dateLabel = parseDateLabel(start),
             fullDate = parseDateKey(start),
         )
@@ -258,21 +256,7 @@ private fun weekLabel(weeks: List<String>, idx: Int): String {
     return "$monStr – $sunStr"
 }
 
-// ── Category / conflict helpers ──────────────────────────────
-
-private data class CategoryHours(val work: Float, val health: Float, val leisure: Float)
-
-private fun categoryHours(bars: List<CalendarEventBar>): CategoryHours {
-    var w = 0f; var h = 0f; var l = 0f
-    bars.filter { !it.isProposal }.forEach { b ->
-        when (b.color) {
-            AutoLifeSemantic.categoryWork -> w += b.durationHours
-            AutoLifeSemantic.categoryHealth -> h += b.durationHours
-            else -> l += b.durationHours
-        }
-    }
-    return CategoryHours(w, h, l)
-}
+// ── Conflict helpers ─────────────────────────────────────────
 
 private fun proposalKey(c: ProposedChange) = "${c.title ?: ""}|${(c.start_time ?: "").take(10)}"
 
@@ -333,57 +317,74 @@ class ScheduleViewModel : ViewModel() {
     }
 }
 
-// ── Calendar connect card ────────────────────────────────────
+// ── Compact header card ──────────────────────────────────────
 
 @Composable
-private fun CalendarConnectCard(
+private fun ScheduleHeaderCard(
     connected: Boolean?,
     loading: Boolean,
     error: String?,
+    eventCount: Int,
+    proposalCount: Int,
     onConnect: () -> Unit,
     onRefresh: () -> Unit,
 ) {
+    val statusColor = when (connected) {
+        true -> AutoLifeSemantic.categoryHealth
+        false -> MaterialTheme.colorScheme.error
+        null -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val statusText = when (connected) {
+        true -> "Connected"
+        false -> "Not connected"
+        null -> "Checking…"
+    }
+
     SurfaceCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = if (connected == true) Icons.Default.CheckCircle else Icons.Default.CalendarMonth,
-                    contentDescription = null,
-                    tint = if (connected == true) AutoLifeSemantic.categoryHealth else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp),
-                )
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(
-                        "Google Calendar",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .background(statusColor, CircleShape)
                     )
                     Text(
-                        when (connected) {
-                            true -> "Connected"
-                            false -> "Not connected"
-                            null -> "Checking…"
-                        },
+                        "Google Calendar · $statusText",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (connected == true) AutoLifeSemantic.categoryHealth
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                when {
+                    loading -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    connected == true -> TextButton(
+                        onClick = onRefresh,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    ) { Text("Refresh", style = MaterialTheme.typography.labelSmall) }
+                    else -> TextButton(
+                        onClick = onConnect,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    ) { Text("Connect", style = MaterialTheme.typography.labelSmall) }
+                }
             }
-            when {
-                loading -> CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                connected == true -> TextButton(onClick = onRefresh) { Text("Refresh") }
-                else -> Button(onClick = onConnect, enabled = !loading) { Text("Connect") }
+
+            if (error != null) {
+                Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
-        }
-        if (error != null) {
-            Spacer(Modifier.height(6.dp))
-            Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                SourceStatCell(Icons.AutoMirrored.Filled.EventNote, "Events", "$eventCount", Modifier.weight(1f))
+                SourceStatCell(Icons.Default.CheckCircle, "Proposals", "$proposalCount", Modifier.weight(1f))
+            }
         }
     }
 }
@@ -400,10 +401,8 @@ fun ScheduleScreen(
     val selectedProposals by AnalysisRepository.selectedProposals.collectAsState()
     val uriHandler = LocalUriHandler.current
 
-    // Check calendar status on first load
     LaunchedEffect(Unit) { viewModel.checkCalendarStatus() }
 
-    // Open auth URL in browser when ready
     val pendingUrl = viewModel.pendingAuthUrl
     LaunchedEffect(pendingUrl) {
         if (pendingUrl != null) {
@@ -412,14 +411,22 @@ fun ScheduleScreen(
         }
     }
 
-    // Re-check status whenever screen resumes (e.g. returning from browser)
     val lifecycleOwner = LocalLifecycleOwner.current
+    var prevConnected by remember { mutableStateOf<Boolean?>(null) }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) viewModel.checkCalendarStatus()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(viewModel.calendarConnected) {
+        val current = viewModel.calendarConnected
+        if (prevConnected == false && current == true) {
+            SnackbarBus.emit("Google Calendar connected")
+        }
+        prevConnected = current
     }
 
     if (result == null) {
@@ -429,27 +436,27 @@ fun ScheduleScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             item {
+                ScheduleHeaderCard(
+                    connected = viewModel.calendarConnected,
+                    loading = viewModel.oauthLoading,
+                    error = viewModel.oauthError,
+                    eventCount = 0,
+                    proposalCount = 0,
+                    onConnect = { viewModel.requestAuthUrl() },
+                    onRefresh = { viewModel.checkCalendarStatus() },
+                )
+            }
+            item {
                 SurfaceCard {
                     ActionableEmptyState(
                         icon = Icons.AutoMirrored.Filled.EventNote,
                         title = "No schedule plan yet",
                         description = "Calendar connection gives AutoLife context. Analysis turns that context into weekly schedule suggestions.",
                         action = {
-                            Button(onClick = onOpenAgent) {
-                                Text("Run analysis")
-                            }
+                            Button(onClick = onOpenAgent) { Text("Run analysis") }
                         },
                     )
                 }
-            }
-            item {
-                CalendarConnectCard(
-                    connected = viewModel.calendarConnected,
-                    loading = viewModel.oauthLoading,
-                    error = viewModel.oauthError,
-                    onConnect = { viewModel.requestAuthUrl() },
-                    onRefresh = { viewModel.checkCalendarStatus() },
-                )
             }
             item {
                 SurfaceCard {
@@ -457,9 +464,7 @@ fun ScheduleScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         repeat(3) {
                             SkeletonBox(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(18.dp),
+                                modifier = Modifier.fillMaxWidth().height(18.dp),
                                 cornerRadius = 6,
                             )
                         }
@@ -482,33 +487,17 @@ fun ScheduleScreen(
 
     val allWeeks = remember(eventBars, proposalBars) { groupIntoWeeks(eventBars + proposalBars) }
     var currentWeekIndex by remember(allWeeks) { mutableIntStateOf(indexOfCurrentWeek(allWeeks)) }
+    val currentWeekDefault = remember(allWeeks) { indexOfCurrentWeek(allWeeks) }
     val weekRangeLabel = remember(allWeeks, currentWeekIndex) { weekLabel(allWeeks, currentWeekIndex) }
 
-    var showWork by remember { mutableStateOf(true) }
-    var showHealth by remember { mutableStateOf(true) }
-    var showLeisure by remember { mutableStateOf(true) }
-
-    val visibleBars = remember(eventBars, proposalBars, showWork, showHealth, showLeisure) {
-        (eventBars + proposalBars).filter { bar ->
-            when {
-                bar.isProposal -> true
-                bar.color == AutoLifeSemantic.categoryWork -> showWork
-                bar.color == AutoLifeSemantic.categoryHealth -> showHealth
-                else -> showLeisure
-            }
-        }
-    }
-
-    val weekBars = remember(visibleBars, allWeeks, currentWeekIndex) {
-        filterBarsToWeek(visibleBars, allWeeks, currentWeekIndex)
-    }
-    val weekAllBars = remember(eventBars, proposalBars, allWeeks, currentWeekIndex) {
+    val weekBars = remember(eventBars, proposalBars, allWeeks, currentWeekIndex) {
         filterBarsToWeek(eventBars + proposalBars, allWeeks, currentWeekIndex)
     }
-    val catHours = remember(weekAllBars) { categoryHours(weekAllBars) }
 
+    var showCalendar by rememberSaveable { mutableStateOf(false) }
+    var showAllProposals by remember { mutableStateOf(false) }
     var selectedBar by remember { mutableStateOf<CalendarEventBar?>(null) }
-    val expandedProposals = remember { mutableStateListOf<String>() }
+    val expandedProposalKeys = remember { mutableStateListOf<String>() }
     val conflictFlags = remember(proposalBars, eventBars) {
         proposalBars.associateWith { hasConflict(it, eventBars) }
     }
@@ -516,105 +505,31 @@ fun ScheduleScreen(
     val weekMondayKey = if (allWeeks.isNotEmpty() && currentWeekIndex in allWeeks.indices)
         allWeeks[currentWeekIndex] else ""
 
+    // Auto-expand calendar after a successful apply
+    val isApplying by ProposalApplier.isApplying.collectAsState()
+    val wasApplying = remember { mutableStateOf(false) }
+    LaunchedEffect(isApplying) {
+        if (!isApplying && wasApplying.value) showCalendar = true
+        wasApplying.value = isApplying
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Calendar connect card
+            // Compact header
             item {
-                CalendarConnectCard(
+                ScheduleHeaderCard(
                     connected = viewModel.calendarConnected,
                     loading = viewModel.oauthLoading,
                     error = viewModel.oauthError,
+                    eventCount = eventBars.size,
+                    proposalCount = proposalBars.size,
                     onConnect = { viewModel.requestAuthUrl() },
                     onRefresh = { viewModel.checkCalendarStatus() },
                 )
-            }
-
-            // Summary card
-            item {
-                SurfaceCard {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                    ) {
-                        SourceStatCell(Icons.Default.CalendarMonth, "Total hours", "${calSummary?.total_hours?.let { DateFormat.fmtFloat1(it) } ?: "--"}h", Modifier.weight(1f))
-                        SourceStatCell(Icons.AutoMirrored.Filled.EventNote, "Events", "${eventBars.size}", Modifier.weight(1f))
-                        SourceStatCell(Icons.Default.CheckCircle, "Proposals", "${proposalBars.size}", Modifier.weight(1f))
-                    }
-                }
-            }
-
-            // Filter chips
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    CategoryFilterChip("Work", AutoLifeSemantic.categoryWork, showWork) { showWork = it }
-                    CategoryFilterChip("Health", AutoLifeSemantic.categoryHealth, showHealth) { showHealth = it }
-                    CategoryFilterChip("Leisure", AutoLifeSemantic.categoryLeisure, showLeisure) { showLeisure = it }
-                }
-            }
-
-            // Week navigation
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    IconButton(onClick = { currentWeekIndex-- }, enabled = currentWeekIndex > 0) {
-                        Icon(Icons.Default.ChevronLeft, "Previous week")
-                    }
-                    Text(
-                        weekRangeLabel,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    IconButton(onClick = { currentWeekIndex++ }, enabled = currentWeekIndex < allWeeks.size - 1) {
-                        Icon(Icons.Default.ChevronRight, "Next week")
-                    }
-                }
-            }
-
-            // Chart (or filtered-empty hint)
-            item {
-                SurfaceCard {
-                    if (weekBars.isEmpty() && weekAllBars.isNotEmpty()) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text(
-                                "No events match the current filters",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            TextButton(onClick = {
-                                showWork = true; showHealth = true; showLeisure = true
-                            }) { Text("Clear filters") }
-                        }
-                    } else {
-                        WeekGridChart(bars = weekBars, weekMondayKey = weekMondayKey, onBarClick = { selectedBar = it })
-                    }
-                }
-            }
-
-            // Legend
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(start = 48.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    LegendDot("Work", AutoLifeSemantic.categoryWork)
-                    LegendDot("Health", AutoLifeSemantic.categoryHealth)
-                    LegendDot("Leisure", AutoLifeSemantic.categoryLeisure)
-                    LegendDot("Proposal", proposalColor)
-                }
             }
 
             // AI Proposals
@@ -624,6 +539,8 @@ fun ScheduleScreen(
                     val bar = proposalBars.find { "${it.title}|${it.fullDate}" == pKey }
                     conflictFlags[bar] != true
                 }
+                val visibleClear = if (showAllProposals || clearProposals.size <= 3)
+                    clearProposals else clearProposals.take(3)
 
                 item {
                     Row(
@@ -631,39 +548,59 @@ fun ScheduleScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        SectionHeader(
-                            title = "Selected proposals",
+                        Text(
+                            "AI proposals · ${result!!.proposed_changes.size} ready",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
                         )
                         if (clearProposals.isNotEmpty()) {
                             TextButton(onClick = {
-                                clearProposals.forEach { if (!selectedProposals.contains(it)) AnalysisRepository.addProposal(it) }
+                                clearProposals.forEach {
+                                    if (!selectedProposals.contains(it)) AnalysisRepository.addProposal(it)
+                                }
                             }) {
-                                Text("Select All", style = MaterialTheme.typography.labelMedium)
+                                Text("Select all", style = MaterialTheme.typography.labelMedium)
                             }
                         }
                     }
                 }
 
-                items(clearProposals) { change ->
+                items(visibleClear) { change ->
+                    val pKey = proposalKey(change)
                     ProposalRow(
                         change = change,
                         isSelected = selectedProposals.contains(change),
                         hasConflict = false,
-                        isExpanded = expandedProposals.contains(proposalKey(change)),
+                        isExpanded = expandedProposalKeys.contains(pKey),
                         onToggleExpand = {
-                            val k = proposalKey(change)
-                            if (expandedProposals.contains(k)) expandedProposals.remove(k) else expandedProposals.add(k)
+                            if (expandedProposalKeys.contains(pKey)) expandedProposalKeys.remove(pKey)
+                            else expandedProposalKeys.add(pKey)
+                            // Highlight matching bar in the grid
+                            val bar = proposalBars.find { "${it.title}|${it.fullDate}" == pKey }
+                            if (bar != null) selectedBar = bar
                         },
                         onToggleSelect = { checked ->
-                            if (checked) AnalysisRepository.addProposal(change) else AnalysisRepository.removeProposal(change)
+                            if (checked) AnalysisRepository.addProposal(change)
+                            else AnalysisRepository.removeProposal(change)
                         },
                     )
+                }
+
+                if (!showAllProposals && clearProposals.size > 3) {
+                    item {
+                        TextButton(
+                            onClick = { showAllProposals = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Show all ${clearProposals.size} proposals", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
                 }
 
                 if (conflictProposals.isNotEmpty()) {
                     item {
                         Text(
-                            "Conflicts — review before applying",
+                            "⚠ Conflicts — review before applying",
                             style = MaterialTheme.typography.labelMedium,
                             color = AutoLifeSemantic.riskMild,
                             modifier = Modifier.padding(top = 4.dp),
@@ -675,10 +612,11 @@ fun ScheduleScreen(
                             change = change,
                             isSelected = false,
                             hasConflict = true,
-                            isExpanded = expandedProposals.contains(proposalKey(change)),
+                            isExpanded = expandedProposalKeys.contains(proposalKey(change)),
                             onToggleExpand = {
                                 val k = proposalKey(change)
-                                if (expandedProposals.contains(k)) expandedProposals.remove(k) else expandedProposals.add(k)
+                                if (expandedProposalKeys.contains(k)) expandedProposalKeys.remove(k)
+                                else expandedProposalKeys.add(k)
                             },
                             onToggleSelect = {},
                         )
@@ -687,22 +625,121 @@ fun ScheduleScreen(
 
                 // Apply button
                 item {
-                    val isApplying by ProposalApplier.isApplying.collectAsState()
                     Button(
                         onClick = { viewModel.applySelected() },
                         enabled = selectedProposals.isNotEmpty() && !isApplying,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
-                            if (isApplying) "Applying..."
+                            if (isApplying) "Applying…"
                             else "Apply ${selectedProposals.size} change${if (selectedProposals.size == 1) "" else "s"}",
                         )
                     }
                 }
             }
+
+            // Show / Hide calendar toggle
+            item {
+                OutlinedButton(
+                    onClick = { showCalendar = !showCalendar },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        Icons.Default.CalendarMonth,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        if (showCalendar) "Hide calendar" else "Show calendar",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        if (showCalendar) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+
+            if (showCalendar) {
+                // Week navigation + Today pill
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        IconButton(onClick = { currentWeekIndex-- }, enabled = currentWeekIndex > 0) {
+                            Icon(Icons.Default.ChevronLeft, "Previous week")
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                weekRangeLabel,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            if (currentWeekIndex != currentWeekDefault) {
+                                TextButton(
+                                    onClick = { currentWeekIndex = currentWeekDefault },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                ) {
+                                    Text("Today", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                        IconButton(
+                            onClick = { currentWeekIndex++ },
+                            enabled = currentWeekIndex < allWeeks.size - 1,
+                        ) {
+                            Icon(Icons.Default.ChevronRight, "Next week")
+                        }
+                    }
+                }
+
+                // Week grid
+                item {
+                    SurfaceCard {
+                        WeekGridChart(
+                            bars = weekBars,
+                            weekMondayKey = weekMondayKey,
+                            onBarClick = { selectedBar = it },
+                        )
+                    }
+                }
+
+                // Legend for proposals
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 48.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        LegendDot("Events", AutoLifeSemantic.eventBar)
+                        LegendDot("AI proposal", proposalColor, dashed = true)
+                    }
+                }
+
+                // Bottom padding so FAB doesn't cover content
+                item { Spacer(Modifier.height(64.dp)) }
+            }
         }
 
-        // Detail bottom sheet
+        // FAB to open native calendar app (only when grid is visible)
+        if (showCalendar) {
+            FloatingActionButton(
+                onClick = { openNativeCalendar() },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            ) {
+                Icon(Icons.Default.CalendarMonth, contentDescription = "Open in Calendar")
+            }
+        }
+
+        // Event detail sheet
         if (selectedBar != null) {
             EventDetailSheet(bar = selectedBar!!, onDismiss = { selectedBar = null })
         }
@@ -763,9 +800,13 @@ private fun WeekGridChart(
     }
     val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val todayColumnColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val textMeasurer = rememberTextMeasurer()
     val hitRects = remember(bars) { mutableListOf<BarHitRect>() }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Day header row
         Row(modifier = Modifier.fillMaxWidth().padding(start = 44.dp)) {
             DAYS.forEach { day ->
                 val isToday = isCurrentWeek && day == todayName
@@ -794,7 +835,7 @@ private fun WeekGridChart(
             }
         }
 
-        Row(modifier = Modifier.fillMaxWidth().height(520.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().height(420.dp)) {
             Column(
                 modifier = Modifier.width(44.dp).fillMaxHeight(),
                 verticalArrangement = Arrangement.SpaceBetween,
@@ -818,16 +859,33 @@ private fun WeekGridChart(
             ) {
                 hitRects.clear()
                 val dayWidth = size.width / DAYS.size
+                val dashEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f), 0f)
+
+                // Today column background band
+                if (isCurrentWeek && todayName.isNotEmpty()) {
+                    val todayIdx = DAYS.indexOf(todayName)
+                    if (todayIdx >= 0) {
+                        drawRect(
+                            color = todayColumnColor,
+                            topLeft = Offset(todayIdx * dayWidth, 0f),
+                            size = Size(dayWidth, size.height),
+                        )
+                    }
+                }
+
+                // Vertical grid lines
                 DAYS.indices.forEach { index ->
-                    val x = index * dayWidth
-                    drawLine(gridColor, Offset(x, 0f), Offset(x, size.height), 1f)
+                    drawLine(gridColor, Offset(index * dayWidth, 0f), Offset(index * dayWidth, size.height), 1f)
                 }
                 drawLine(gridColor, Offset(size.width, 0f), Offset(size.width, size.height), 1f)
+
+                // Horizontal hour lines
                 for (h in 6..22 step 2) {
                     val y = ((h - DAY_START) / HOUR_SPAN) * size.height
                     drawLine(gridColor, Offset(0f, y), Offset(size.width, y), 1f)
                 }
 
+                // Event bars
                 bars.forEach { event ->
                     val dayIndex = DAYS.indexOf(event.dayOfWeek).coerceAtLeast(0)
                     val top = ((event.startHour - DAY_START).coerceAtLeast(0f) / HOUR_SPAN) * size.height
@@ -835,12 +893,71 @@ private fun WeekGridChart(
                     val left = dayIndex * dayWidth + 4.dp.toPx()
                     val width = (dayWidth - 8.dp.toPx()).coerceAtLeast(8f)
                     hitRects.add(BarHitRect(left, left + width, top, top + height))
+
+                    // Fill
                     drawRoundRect(
-                        color = event.color.copy(alpha = if (event.isProposal) 0.35f else 0.52f),
+                        color = event.color.copy(alpha = if (event.isProposal) 0.30f else 0.52f),
                         topLeft = Offset(left, top),
                         size = Size(width, height),
                         cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
                     )
+
+                    // Dashed outline for proposals
+                    if (event.isProposal) {
+                        drawRoundRect(
+                            color = event.color.copy(alpha = 0.7f),
+                            topLeft = Offset(left, top),
+                            size = Size(width, height),
+                            cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
+                            style = Stroke(width = 1.5f, pathEffect = dashEffect),
+                        )
+                    }
+
+                    // In-bar text labels
+                    val textPad = 4.dp.toPx()
+                    val textMaxWidth = (width - textPad * 2).coerceAtLeast(20f).toInt()
+                    val minHeightTitle = 28.dp.toPx()
+                    val minHeightTime = 44.dp.toPx()
+                    val textColor = onSurface.copy(alpha = 0.85f)
+
+                    if (height >= minHeightTitle && textMaxWidth > 20) {
+                        val titleResult = textMeasurer.measure(
+                            text = event.title,
+                            style = TextStyle(
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = textColor,
+                            ),
+                            overflow = TextOverflow.Ellipsis,
+                            maxLines = 1,
+                            constraints = Constraints(maxWidth = textMaxWidth),
+                        )
+                        drawText(
+                            textLayoutResult = titleResult,
+                            topLeft = Offset(left + textPad, top + textPad),
+                        )
+
+                        if (height >= minHeightTime) {
+                            val timeStr = formatAmPm(
+                                event.startHour.toInt(),
+                                ((event.startHour % 1) * 60).toInt(),
+                            )
+                            val timeResult = textMeasurer.measure(
+                                text = timeStr,
+                                style = TextStyle(
+                                    fontSize = 9.sp,
+                                    color = textColor.copy(alpha = 0.7f),
+                                ),
+                                overflow = TextOverflow.Ellipsis,
+                                maxLines = 1,
+                                constraints = Constraints(maxWidth = textMaxWidth),
+                            )
+                            drawText(
+                                textLayoutResult = timeResult,
+                                topLeft = Offset(left + textPad, top + textPad + titleResult.size.height + 1f),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -881,10 +998,7 @@ private fun WeekBarChart(
     val hourLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     Column {
-        // Hour axis
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 52.dp, bottom = 2.dp),
-        ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(start = 52.dp, bottom = 2.dp)) {
             val hours = listOf(6, 9, 12, 15, 18, 21, 22)
             hours.zipWithNext().forEach { (h1, h2) ->
                 Text(
@@ -953,7 +1067,6 @@ private fun DayRow(
         ) {
             barHitRects.clear()
 
-            // Grid lines
             listOf(0f, 3f, 6f, 9f, 12f, 15f).forEach { offset ->
                 val x = (offset / HOUR_SPAN) * size.width
                 drawLine(gridColor, Offset(x, 0f), Offset(x, size.height), 1f)
@@ -984,29 +1097,22 @@ private fun DayRow(
 // ── Sub-composables ──────────────────────────────────────────
 
 @Composable
-private fun CategoryPill(label: String, value: String, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, style = MaterialTheme.typography.titleMedium, color = color, fontWeight = FontWeight.SemiBold)
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun CategoryFilterChip(label: String, chipColor: Color, selected: Boolean, onSelectedChange: (Boolean) -> Unit) {
-    FilterChip(
-        selected = selected,
-        onClick = { onSelectedChange(!selected) },
-        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
-        leadingIcon = { Box(Modifier.size(8.dp).background(chipColor, CircleShape)) },
-    )
-}
-
-@Composable
-private fun LegendDot(label: String, color: Color) {
+private fun LegendDot(label: String, color: Color, dashed: Boolean = false) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).background(color, RoundedCornerShape(2.dp)))
+        Box(
+            Modifier
+                .size(8.dp)
+                .background(
+                    if (dashed) color.copy(alpha = 0.4f) else color.copy(alpha = 0.6f),
+                    RoundedCornerShape(2.dp),
+                )
+        )
         Spacer(Modifier.width(4.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            if (dashed) "$label (dashed)" else label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -1044,7 +1150,9 @@ private fun ProposalRow(
                 enabled = !hasConflict,
                 onCheckedChange = onToggleSelect,
             )
-            Column(modifier = Modifier.weight(1f).padding(start = 4.dp)) {
+            Column(modifier = Modifier.weight(1f).padding(start = 4.dp).let {
+                if (!desc.isNullOrBlank()) it.clickable(onClick = onToggleExpand) else it
+            }) {
                 Text(
                     title,
                     style = MaterialTheme.typography.bodyMedium,
@@ -1108,14 +1216,9 @@ private fun EventDetailSheet(bar: CalendarEventBar, onDismiss: () -> Unit) {
             }
             Spacer(Modifier.height(12.dp))
             DataRow("Date", bar.dateLabel.ifBlank { bar.dayOfWeek })
-            DataRow("Start", "${pad2(bar.startHour.toInt())}:${pad2(((bar.startHour % 1) * 60).toInt())}")
+            DataRow("Start", formatAmPm(bar.startHour.toInt(), ((bar.startHour % 1) * 60).toInt()))
             DataRow("Duration", "${DateFormat.fmtFloat1(bar.durationHours)}h")
-            DataRow("Type", when {
-                bar.isProposal -> "AI Proposal"
-                bar.color == AutoLifeSemantic.categoryWork -> "Work"
-                bar.color == AutoLifeSemantic.categoryHealth -> "Health"
-                else -> "Leisure"
-            })
+            DataRow("Type", if (bar.isProposal) "AI Proposal" else "Event")
             Spacer(Modifier.height(24.dp))
         }
     }

@@ -46,7 +46,7 @@ internal object BehavioralMarkerAggregator {
         val byDay = contextLogs.groupBy { msToDateKey(it.windowStartMs) }
 
         val dayKeys = (0 until nDays).map { offset ->
-            msToDateKey(startMs + offset * 24L * 60 * 60 * 1000)
+            msToDateKey(nowMs - (nDays - 1 - offset) * 24L * 60 * 60 * 1000)
         }
 
         data class DayRaw(
