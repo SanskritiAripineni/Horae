@@ -48,7 +48,7 @@ class JournalGenerator(private val context: Context) {
                 Log.w(TAG, "Journal generation failed", error)
                 return@withContext false
             }
-            .takeIf { it.isNotBlank() }
+            .takeIf { isGeneratedJournalContent(it) }
             ?: return@withContext false
 
         com.google.mediapipe.examples.llminference.data.DebugRepository.updateLastJournal(journalContent)
@@ -62,5 +62,13 @@ class JournalGenerator(private val context: Context) {
         )
         fingerprintStorage.set(fingerprint)
         true
+    }
+
+    private fun isGeneratedJournalContent(content: String): Boolean {
+        if (content.isBlank()) return false
+        val normalized = content.trim().lowercase()
+        return normalized != "no response from gemini" &&
+            normalized != "no response" &&
+            !normalized.startsWith("gemini request failed")
     }
 }

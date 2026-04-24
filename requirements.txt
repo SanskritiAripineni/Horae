@@ -1,10 +1,5 @@
-# Core ML/AI frameworks
-tensorflow>=2.13.0
-langchain>=0.1.0
-
 # Vector database support
 chromadb>=0.4.0
-faiss-cpu>=1.7.4
 
 # Calendar integration
 google-auth>=2.23.0

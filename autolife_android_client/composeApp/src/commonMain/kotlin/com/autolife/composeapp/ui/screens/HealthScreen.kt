@@ -4,8 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
@@ -21,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.autolife.composeapp.ui.DateFormat
 import com.autolife.composeapp.ui.components.*
 import com.autolife.composeapp.ui.theme.AutoLifeSemantic
 import com.autolife.shared.model.*
@@ -28,7 +27,10 @@ import com.autolife.shared.repository.AnalysisRepository
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HealthScreen(onOpenAgent: () -> Unit = {}) {
+fun HealthScreen(
+    onOpenAgent: () -> Unit = {},
+    onOpenSchedule: () -> Unit = {},
+) {
     val result by AnalysisRepository.result.collectAsState()
     val isLoading by AnalysisRepository.loading.collectAsState()
     var showSources by remember { mutableStateOf(false) }
@@ -52,12 +54,6 @@ fun HealthScreen(onOpenAgent: () -> Unit = {}) {
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             item {
-                ScreenIntro(
-                    title = "Health",
-                    subtitle = "Your wellbeing assessment appears here after AutoLife analyzes recent context.",
-                )
-            }
-            item {
                 SurfaceCard {
                     ActionableEmptyState(
                         icon = Icons.Default.FavoriteBorder,
@@ -77,15 +73,22 @@ fun HealthScreen(onOpenAgent: () -> Unit = {}) {
 
     val mh = result!!.health
     val ui = result!!.ui_summary
-    val riskLevel = mh?.risk_level ?: "unknown"
-    val riskColor = AutoLifeSemantic.riskColor(riskLevel)
     val concerns = ui?.concerns?.takeIf { it.isNotEmpty() }
         ?: mh?.key_concerns?.map { SignalItem(label = it, severity = "medium") }
         ?: emptyList()
-    val protective = ui?.protective_signals?.takeIf { it.isNotEmpty() }
+    val positiveSignals = ui?.protective_signals?.takeIf { it.isNotEmpty() }
+        ?: ui?.productive_signals?.takeIf { it.isNotEmpty() }
         ?: mh?.positive_indicators?.map { SignalItem(label = it, severity = "positive") }
         ?: emptyList()
-    val evidence = ui?.evidence_chips?.takeIf { it.isNotEmpty() } ?: buildHealthEvidence(mh)
+    val sourceTitles = result!!.analysis_details?.research_sources
+        .orEmpty()
+        .mapNotNull { it.source.takeIf(String::isNotBlank) }
+        .distinct()
+    val wellbeingNarrative = wellbeingNarrative(
+        uiSummary = ui?.summary,
+        behavioralContext = mh?.behavioral_context,
+        journalSummary = result!!.journal_summary,
+    )
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -93,24 +96,12 @@ fun HealthScreen(onOpenAgent: () -> Unit = {}) {
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
-            ScreenIntro(
-                title = "Health",
-                subtitle = "Understand the signals behind the current wellbeing assessment.",
-            )
-        }
-
-        item {
             SurfaceCard {
                 Text("Wellbeing assessment", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(6.dp))
                 SerifHeadline(
-                    text = ui?.headline?.takeIf { it.isNotBlank() } ?: healthHeadline(riskLevel),
-                    color = riskColor,
-                )
-                Spacer(Modifier.height(10.dp))
-                StatusPill(
-                    text = ui?.confidence_label?.takeIf { it.isNotBlank() } ?: "Assessment confidence",
-                    color = AutoLifeSemantic.riskMild,
+                    text = ui?.headline?.takeIf { it.isNotBlank() } ?: healthHeadline(mh?.risk_level ?: "unknown"),
+                    color = AutoLifeSemantic.riskColor(mh?.risk_level ?: "unknown"),
                 )
                 Spacer(Modifier.height(14.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -124,20 +115,10 @@ fun HealthScreen(onOpenAgent: () -> Unit = {}) {
                 }
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text = ui?.summary?.takeIf { it.isNotBlank() }
-                        ?: result!!.journal_summary
-                        ?: mh?.behavioral_context
-                        ?: "Assessment is ready, but no summary was returned.",
+                    text = wellbeingNarrative,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-        }
-
-        if (evidence.isNotEmpty()) {
-            item {
-                SectionHeader(title = "Why this assessment")
-                HealthEvidenceGrid(evidence)
             }
         }
 
@@ -146,12 +127,12 @@ fun HealthScreen(onOpenAgent: () -> Unit = {}) {
                 if (maxWidth > 520.dp) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                         SignalPanel("Concerns", concerns, "concern", Icons.Default.Warning, Modifier.weight(1f))
-                        SignalPanel("Protective signals", protective, "protective", Icons.Default.CheckCircle, Modifier.weight(1f))
+                        SignalPanel("Positive signals", positiveSignals, "positive", Icons.Default.CheckCircle, Modifier.weight(1f))
                     }
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         SignalPanel("Concerns", concerns, "concern", Icons.Default.Warning)
-                        SignalPanel("Protective signals", protective, "protective", Icons.Default.CheckCircle)
+                        SignalPanel("Positive signals", positiveSignals, "positive", Icons.Default.CheckCircle)
                     }
                 }
             }
@@ -171,7 +152,16 @@ fun HealthScreen(onOpenAgent: () -> Unit = {}) {
                         rec.source?.takeIf { it.isNotBlank() }?.let { "Research-backed" to AutoLifeSemantic.toolVectorDB },
                     ),
                     accent = healthCategoryColor(rec.category),
+                    showChevron = false,
                 )
+            }
+            item {
+                Button(
+                    onClick = onOpenSchedule,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Implement these practices")
+                }
             }
         }
 
@@ -179,7 +169,7 @@ fun HealthScreen(onOpenAgent: () -> Unit = {}) {
             SurfaceCard(modifier = Modifier.clickable { showSources = true }) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Icon(Icons.Default.Storage, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
-                    Text("View evidence & sources", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text("View sources", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                     Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -196,7 +186,10 @@ fun HealthScreen(onOpenAgent: () -> Unit = {}) {
     if (showSources) {
         ModalBottomSheet(onDismissRequest = { showSources = false }) {
             Column(
-                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp).padding(bottom = 32.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Row(
@@ -210,26 +203,23 @@ fun HealthScreen(onOpenAgent: () -> Unit = {}) {
                     }
                 }
                 SurfaceCard {
-                    DataRow("Journals", "${result!!.analysis_details?.journal_count ?: 0}")
-                    DataRow("Research sources", "${result!!.analysis_details?.research_sources?.size ?: 0}")
-                    DataRow("Calendar events", "${result!!.calendar_summary?.event_count ?: 0}")
-                    DataRow("Duration", "${result!!.analysis_details?.duration_seconds ?: 0.0}s")
-                }
-                val sensing = result!!.analysis_details?.behavioral_sensing?.toString()
-                if (!sensing.isNullOrBlank() && sensing != "null") {
-                    SurfaceCard {
-                        SectionHeader(title = "Behavioral sensing")
-                        Text(sensing, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                result!!.analysis_details?.research_sources?.take(5)?.forEach { source ->
-                    SurfaceCard {
-                        CategoryBadge(source.category.ifBlank { "Research" }, AutoLifeSemantic.toolVectorDB)
-                        Spacer(Modifier.height(8.dp))
-                        Text(source.source.ifBlank { "Unknown source" }, style = MaterialTheme.typography.titleMedium)
-                        if (source.content.isNotBlank()) {
-                            Spacer(Modifier.height(4.dp))
-                            Text(source.content, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    SectionHeader(title = "Sources")
+                    if (sourceTitles.isEmpty()) {
+                        Text(
+                            "No source titles were returned for this run.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        sourceTitles.forEachIndexed { index, title ->
+                            if (index > 0) {
+                                Spacer(Modifier.height(10.dp))
+                            }
+                            Text(
+                                title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
                         }
                     }
                 }
@@ -238,39 +228,26 @@ fun HealthScreen(onOpenAgent: () -> Unit = {}) {
     }
 }
 
-private fun buildHealthEvidence(mh: MentalHealthAssessment?): List<SignalChip> {
-    val chips = mutableListOf<SignalChip>()
-    mh?.key_concerns?.take(3)?.forEach { chips.add(SignalChip(it, "concern", "warning")) }
-    mh?.positive_indicators?.take(2)?.forEach { chips.add(SignalChip(it, "protective", "check")) }
-    return chips
-}
-
-@Composable
-private fun HealthEvidenceGrid(chips: List<SignalChip>) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        chips.chunked(3).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                row.forEach { chip ->
-                    EvidenceChip(chip.label, chip.kind, healthChipIcon(chip), Modifier.weight(1f))
-                }
-                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
-            }
-        }
-    }
-}
-
-private fun healthChipIcon(chip: SignalChip): ImageVector = when (chip.kind.lowercase()) {
-    "concern", "warning" -> Icons.Default.Warning
-    "protective", "productive", "positive" -> Icons.Default.CheckCircle
-    else -> Icons.Default.FavoriteBorder
-}
-
 private fun healthHeadline(riskLevel: String): String = when (riskLevel.lowercase()) {
     "minimal", "low" -> "Stable wellbeing"
     "mild" -> "Mild stress"
     "moderate" -> "Moderate stress"
     "severe", "high" -> "High stress"
     else -> "Wellbeing"
+}
+
+private fun wellbeingNarrative(
+    uiSummary: String?,
+    behavioralContext: String?,
+    journalSummary: String?,
+): String {
+    val parts = listOf(uiSummary, behavioralContext, journalSummary)
+        .map { it.orEmpty().trim() }
+        .filter { it.isNotBlank() }
+        .distinct()
+    return parts.take(2).joinToString("\n\n").ifBlank {
+        "Assessment is ready, but no summary was returned."
+    }
 }
 
 private fun healthPracticeIcon(category: String?): ImageVector = when (category?.lowercase()) {

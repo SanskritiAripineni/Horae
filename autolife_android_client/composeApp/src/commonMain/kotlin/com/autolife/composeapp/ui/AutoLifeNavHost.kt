@@ -2,15 +2,20 @@ package com.autolife.composeapp.ui
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -28,6 +33,9 @@ fun AutoLifeNavHost(
     onServiceToggle: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val topLevelScreens = listOf(
+        Screen.Agent, Screen.Health, Screen.Schedule, Screen.Journal, Screen.Memory,
+    )
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
     val serviceState by PlatformStateProvider.serviceState.collectAsState()
@@ -39,17 +47,38 @@ fun AutoLifeNavHost(
         }
     }
 
-    val topLevelScreens = listOf(
-        Screen.Agent, Screen.Health, Screen.Schedule, Screen.Journal, Screen.Memory,
-    )
     val isTopLevel = topLevelScreens.any { it.route == currentRoute }
+    val topBarTitle = when (currentRoute) {
+        Screen.Agent.route -> "RIDE Agent"
+        Screen.Health.route -> "Health"
+        Screen.Schedule.route -> "Schedule"
+        Screen.Journal.route -> "Journal"
+        Screen.Memory.route -> "Memory"
+        else -> "RIDE"
+    }
+
+    fun navigateTopLevel(route: String) {
+        navController.navigate(route) {
+            popUpTo(navController.graph.startDestinationId) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    fun routeIndex(route: String?): Int = topLevelScreens.indexOfFirst { it.route == route }
 
     Scaffold(
         modifier = modifier,
         topBar = {
             TopAppBar(
                 title = {
-                    Text("AutoLife", style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        topBarTitle,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Normal,
+                        )
+                    )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
@@ -97,11 +126,7 @@ fun AutoLifeNavHost(
                         NavigationBarItem(
                             selected = selected,
                             onClick = {
-                                navController.navigate(screen.route) {
-                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
+                                navigateTopLevel(screen.route)
                             },
                             icon = { Icon(screen.icon, screen.label, modifier = Modifier.size(24.dp)) },
                             label = { Text(screen.label, style = MaterialTheme.typography.labelSmall) },
@@ -120,11 +145,27 @@ fun AutoLifeNavHost(
         },
     ) { innerPadding ->
         // Smooth fade for tab switches (top-level screens)
-        val tabEnter: AnimatedContentTransitionScope<*>.() -> EnterTransition = {
-            fadeIn(tween(250))
+        val topLevelEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+            val initial = routeIndex(initialState.destination.route)
+            val target = routeIndex(targetState.destination.route)
+            if (initial >= 0 && target >= 0) {
+                slideInHorizontally(tween(280)) { fullWidth ->
+                    if (target > initial) fullWidth / 3 else -fullWidth / 3
+                } + fadeIn(tween(280))
+            } else {
+                fadeIn(tween(250))
+            }
         }
-        val tabExit: AnimatedContentTransitionScope<*>.() -> ExitTransition = {
-            fadeOut(tween(250))
+        val topLevelExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+            val initial = routeIndex(initialState.destination.route)
+            val target = routeIndex(targetState.destination.route)
+            if (initial >= 0 && target >= 0) {
+                slideOutHorizontally(tween(280)) { fullWidth ->
+                    if (target > initial) -fullWidth / 3 else fullWidth / 3
+                } + fadeOut(tween(280))
+            } else {
+                fadeOut(tween(250))
+            }
         }
 
         // iOS-style horizontal slide for push/pop screens
@@ -144,15 +185,47 @@ fun AutoLifeNavHost(
         NavHost(
             navController = navController,
             startDestination = Screen.Agent.route,
-            modifier = Modifier.padding(innerPadding),
-            enterTransition = tabEnter,
-            exitTransition = tabExit,
-            popEnterTransition = tabEnter,
-            popExitTransition = tabExit,
+            modifier = Modifier
+                .padding(innerPadding)
+                .pointerInput(currentRoute) {
+                    if (!isTopLevel) return@pointerInput
+                    var totalDrag = 0f
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { _, dragAmount ->
+                            totalDrag += dragAmount
+                        },
+                        onDragEnd = {
+                            val currentIndex = routeIndex(currentRoute)
+                            if (currentIndex < 0) return@detectHorizontalDragGestures
+                            val threshold = 72.dp.toPx()
+                            when {
+                                totalDrag <= -threshold && currentIndex < topLevelScreens.lastIndex ->
+                                    navigateTopLevel(topLevelScreens[currentIndex + 1].route)
+                                totalDrag >= threshold && currentIndex > 0 ->
+                                    navigateTopLevel(topLevelScreens[currentIndex - 1].route)
+                            }
+                            totalDrag = 0f
+                        },
+                        onDragCancel = {
+                            totalDrag = 0f
+                        },
+                    )
+                },
+            enterTransition = topLevelEnter,
+            exitTransition = topLevelExit,
+            popEnterTransition = topLevelEnter,
+            popExitTransition = topLevelExit,
         ) {
-            composable(Screen.Agent.route) { AgentScreen() }
-            composable(Screen.Health.route) { HealthScreen(onOpenAgent = { navController.navigate(Screen.Agent.route) }) }
-            composable(Screen.Schedule.route) { ScheduleScreen(onOpenAgent = { navController.navigate(Screen.Agent.route) }) }
+            composable(Screen.Agent.route) {
+                AgentScreen(onOpenHealth = { navigateTopLevel(Screen.Health.route) })
+            }
+            composable(Screen.Health.route) {
+                HealthScreen(
+                    onOpenAgent = { navigateTopLevel(Screen.Agent.route) },
+                    onOpenSchedule = { navigateTopLevel(Screen.Schedule.route) },
+                )
+            }
+            composable(Screen.Schedule.route) { ScheduleScreen(onOpenAgent = { navigateTopLevel(Screen.Agent.route) }) }
             composable(Screen.Journal.route) { JournalScreen(onServiceToggle = onServiceToggle) }
             composable(Screen.Memory.route) { MemoryScreen() }
             composable(

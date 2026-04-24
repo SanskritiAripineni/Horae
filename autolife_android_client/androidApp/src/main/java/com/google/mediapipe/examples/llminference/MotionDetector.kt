@@ -9,14 +9,18 @@ import android.util.Log
 import com.autolife.shared.analyzer.MotionClassifier
 import com.autolife.shared.model.WindowFeatures
 import com.autolife.shared.platform.MotionSensorProvider
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.sqrt
 
 class MotionDetector(private val context: Context) : SensorEventListener, MotionSensorProvider {
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val motionStorage = MotionStorage(context)
+    private val storageScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private var motionCallback: ((List<String>) -> Unit)? = null
     private var activeConsumers = 0
@@ -255,7 +259,9 @@ class MotionDetector(private val context: Context) : SensorEventListener, Motion
             alt = currentAltitude ?: 0.0,
             clazz = motions.firstOrNull() ?: "Unknown"
         )
-        motionStorage.saveMotionDetection(motions)
+        storageScope.launch {
+            motionStorage.saveMotionDetection(motions)
+        }
         callback.invoke(motions)
     }
 

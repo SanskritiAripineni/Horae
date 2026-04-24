@@ -40,7 +40,7 @@ class WellbeingSensor:
     """
 
     def __init__(self,
-                 warmup_days: int = 10,
+                 warmup_days: int = 5,
                  recent_days: int = 4,
                  baseline_days: int = 28,
                  model: Optional[str] = None):
@@ -74,7 +74,7 @@ class WellbeingSensor:
         for raw in raw_days:
             baseline.add(markers_from_raw(raw))
 
-        as_of = raw_days[-1]["date"]
+        as_of = baseline.history[-1].day
         devs = detect_deviations(
             baseline, as_of=as_of,
             recent_days=self.recent_days,
@@ -105,5 +105,4 @@ class WellbeingSensor:
             "llm_analysis": llm_result,
             "baseline_warm": baseline_warm,
         }
-
 

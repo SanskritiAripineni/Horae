@@ -77,7 +77,12 @@ class AutoLifeService : Service() {
 
         if (!isRunning) {
             isRunning = true
-            startForegroundService()
+            if (!startForegroundService()) {
+                isRunning = false
+                com.google.mediapipe.examples.llminference.data.DebugRepository.setServiceRunning(false)
+                stopSelf(startId)
+                return START_NOT_STICKY
+            }
             startLoop()
             startPermanentMotionObserver()
         }
@@ -89,7 +94,7 @@ class AutoLifeService : Service() {
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
-    private fun startForegroundService() {
+    private fun startForegroundService(): Boolean {
         val pendingIntent: PendingIntent = Intent(this, MainActivity::class.java).let { notificationIntent ->
             PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE)
         }
@@ -102,10 +107,22 @@ class AutoLifeService : Service() {
             .setOngoing(true)
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {     
-             startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID, notification,
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            return true
+        } catch (e: SecurityException) {
+            Log.w("AutoLifeService", "Cannot promote AutoLife service to a location foreground service", e)
+            return false
         }
     }
 

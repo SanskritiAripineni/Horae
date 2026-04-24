@@ -106,6 +106,14 @@ class LLMClient:
         except (json.JSONDecodeError, ValueError, KeyError):
             return default
 
+    @staticmethod
+    def _text(value: Any) -> str:
+        if isinstance(value, timedelta):
+            return str(value)
+        if value is None:
+            return ""
+        return str(value)
+
     def generate(self, prompt: str, max_tokens: int = 8192) -> str:
         """Generate text from a prompt with exponential-backoff retry."""
         if not self.client:
@@ -147,7 +155,8 @@ class LLMClient:
         """Generate personalized recommendations based on analysis and research."""
         research_text = ""
         for i, r in enumerate(research_context[:6], 1):
-            research_text += f"{i}. [{r.get('category', 'General')}] {r.get('content', '')[:500]}...\n"
+            content = r.get('content') or ''
+            research_text += f"{i}. [{r.get('category', 'General')}] {content[:500]}...\n"
             research_text += f"   Source: {r.get('source', 'Unknown')}\n\n"
         
         prompt = f'''Generate 3-4 personalized wellness recommendations.
@@ -176,7 +185,7 @@ Rules:
 1. Be specific and actionable
 2. Match recommendations to the user's concerns
 3. Base suggestions on the research evidence when available
-4. Keep recommendations realistic for a college student'''
+4. Keep recommendations realistic and actionable'''
 
         response = self.generate(prompt)
         data = self._parse_json_response(response, None)
@@ -211,7 +220,7 @@ Rules:
         # Group existing events by date so the model can see per-day busy windows
         events_by_date: Dict[str, list] = {d: [] for d in dates}
         for e in (calendar_summary.get('events') or []):
-            date_key = e['start'][:10]
+            date_key = self._text(e.get('start'))[:10]
             if date_key in events_by_date:
                 events_by_date[date_key].append(e)
 
@@ -222,8 +231,8 @@ Rules:
             day_events = events_by_date[d]
             if day_events:
                 busy_slots = "  |  ".join(
-                    f"{e['start'][11:16]}–{e['end'][11:16]} [{e['title']}]"
-                    for e in sorted(day_events, key=lambda x: x['start'])
+                    f"{self._text(e.get('start'))[11:16]}–{self._text(e.get('end'))[11:16]} [{self._text(e.get('title'))}]"
+                    for e in sorted(day_events, key=lambda x: self._text(x.get('start')))
                 )
                 day_schedule_text += f"  {d} ({day_name}): {busy_slots}\n"
             else:
@@ -231,10 +240,11 @@ Rules:
 
         # Format tasks
         tasks_text = ""
-        if calendar_summary.get('tasks'):
+        if (calendar_summary or {}).get('tasks'):
             for t in calendar_summary['tasks'][:10]:
-                due = f" (due: {t['due']})" if t['due'] != 'No due date' else ""
-                tasks_text += f"- {t['title']}{due}\n"
+                task_due = self._text(t.get('due'))
+                due = f" (due: {task_due})" if task_due != 'No due date' else ""
+                tasks_text += f"- {self._text(t.get('title'))}{due}\n"
         else:
             tasks_text = "No pending tasks.\n"
 
@@ -316,8 +326,8 @@ STRICT RULES — follow every one exactly:
 
         # Per-day busy slots
         events_by_date: Dict[str, list] = {d: [] for d in dates}
-        for e in (calendar_summary.get('events') or []):
-            date_key = e['start'][:10]
+        for e in ((calendar_summary or {}).get('events') or []):
+            date_key = self._text(e.get('start'))[:10]
             if date_key in events_by_date:
                 events_by_date[date_key].append(e)
 
@@ -328,24 +338,26 @@ STRICT RULES — follow every one exactly:
             day_events = events_by_date[d]
             if day_events:
                 busy_slots = "  |  ".join(
-                    f"{e['start'][11:16]}–{e['end'][11:16]} [{e['title']}]"
-                    for e in sorted(day_events, key=lambda x: x['start'])
+                    f"{self._text(e.get('start'))[11:16]}–{self._text(e.get('end'))[11:16]} [{self._text(e.get('title'))}]"
+                    for e in sorted(day_events, key=lambda x: self._text(x.get('start')))
                 )
                 day_schedule_text += f"  {d} ({day_name}): {busy_slots}\n"
             else:
                 day_schedule_text += f"  {d} ({day_name}): (no events)\n"
 
         tasks_text = ""
-        if calendar_summary.get('tasks'):
+        if (calendar_summary or {}).get('tasks'):
             for t in calendar_summary['tasks'][:10]:
-                due = f" (due: {t['due']})" if t['due'] != 'No due date' else ""
-                tasks_text += f"- {t['title']}{due}\n"
+                task_due = self._text(t.get('due'))
+                due = f" (due: {task_due})" if task_due != 'No due date' else ""
+                tasks_text += f"- {self._text(t.get('title'))}{due}\n"
         else:
             tasks_text = "No pending tasks.\n"
 
         research_text = ""
         for i, r in enumerate(research_context[:6], 1):
-            research_text += f"{i}. [{r.get('category', 'General')}] {r.get('content', '')[:400]}\n"
+            content = r.get('content') or ''
+            research_text += f"{i}. [{r.get('category', 'General')}] {content[:400]}\n"
             research_text += f"   Source: {r.get('source', 'Unknown')}\n\n"
 
         pref_text = ""
@@ -365,9 +377,11 @@ STRICT RULES — follow every one exactly:
             if lines:
                 history_text = "\nPAST SUGGESTION HISTORY (most recent last):\n" + "\n".join(lines)
 
+        behavioral_text = self._text(behavioral_prose)
+        journal_text = self._text(journal_narrative)
         sensing_section = (
-            f"BEHAVIORAL SENSING (objective phone sensor assessment from Layer 1-4 pipeline):\n{behavioral_prose[:3000]}"
-            if behavioral_prose
+            f"BEHAVIORAL SENSING (objective phone sensor assessment from Layer 1-4 pipeline):\n{behavioral_text[:3000]}"
+            if behavioral_text
             else "BEHAVIORAL SENSING: No sensor data available for this period."
         )
 
@@ -376,7 +390,7 @@ STRICT RULES — follow every one exactly:
 TODAY: {now.strftime('%A, %Y-%m-%d %H:%M')} (timezone: America/Chicago)
 
 JOURNAL NARRATIVE (contextual record of the user's recent activities — not a wellbeing assessment):
-{journal_narrative[:3000]}
+{journal_text[:3000]}
 
 {sensing_section}
 
@@ -471,7 +485,7 @@ STRICT RULES:
         logger.error("generate_schedule_proposals: failed to parse orchestrator response")
         return {
             "risk_level": risk_level,
-            "summary": behavioral_prose[:200] if behavioral_prose else "Assessment unavailable.",
+            "summary": behavioral_text[:200] if behavioral_text else "Assessment unavailable.",
             "concerns": [],
             "positives": [],
             "ui_summary": {},

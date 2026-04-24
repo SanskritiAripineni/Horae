@@ -8,11 +8,23 @@ import com.autolife.composeapp.ui.theme.AutoLifeTheme
 import com.autolife.shared.db.DatabaseRepository
 import com.autolife.shared.model.EnrollRequest
 import com.autolife.shared.network.AutoLifeApi
+import com.autolife.shared.repository.AnalysisRepository
 import com.autolife.shared.platform.currentTimeMillis
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+@OptIn(ExperimentalUuidApi::class)
+private fun getOrCreateDeviceId(): String {
+    val existing = DatabaseRepository.getDeviceId()
+    if (existing != null) return existing
+    val newId = Uuid.random().toString()
+    DatabaseRepository.saveDeviceId(newId)
+    return newId
+}
 
 @Composable
 fun AutoLifeApp(
@@ -31,6 +43,9 @@ fun AutoLifeApp(
 
         withContext(Dispatchers.IO) { DatabaseRepository.getAuthToken() }?.let { token ->
             AutoLifeApi.setAuthToken(token)
+        }
+        withContext(Dispatchers.IO) { DatabaseRepository.getDeviceId() }?.let { id ->
+            AnalysisRepository.userId = id
         }
     }
 
@@ -54,7 +69,9 @@ fun AutoLifeApp(
                             consented = true
                             onConsentReady()
                             try {
-                                val resp = AutoLifeApi.enroll(EnrollRequest(consented_at = now))
+                                val deviceId = getOrCreateDeviceId()
+                                AnalysisRepository.userId = deviceId
+                                val resp = AutoLifeApi.enroll(EnrollRequest(user_id = deviceId, consented_at = now))
                                 resp.auth_token?.let { token ->
                                     withContext(Dispatchers.IO) {
                                         DatabaseRepository.saveAuthToken(token)

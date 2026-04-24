@@ -133,6 +133,7 @@ class SequentialMotionLocationAnalyzer(
                 motionCandidates = motionCandidates,
                 calibratedMotion = calibratedMotion,
                 mapContext = locationResult.mapContext,
+                osmContext = locationResult.osmContext,
                 ssidContext = locationResult.ssidContext,
                 fusedLocationContext = locationResult.fusedLocationContext,
                 locationGridKey = locationResult.gridKey,

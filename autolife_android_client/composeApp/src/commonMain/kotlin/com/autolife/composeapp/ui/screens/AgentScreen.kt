@@ -91,9 +91,9 @@ class AgentViewModel : ViewModel() {
                         timestamp = DateFormat.dateTime(j.createdTimestamp)
                     )
                 }
-                val rawDays = getBehavioralMarkers(7).takeIf { it.isNotEmpty() }
+                val rawDays = getBehavioralMarkers(14).takeIf { it.isNotEmpty() }
                 val response = AutoLifeApi.processJournals(
-                    ProcessJournalsRequest(journals = apiJournals, raw_days = rawDays)
+                    ProcessJournalsRequest(journals = apiJournals, raw_days = rawDays, user_id = repo.userId)
                 )
                 repo.setResult(response)
                 repo.clearProposals()
@@ -126,7 +126,7 @@ class AgentViewModel : ViewModel() {
         analysisJob?.cancel()
         analysisJob = null
         repo.setLoading(false)
-        repo.setError("Cancelled by user")
+        repo.setError(null)
     }
 }
 
@@ -134,51 +134,99 @@ private enum class ExpandedTool { AUTOLIFE, WELLBEING, VECTORDB, CALENDAR, LAST_
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AgentScreen(viewModel: AgentViewModel = viewModel { AgentViewModel() }) {
+fun AgentScreen(
+    onOpenHealth: () -> Unit = {},
+    viewModel: AgentViewModel = viewModel { AgentViewModel() },
+) {
     val result by AnalysisRepository.result.collectAsState()
     val isLoading by AnalysisRepository.loading.collectAsState()
     val error by AnalysisRepository.error.collectAsState()
     val lastRunMs by AnalysisRepository.lastRunMs.collectAsState()
-    val memory by AnalysisRepository.memory.collectAsState()
+    val serviceState by PlatformStateProvider.serviceState.collectAsState()
 
     var expandedTool by remember { mutableStateOf<ExpandedTool?>(null) }
+    val health = result?.health
+    val recommendation = result?.recommendations?.firstOrNull()
+    val sourceCounts = sourceCounts(
+        result = result,
+        lastJournalCount = viewModel.lastJournalCount,
+        sensorsLive = serviceState.isRunning,
+    )
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Agent control card
         item {
             SurfaceCard {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Top,
                 ) {
                     Text(
-                        text = "Life Agent",
-                        style = MaterialTheme.typography.headlineMedium,
+                        text = "Current wellbeing",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     StatusPill(
-                        kind = when {
-                            isLoading -> StatusKind.Running
-                            error != null -> StatusKind.Error
-                            result != null -> StatusKind.Ready
-                            else -> StatusKind.Idle
+                        text = when {
+                            isLoading -> "Analyzing"
+                            error != null -> "Needs attention"
+                            result != null -> "Analysis ready"
+                            else -> "Awaiting analysis"
                         },
+                        color = when {
+                            isLoading -> MaterialTheme.colorScheme.tertiary
+                            error != null -> MaterialTheme.colorScheme.error
+                            result != null -> AutoLifeSemantic.riskColor(health?.risk_level)
+                            else -> MaterialTheme.colorScheme.primary
+                        },
+                        showDot = true,
                     )
                 }
-                Spacer(Modifier.height(8.dp))
-                DataRow(
-                    label = "Last Run",
-                    value = lastRunMs?.let { DateFormat.time(it) } ?: "—",
+                Spacer(Modifier.height(10.dp))
+                SerifHeadline(
+                    text = riskHeadline(health?.risk_level ?: ""),
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                DataRow(
-                    label = "Journals Sent",
-                    value = if (viewModel.lastJournalCount > 0) "${viewModel.lastJournalCount}" else "—",
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ReadinessChip(
+                        icon = Icons.AutoMirrored.Filled.Article,
+                        label = sourceCounts.dataWindow,
+                        modifier = Modifier.weight(1f),
+                    )
+                    ReadinessChip(
+                        icon = Icons.Default.CalendarMonth,
+                        label = "Last ${lastRunMs?.let { DateFormat.time(it) } ?: "--"}",
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = result?.ui_summary?.summary?.takeIf { it.isNotBlank() }
+                        ?: health?.behavioral_context?.takeIf { it.isNotBlank() }
+                        ?: "Run analysis when you want AutoLife to combine journals, sensor markers, research, and calendar context into one focused plan.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(12.dp))
+                if (error != null) {
+                    Spacer(Modifier.height(12.dp))
+                    val parts = error!!.split("\n---\n", limit = 2)
+                    ErrorCard(
+                        title = "Analysis didn't run",
+                        message = parts[0],
+                        details = parts.getOrNull(1),
+                        onRetry = if (!isLoading) { { viewModel.runAnalysis() } } else null,
+                    )
+                }
+                Spacer(Modifier.height(18.dp))
                 if (isLoading) {
                     Button(
                         onClick = { viewModel.cancelAnalysis() },
@@ -203,155 +251,35 @@ fun AgentScreen(viewModel: AgentViewModel = viewModel { AgentViewModel() }) {
                         Text("Run Analysis")
                     }
                 }
-                if (error != null) {
-                    Spacer(Modifier.height(8.dp))
-                    val parts = error!!.split("\n---\n", limit = 2)
-                    ErrorCard(
-                        title = "Analysis didn't run",
-                        message = parts[0],
-                        details = parts.getOrNull(1),
-                        onRetry = if (!isLoading) { { viewModel.runAnalysis() } } else null,
-                    )
-                }
             }
         }
 
-        // Tools grid
         item {
-            SectionHeader(title = "Tools", action = {
-                Text(
-                    text = "Tap to expand",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            })
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    LiveAutoLifeCard(
-                        modifier = Modifier.weight(1f),
-                        onClick = { expandedTool = ExpandedTool.AUTOLIFE },
-                    )
-                    ToolCard(
-                        modifier = Modifier.weight(1f),
-                        accentColor = AutoLifeSemantic.toolKEmo,
-                        title = "Wellbeing",
-                        subtitle = "Behavioral State",
-                        dataLines = listOf(
-                            "State" to (result?.health?.risk_level?.replaceFirstChar { it.uppercase() } ?: "—"),
-                            "Signals" to (result?.health?.let { "${it.key_concerns.size + it.positive_indicators.size}" } ?: "—"),
-                        ),
-                        status = if (result?.health != null) "Ready" else "Idle",
-                        onClick = { expandedTool = ExpandedTool.WELLBEING },
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    val vectorErr = result?.errors?.any {
-                        it.contains("vector", ignoreCase = true) || it.contains("chroma", ignoreCase = true)
-                    } == true
-                    ToolCard(
-                        modifier = Modifier.weight(1f),
-                        accentColor = AutoLifeSemantic.toolVectorDB,
-                        title = "VectorDB",
-                        subtitle = "Wellness Research",
-                        dataLines = listOf(
-                            "Status" to if (result != null && !vectorErr) "OK" else "—",
-                            "Top-K" to "5",
-                        ),
-                        status = if (vectorErr) "Error" else if (result != null) "Ready" else "Idle",
-                        onClick = { expandedTool = ExpandedTool.VECTORDB },
-                    )
-                    ToolCard(
-                        modifier = Modifier.weight(1f),
-                        accentColor = AutoLifeSemantic.toolCalendar,
-                        title = "Calendar",
-                        subtitle = "Events & Tasks",
-                        dataLines = listOf(
-                            "Events" to (result?.calendar_summary?.event_count?.toString() ?: "—"),
-                            "Tasks" to (result?.calendar_summary?.task_count?.toString() ?: "—"),
-                        ),
-                        status = if (result?.calendar_summary?.event_count != null) "Ready" else "Idle",
-                        onClick = { expandedTool = ExpandedTool.CALENDAR },
-                    )
-                }
-            }
+            SectionHeader(title = "Recommended next step")
+            PracticeRow(
+                icon = iconForRecommendation(recommendation?.category),
+                title = recommendationTitle(recommendation),
+                subtitle = recommendation?.action
+                    ?: "Refresh analysis to get the next best practice from your current context.",
+                tags = recommendationTags(recommendation),
+                accent = colorForCategory(recommendation?.category),
+                onClick = onOpenHealth,
+            )
         }
 
-        // Memory section
-        item {
-            SectionHeader(title = "Memory")
-            SurfaceCard {
-                DataRow(
-                    label = "Preferences",
-                    value = if (memory != null) "Loaded · ${memory!!.preferences.goals.size} goals" else "—",
-                )
-                DataRow(
-                    label = "Health History",
-                    value = if (memory != null)
-                        "${memory!!.health.history.size} entries · ${memory!!.health.trend.replaceFirstChar { it.uppercase() }}"
-                    else "—",
-                )
-            }
-        }
-
-        // Last result summary
-        if (result != null) {
+        if (!result?.proposed_changes.isNullOrEmpty()) {
             item {
-                SectionHeader(title = "Last Result", action = {
-                    TextButton(onClick = { expandedTool = ExpandedTool.LAST_RESULT }) {
-                        Text("Details")
-                    }
-                })
-                val mh = result!!.health
-                val rc = AutoLifeSemantic.riskColor(mh?.risk_level)
-                SurfaceCard(modifier = Modifier.clickable { expandedTool = ExpandedTool.LAST_RESULT }) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = mh?.risk_level?.replaceFirstChar { it.uppercase() } ?: "—",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = rc,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text("State", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SectionHeader(title = "Schedule proposals")
+                SurfaceCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        result!!.proposed_changes.take(3).forEach { change ->
+                            ProposalPreviewRow(change)
                         }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "${result!!.recommendations.size}",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text("Recs", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "${result!!.proposed_changes.size}",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text("Changes", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    if (result!!.errors.isNotEmpty()) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = "${result!!.errors.size} error(s)",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
                     }
                 }
             }
         }
+
     }
 
     // Tool detail bottom sheet
@@ -385,37 +313,6 @@ private fun sourceCounts(
     )
 }
 
-private fun displayEvidence(ui: UiSummary?, mh: MentalHealthAssessment?): List<SignalChip> {
-    if (!ui?.evidence_chips.isNullOrEmpty()) return ui!!.evidence_chips.take(6)
-    val chips = mutableListOf<SignalChip>()
-    mh?.key_concerns?.take(3)?.forEach {
-        chips.add(SignalChip(label = it, kind = "concern", icon = "warning"))
-    }
-    mh?.positive_indicators?.take(3)?.forEach {
-        chips.add(SignalChip(label = it, kind = "protective", icon = "check"))
-    }
-    return chips
-}
-
-@Composable
-private fun EvidenceGrid(chips: List<SignalChip>) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        chips.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                row.forEach { chip ->
-                    EvidenceChip(
-                        label = chip.label,
-                        kind = chip.kind,
-                        icon = iconForSignalChip(chip),
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
-    }
-}
-
 private fun riskHeadline(riskLevel: String): String = when (riskLevel.lowercase()) {
     "minimal", "low" -> "Stable wellbeing"
     "mild" -> "Mild stress"
@@ -445,12 +342,6 @@ private fun ReadinessChip(
             Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
     }
-}
-
-private fun iconForSignalChip(chip: SignalChip): ImageVector = when (chip.kind.lowercase()) {
-    "concern", "warning" -> Icons.Default.Warning
-    "protective", "productive", "positive" -> Icons.Default.CheckCircle
-    else -> Icons.Default.FavoriteBorder
 }
 
 private fun iconForRecommendation(category: String?): ImageVector = when (category?.lowercase()) {
@@ -516,7 +407,11 @@ private fun ProposalPreviewRow(change: ProposedChange) {
 
 private fun proposalTimeLabel(change: ProposedChange): String {
     val start = change.start_time?.replace("T", " ")?.take(16) ?: "Time pending"
-    val end = change.end_time?.takeLast(8)?.take(5)
+    // Use positional slice so timezone offsets (e.g. +05:30) don't corrupt the result.
+    val end = change.end_time?.let { t ->
+        val tIdx = t.indexOf('T')
+        if (tIdx >= 0 && t.length >= tIdx + 6) t.substring(tIdx + 1, tIdx + 6) else null
+    }
     return if (end.isNullOrBlank()) start else "$start - $end"
 }
 
@@ -651,6 +546,7 @@ private fun ToolDetailSheet(
 @Composable
 private fun AutoLifeDetail() {
     val motionState by PlatformStateProvider.motionState.collectAsState()
+    val locationState by PlatformStateProvider.locationState.collectAsState()
     SurfaceCard {
         SectionHeader(title = "Live Sensor Data")
         DataRow("Activity", motionState.detectedClass)
@@ -665,6 +561,30 @@ private fun AutoLifeDetail() {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+    SurfaceCard {
+        SectionHeader(title = "Location Context")
+        DataRow("Latitude", DateFormat.fmtFloat3(locationState.latitude))
+        DataRow("Longitude", DateFormat.fmtFloat3(locationState.longitude))
+        DataRow("WiFi networks", "${locationState.ssids.size}")
+        Spacer(Modifier.height(6.dp))
+        DataTextBlock("Inference source", locationState.inferenceSource)
+        locationState.geocoderContext?.takeIf { it.isNotBlank() }?.let {
+            DataTextBlock("Reverse geocoder address", it)
+        }
+        locationState.osmContext?.takeIf { it.isNotBlank() }?.let {
+            DataTextBlock("OpenStreetMap nearby features", it)
+        }
+        locationState.wifiContext?.takeIf { it.isNotBlank() }?.let {
+            DataTextBlock("Wi-Fi inferred environment", it)
+        }
+        if (locationState.lastInference.isNotBlank()) {
+            DataTextBlock(
+                label = "Gemini fused context",
+                value = locationState.lastInference,
+                valueColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

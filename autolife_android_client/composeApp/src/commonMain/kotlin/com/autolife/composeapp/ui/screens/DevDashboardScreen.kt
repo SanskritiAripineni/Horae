@@ -53,6 +53,7 @@ import com.autolife.composeapp.platform.BatteryTestProfile
 import com.autolife.composeapp.platform.PlatformStateProvider
 import com.autolife.composeapp.platform.rememberLocationPreviewImage
 import com.autolife.composeapp.ui.components.DataRow
+import com.autolife.composeapp.ui.components.DataTextBlock
 import com.autolife.composeapp.ui.components.IconBulletItem
 import com.autolife.composeapp.ui.components.SectionHeader
 import com.autolife.composeapp.ui.components.StatusPill
@@ -129,14 +130,16 @@ fun DevDashboardScreen() {
                 onCheckedChange = { PlatformStateProvider.toggleDemoMode(it) },
             )
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            if (PlatformStateProvider.isDebugBuild) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-            ToggleRow(
-                title = "Keep Motion Active",
-                description = "Sensor update: 2s",
-                checked = isPermanentMotion,
-                onCheckedChange = { PlatformStateProvider.togglePermanentMotion(it) },
-            )
+                ToggleRow(
+                    title = "Keep Motion Active",
+                    description = "Sensor update: 2s",
+                    checked = isPermanentMotion,
+                    onCheckedChange = { PlatformStateProvider.togglePermanentMotion(it) },
+                )
+            }
 
             if (PlatformStateProvider.onExportRequested != null) {
                 Spacer(Modifier.height(8.dp))
@@ -432,7 +435,7 @@ fun DevDashboardScreen() {
         SurfaceCard {
             if (locationPreview != null) {
                 Text(
-                    "Map Snapshot Used For Inference",
+                    "Map Snapshot Preview",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                 )
@@ -451,8 +454,16 @@ fun DevDashboardScreen() {
 
             DataRow("Latitude", locationState.latitude.fmt(6))
             DataRow("Longitude", locationState.longitude.fmt(6))
+            Spacer(Modifier.height(6.dp))
+            DataTextBlock("Inference source", locationState.inferenceSource)
+            locationState.geocoderContext?.takeIf { it.isNotBlank() }?.let {
+                DataTextBlock("Reverse geocoder address", it)
+            }
+            locationState.osmContext?.takeIf { it.isNotBlank() }?.let {
+                DataTextBlock("OpenStreetMap nearby features", it)
+            }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             Text(
                 "WiFi Networks (${locationState.ssids.size})",
                 style = MaterialTheme.typography.bodyMedium,
@@ -482,15 +493,13 @@ fun DevDashboardScreen() {
             }
 
             Spacer(Modifier.height(8.dp))
-            Text(
-                "Gemini Inference",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-            )
-            Text(
-                locationState.lastInference,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
+            locationState.wifiContext?.takeIf { it.isNotBlank() }?.let {
+                DataTextBlock("Wi-Fi inferred environment", it)
+            }
+            DataTextBlock(
+                label = "Gemini fused context",
+                value = locationState.lastInference,
+                valueColor = MaterialTheme.colorScheme.primary,
             )
         }
 

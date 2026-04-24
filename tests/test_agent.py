@@ -161,6 +161,32 @@ class TestRunFromJournals:
         assert result["status"] == "failed"
         assert any("API down" in e for e in result["errors"])
 
+    def test_timedelta_tool_values_are_coerced(self, sample_journals):
+        agent = _make_agent()
+        agent.calendar_api.get_schedule_summary.return_value = {
+            "event_count": 1,
+            "events": [
+                {
+                    "id": "e1",
+                    "title": "Deep work",
+                    "start": datetime.now().replace(hour=10, minute=0).strftime("%Y-%m-%d %H:%M"),
+                    "end": datetime.now().replace(hour=11, minute=0).strftime("%Y-%m-%d %H:%M"),
+                    "duration_hours": timedelta(minutes=45),
+                }
+            ],
+            "total_hours": timedelta(hours=1),
+            "busiest_day": None,
+            "days_covered": 1,
+            "tasks": [],
+            "task_count": 0,
+        }
+
+        result = agent.run_from_journals(sample_journals)
+
+        assert result["status"] == "completed"
+        assert result["calendar_summary"]["total_hours"] == 3600.0
+        assert result["calendar_summary"]["events"][0]["duration_hours"] == 2700.0
+
     def test_calls_tools_in_order(self, sample_journals):
         agent = _make_agent()
         agent.run_from_journals(sample_journals)

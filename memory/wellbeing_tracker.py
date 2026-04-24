@@ -32,7 +32,10 @@ class WellbeingTracker:
     def add_assessment(self, assessment: WellbeingAssessment):
         history = self._get_history(assessment.user_id)
         history.append(asdict(assessment))
-        self.storage.save('health_history', assessment.user_id, history)
+        self.storage.update_user_memory(
+            assessment.user_id,
+            lambda memory: self._set_history(memory, history),
+        )
 
     def get_latest(self, user_id: str = "default") -> Optional[WellbeingAssessment]:
         history = self._get_history(user_id)
@@ -75,8 +78,14 @@ class WellbeingTracker:
             return TrendAnalysis(direction="stable")
 
     def get_history(self, user_id: str) -> List[Any]:
-        return self.storage.load('health_history', user_id) or []
+        memory = self.storage.load_user_memory(user_id)
+        return memory.get("wellbeing", {}).get("history", []) or []
 
     _get_history = get_history
 
+    @staticmethod
+    def _set_history(memory: dict, history: List[Any]) -> dict:
+        memory.setdefault("wellbeing", {})
+        memory["wellbeing"]["history"] = history
+        return memory
 

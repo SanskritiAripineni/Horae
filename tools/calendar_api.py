@@ -142,9 +142,11 @@ class CalendarAPI:
         import base64, json as _json
         from google.oauth2.credentials import Credentials as OAuthCredentials
 
-        # 1. Try CALENDAR_TOKEN_B64 env var directly (most reliable on Railway)
+        # 1. Try CALENDAR_TOKEN_B64 env var directly (most reliable on Railway).
+        #    Scoped to the server's own "default" user — never leak the shared
+        #    token to per-user pipeline calls (see oauth/status bug, Apr 2026).
         token_b64 = os.environ.get("CALENDAR_TOKEN_B64", "").strip()
-        if token_b64:
+        if token_b64 and self.user_id == "default":
             try:
                 token_data = _json.loads(base64.b64decode(token_b64).decode())
                 self.credentials = OAuthCredentials.from_authorized_user_info(token_data, SCOPES)
@@ -387,7 +389,7 @@ class CalendarAPI:
                 "id": event.id,
                 "title": event.summary,
                 "start": event.start_time.strftime('%Y-%m-%d %H:%M'),
-                "end": event.end_time.strftime('%H:%M'),
+                "end": event.end_time.strftime('%Y-%m-%d %H:%M'),
                 "duration_hours": round((event.end_time - event.start_time).total_seconds() / 3600, 1)
             })
         

@@ -6,6 +6,10 @@ import android.content.Intent
 import android.util.Log
 import com.autolife.shared.db.DatabaseRepository
 import com.autolife.shared.model.SensorLog
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Records screen-off/on transitions for sleep detection.
@@ -20,6 +24,7 @@ import com.autolife.shared.model.SensorLog
 class SleepStateReceiver(
     private val lightMonitor: LightSensorMonitor,
 ) : BroadcastReceiver() {
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onReceive(context: Context, intent: Intent) {
         val event = when (intent.action) {
@@ -34,12 +39,17 @@ class SleepStateReceiver(
         else
             """{"event":"$event","ts":$nowMs}"""
 
-        try {
-            DatabaseRepository.insertLog(
-                SensorLog(timestamp = nowMs, type = "SLEEP_STATE", content = content)
-            )
-        } catch (e: Exception) {
-            Log.w("SleepStateReceiver", "Failed to log $event", e)
+        val pendingResult = goAsync()
+        ioScope.launch {
+            try {
+                DatabaseRepository.insertLog(
+                    SensorLog(timestamp = nowMs, type = "SLEEP_STATE", content = content)
+                )
+            } catch (e: Exception) {
+                Log.w("SleepStateReceiver", "Failed to log $event", e)
+            } finally {
+                pendingResult.finish()
+            }
         }
     }
 }

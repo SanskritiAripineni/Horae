@@ -122,4 +122,14 @@ object DatabaseRepository {
     fun getAuthToken(): String? = try {
         queries.getAuthToken().executeAsOneOrNull()
     } catch (e: Exception) { null }
+
+    // ── Device ID ────────────────────────────────────────────────────────
+
+    fun saveDeviceId(deviceId: String) {
+        queries.upsertDeviceId(device_id = deviceId)
+    }
+
+    fun getDeviceId(): String? = try {
+        queries.getDeviceId().executeAsOneOrNull()
+    } catch (e: Exception) { null }
 }

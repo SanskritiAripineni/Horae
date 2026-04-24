@@ -16,6 +16,7 @@ fun createAndroidDriver(context: Context): SqlDriver {
                 db.execSQL("DROP TABLE IF EXISTS journal_entries")
                 db.execSQL("DROP TABLE IF EXISTS user_consent")
                 db.execSQL("DROP TABLE IF EXISTS auth_tokens")
+                db.execSQL("DROP TABLE IF EXISTS device_ids")
                 onCreate(db)
             }
         },

@@ -22,6 +22,12 @@ object DateFormat {
         return "${pad2(parts.hour)}:${pad2(parts.minute)}"
     }
 
+    /** Format as "Apr 22, 2025" */
+    fun monthDayYear(epochMs: Long): String {
+        val parts = epochToParts(epochMs)
+        return "${MONTHS[parts.month]} ${parts.day}, ${parts.year}"
+    }
+
     private fun pad2(n: Int): String = if (n < 10) "0$n" else "$n"
 
     private data class DateParts(

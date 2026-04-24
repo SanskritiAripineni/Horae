@@ -3,21 +3,30 @@ package com.autolife.composeapp.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -26,6 +35,7 @@ import com.autolife.composeapp.platform.PlatformStateProvider
 import com.autolife.composeapp.ui.DateFormat
 import com.autolife.composeapp.ui.SnackbarBus
 import com.autolife.composeapp.ui.components.*
+import com.autolife.composeapp.ui.theme.AutoLifeSemantic
 import com.autolife.shared.db.DatabaseRepository
 import com.autolife.shared.model.ContextLogCodec
 import com.autolife.shared.model.JournalEntry
@@ -56,67 +66,258 @@ fun JournalScreen(
     val journals by viewModel.journals.collectAsState(initial = emptyList())
     val logs by viewModel.recentLogs.collectAsState(initial = emptyList())
     val serviceState by PlatformStateProvider.serviceState.collectAsState()
-    val motionState by PlatformStateProvider.motionState.collectAsState()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var showClearDialog by remember { mutableStateOf(false) }
+
+    val clearCount = if (selectedTab == 0) journals.size else logs.size
+    val clearLabel = if (selectedTab == 0) "journals" else "live logs"
+
+    if (showClearDialog) {
+        ConfirmClearDialog(
+            title = "Clear all $clearLabel?",
+            body = "This deletes $clearCount ${if (clearCount == 1) clearLabel.dropLast(1) else clearLabel} from the local database. This cannot be undone.",
+            onConfirm = {
+                showClearDialog = false
+                if (selectedTab == 0) {
+                    viewModel.clearJournals()
+                    SnackbarBus.tryEmit("Cleared $clearCount journal${if (clearCount == 1) "" else "s"}")
+                } else {
+                    viewModel.clearLogs()
+                    SnackbarBus.tryEmit("Cleared $clearCount log${if (clearCount == 1) "" else "s"}")
+                }
+            },
+            onDismiss = { showClearDialog = false },
+        )
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Status bar
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            ScreenIntro(
-                title = "Journal",
-                subtitle = "Review generated day summaries and live collection logs.",
+            JournalOverviewCard(
+                serviceRunning = serviceState.isRunning,
+                logCount = logs.size,
+                journalCount = journals.size,
+                onStartCollection = { onServiceToggle(true) },
             )
-            InfoStatusCard(
-                icon = if (serviceState.isRunning) Icons.Default.CheckCircle else Icons.Default.PlayArrow,
-                title = if (serviceState.isRunning) "Collection is active" else "Collection is paused",
-                subtitle = "${logs.size} logs · ${journals.size} journals · ${motionState.detectedClass}",
-                status = if (serviceState.isRunning) "Collecting" else "Paused",
-                statusColor = if (serviceState.isRunning) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
-                action = if (!serviceState.isRunning) {
-                    {
-                        TextButton(onClick = { onServiceToggle(true) }) {
-                            Text("Start")
-                        }
-                    }
-                } else {
-                    null
-                }
-            )
-        }
 
-        // Tabs
-        PrimaryTabRow(
-            selectedTabIndex = selectedTab,
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.primary,
-        ) {
-            Tab(
-                selected = selectedTab == 0,
-                onClick = { selectedTab = 0 },
-                text = { Text("Journals") },
-                modifier = Modifier.testTag("tab_journals"),
-            )
-            Tab(
-                selected = selectedTab == 1,
-                onClick = { selectedTab = 1 },
-                text = { Text("Live Logs") },
-                modifier = Modifier.testTag("tab_live_logs"),
+            JournalTabRow(
+                selectedTab = selectedTab,
+                onSelectTab = { selectedTab = it },
+                clearEnabled = clearCount > 0,
+                onClear = { showClearDialog = true },
             )
         }
 
         when (selectedTab) {
-            0 -> JournalsList(journals, viewModel)
-            1 -> LogsList(logs, viewModel)
+            0 -> JournalsList(journals)
+            1 -> LogsList(logs)
         }
     }
 }
 
 @Composable
-private fun JournalsList(journals: List<JournalEntry>, viewModel: JournalViewModel) {
+private fun JournalOverviewCard(
+    serviceRunning: Boolean,
+    logCount: Int,
+    journalCount: Int,
+    onStartCollection: () -> Unit,
+) {
+    SurfaceCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OverviewStatusCell(
+                modifier = Modifier.weight(1.15f),
+                title = if (serviceRunning) "Active" else "Collection is Paused",
+                tint = if (serviceRunning) AutoLifeSemantic.categoryHealth else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OverviewDivider()
+            OverviewMetricCell(
+                modifier = Modifier.weight(1f),
+                icon = Icons.AutoMirrored.Filled.TrendingUp,
+                value = logCount.toString(),
+                label = "Logs",
+            )
+            OverviewDivider()
+            OverviewMetricCell(
+                modifier = Modifier.weight(1f),
+                icon = Icons.AutoMirrored.Filled.MenuBook,
+                value = journalCount.toString(),
+                label = "Journals",
+            )
+        }
+        if (!serviceRunning) {
+            Spacer(Modifier.height(10.dp))
+            TextButton(
+                onClick = onStartCollection,
+                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+            ) {
+                Text("Start collection")
+            }
+        }
+    }
+}
+
+@Composable
+private fun OverviewStatusCell(
+    title: String,
+    tint: Color,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(12.dp)
+                .background(tint.copy(alpha = 0.95f), shape = MaterialTheme.shapes.small),
+        )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun OverviewMetricCell(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Normal,
+            ),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun OverviewDivider() {
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 10.dp)
+            .width(1.dp)
+            .height(48.dp)
+            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.42f))
+    )
+}
+
+@Composable
+private fun JournalTabRow(
+    selectedTab: Int,
+    onSelectTab: (Int) -> Unit,
+    clearEnabled: Boolean,
+    onClear: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            modifier = Modifier.weight(1f),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+            ),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                JournalTabButton(
+                    label = "Journals",
+                    selected = selectedTab == 0,
+                    onClick = { onSelectTab(0) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("tab_journals"),
+                )
+                JournalTabButton(
+                    label = "Live Logs",
+                    selected = selectedTab == 1,
+                    onClick = { onSelectTab(1) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("tab_live_logs"),
+                )
+            }
+        }
+
+        FilledTonalIconButton(
+            onClick = onClear,
+            enabled = clearEnabled,
+            modifier = Modifier.size(42.dp),
+        ) {
+            Icon(Icons.Default.DeleteOutline, contentDescription = "Clear current tab")
+        }
+    }
+}
+
+@Composable
+private fun JournalTabButton(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+        color = if (selected) AutoLifeSemantic.categoryHealth else Color.Transparent,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun JournalsList(journals: List<JournalEntry>) {
     if (journals.isEmpty()) {
         EmptyState(
             icon = Icons.AutoMirrored.Filled.Article,
@@ -126,120 +327,135 @@ private fun JournalsList(journals: List<JournalEntry>, viewModel: JournalViewMod
         return
     }
 
-    var showClearDialog by remember { mutableStateOf(false) }
-    if (showClearDialog) {
-        ConfirmClearDialog(
-            title = "Clear all journals?",
-            body = "This deletes ${journals.size} journal ${if (journals.size == 1) "entry" else "entries"} from the local database. This cannot be undone.",
-            onConfirm = {
-                val count = journals.size
-                showClearDialog = false
-                viewModel.clearJournals()
-                SnackbarBus.tryEmit("Cleared $count journal${if (count == 1) "" else "s"}")
-            },
-            onDismiss = { showClearDialog = false },
-        )
-    }
-
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                OutlinedButton(onClick = { showClearDialog = true }) {
-                    Text("Clear all")
+        groupedByDay(journals.reversed()) { it.createdTimestamp }.forEach { (day, entries) ->
+            item(day) {
+                DaySectionHeader(day)
+            }
+            item("${day}_card") {
+                GroupedSurfaceCard {
+                    entries.forEachIndexed { index, entry ->
+                        JournalEntryRow(entry)
+                        if (index != entries.lastIndex) {
+                            Spacer(Modifier.height(14.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                            Spacer(Modifier.height(14.dp))
+                        }
+                    }
                 }
             }
-        }
-        items(journals.reversed(), key = { it.id }) { entry ->
-            JournalEntryCard(entry)
         }
     }
 }
 
 @Composable
-private fun JournalEntryCard(entry: JournalEntry) {
+private fun JournalEntryRow(entry: JournalEntry) {
     var expanded by rememberSaveable(entry.id) { mutableStateOf(false) }
+    val hasError = entry.content.contains("No response", ignoreCase = true) ||
+        entry.content.contains("failed", ignoreCase = true)
+    val title = journalTitle(entry)
+    val subtitle = journalSubtitle(entry, hasError)
+    val arrowRotation by animateFloatAsState(targetValue = if (expanded) 180f else 0f, label = "arrow")
 
-    SurfaceCard(
-        modifier = Modifier.clickable { expanded = !expanded }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded }
     ) {
-        val hasError = entry.content.contains("No response", ignoreCase = true) ||
-            entry.content.contains("failed", ignoreCase = true)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
-                Text(
-                    text = DateFormat.dateTime(entry.createdTimestamp),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = "${DateFormat.time(entry.periodStart)} - ${DateFormat.time(entry.periodEnd)}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            StatusPill(
-                text = if (hasError) "Needs retry" else if (expanded) "Open" else "Generated",
-                color = if (hasError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
-                showDot = true,
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        if (hasError) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
                 Text(
-                    text = "The generator did not return a summary for this window.",
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = DateFormat.time(entry.createdTimestamp),
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = if (expanded) Int.MAX_VALUE else 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = if (expanded) Int.MAX_VALUE else 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.width(6.dp))
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                StatusPill(
+                    text = if (hasError) "Failed" else "Processed",
+                    color = if (hasError) MaterialTheme.colorScheme.error else AutoLifeSemantic.categoryHealth,
+                )
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    modifier = Modifier
+                        .size(20.dp)
+                        .rotate(arrowRotation),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
+
         AnimatedVisibility(
             visible = expanded,
             enter = expandVertically(),
             exit = shrinkVertically(),
         ) {
-            Text(
-                text = entry.content,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        if (!expanded) {
-            Text(
-                text = entry.content,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (hasError) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                maxLines = 3,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Tap to ${if (expanded) "hide" else "expand"}",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            Column {
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f))
+                Spacer(Modifier.height(12.dp))
+                if (hasError) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = "The generator did not return a usable summary for this window.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
+                Text(
+                    text = entry.content,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun LogsList(logs: List<SensorLog>, viewModel: JournalViewModel) {
+private fun LogsList(logs: List<SensorLog>) {
     if (logs.isEmpty()) {
         EmptyState(
             icon = Icons.AutoMirrored.Filled.Article,
@@ -249,38 +465,124 @@ private fun LogsList(logs: List<SensorLog>, viewModel: JournalViewModel) {
         return
     }
 
-    var showClearDialog by remember { mutableStateOf(false) }
-    if (showClearDialog) {
-        ConfirmClearDialog(
-            title = "Clear all sensor logs?",
-            body = "This deletes ${logs.size} log entries from the local database. This cannot be undone.",
-            onConfirm = {
-                val count = logs.size
-                showClearDialog = false
-                viewModel.clearLogs()
-                SnackbarBus.tryEmit("Cleared $count log${if (count == 1) "" else "s"}")
-            },
-            onDismiss = { showClearDialog = false },
-        )
-    }
-
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                OutlinedButton(onClick = { showClearDialog = true }) {
-                    Text("Clear all")
+        groupedByDay(logs) { it.timestamp }.forEach { (day, entries) ->
+            item(day) {
+                DaySectionHeader(day)
+            }
+            item("${day}_card") {
+                GroupedSurfaceCard {
+                    entries.forEachIndexed { index, log ->
+                        LogRow(log)
+                        if (index != entries.lastIndex) {
+                            Spacer(Modifier.height(14.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                            Spacer(Modifier.height(14.dp))
+                        }
+                    }
                 }
             }
         }
-        items(logs, key = { it.id }) { log ->
-            LogCard(log)
+    }
+}
+
+@Composable
+private fun DaySectionHeader(label: String) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 4.dp),
+    )
+}
+
+@Composable
+private fun GroupedSurfaceCard(
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    SurfaceCard(content = content)
+}
+
+@Composable
+private fun LogRow(log: SensorLog) {
+    var expanded by rememberSaveable(log.id) { mutableStateOf(false) }
+    val details = log.displayContent()
+    val arrowRotation by animateFloatAsState(targetValue = if (expanded) 180f else 0f, label = "arrow")
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded }
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(
+                    text = DateFormat.time(log.timestamp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = logTitle(log),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = if (expanded) Int.MAX_VALUE else 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = details,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = if (expanded) Int.MAX_VALUE else 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.width(6.dp))
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                StatusPill(
+                    text = log.type.replaceFirstChar { it.uppercase() },
+                    color = logTypeColor(log.type),
+                )
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    modifier = Modifier
+                        .size(20.dp)
+                        .rotate(arrowRotation),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(),
+            exit = shrinkVertically(),
+        ) {
+            Column {
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f))
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = log.content,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
         }
     }
 }
@@ -307,36 +609,47 @@ private fun ConfirmClearDialog(
     )
 }
 
-@Composable
-private fun LogCard(log: SensorLog) {
-    val typeColor = when (log.type.lowercase()) {
-        "motion"   -> MaterialTheme.colorScheme.secondary
-        "location" -> MaterialTheme.colorScheme.primary
-        "wifi"     -> MaterialTheme.colorScheme.tertiary
-        else       -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
+private fun journalTitle(entry: JournalEntry): String {
+    return entry.content
+        .lineSequence()
+        .map { it.trim() }
+        .firstOrNull { it.isNotBlank() }
+        ?.take(72)
+        ?.ifBlank { null }
+        ?: "Journal entry"
+}
 
-    SurfaceCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            StatusPill(text = log.type.uppercase(), color = typeColor)
-            Text(
-                text = DateFormat.time(log.timestamp),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = log.displayContent(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 4,
-        )
+private fun journalSubtitle(entry: JournalEntry, hasError: Boolean): String {
+    return if (hasError) {
+        "Journal processing error"
+    } else {
+        "${DateFormat.time(entry.periodStart)} - ${DateFormat.time(entry.periodEnd)} collection window"
     }
+}
+
+private fun logTitle(log: SensorLog): String {
+    return when (log.type.lowercase()) {
+        "motion" -> "Motion update"
+        "location" -> "Location update"
+        "wifi" -> "Network context"
+        "context" -> "Context snapshot"
+        else -> "${log.type.replaceFirstChar { it.uppercase() }} log"
+    }
+}
+
+@Composable
+private fun logTypeColor(type: String): Color {
+    return when (type.lowercase()) {
+        "motion" -> MaterialTheme.colorScheme.secondary
+        "location" -> MaterialTheme.colorScheme.primary
+        "wifi" -> MaterialTheme.colorScheme.tertiary
+        "context" -> AutoLifeSemantic.categoryHealth
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+}
+
+private fun <T> groupedByDay(items: List<T>, timestamp: (T) -> Long): List<Pair<String, List<T>>> {
+    return items.groupBy { DateFormat.monthDayYear(timestamp(it)) }.toList()
 }
 
 private fun SensorLog.displayContent(): String {

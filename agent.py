@@ -6,7 +6,7 @@ Orchestrates journal analysis, wellbeing assessment, and calendar optimization.
 import logging
 import threading
 from typing import Any, Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 # Import config FIRST to load .env
 from config import config
@@ -41,6 +41,23 @@ def _compact_text(value: Any, max_len: int = 96) -> str:
     if len(text) <= max_len:
         return text
     return text[: max_len - 3].rstrip() + "..."
+
+
+def _json_safe(value: Any) -> Any:
+    """Coerce datetimes/timedeltas from tools into JSON-safe primitives."""
+    if isinstance(value, timedelta):
+        return value.total_seconds()
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, tuple):
+        return [_json_safe(v) for v in value]
+    return value
 
 
 def _risk_headline(risk_level: str) -> str:
@@ -294,7 +311,7 @@ class LLMSchedulerAgent:
                 results['ui_summary'] = _build_ui_summary({}, results, "unknown")
                 results['duration_seconds'] = (datetime.now() - start_time).total_seconds()
                 results['analysis_details'] = _build_analysis_details(results, research_suggestions)
-                return results
+                return _json_safe(results)
 
             # 1. Journal narrative — context only, not assessment
             journal_narrative = self.autolife_reader.get_context_for_prompt(journals)
@@ -308,7 +325,7 @@ class LLMSchedulerAgent:
                 request_calendar.suggest_only = True
             else:
                 request_calendar = CalendarAPI(suggest_only=True, user_id=effective_user_id)
-            calendar_summary = request_calendar.get_schedule_summary(days=7)
+            calendar_summary = _json_safe(request_calendar.get_schedule_summary(days=7))
             results['calendar_summary'] = calendar_summary
             calendar_events = calendar_summary.get('events', []) if calendar_summary else []
 
@@ -317,6 +334,11 @@ class LLMSchedulerAgent:
             risk_level: str = "minimal"
             feedback_history: List[Dict[str, Any]] = []
             llm_analysis: Dict[str, Any] = {}
+            memory_preferences = self.memory.get_prompt_preferences(effective_user_id)
+            sensor_user_prefs = (
+                {"preferences": memory_preferences}
+                if memory_preferences else None
+            )
 
             if raw_days:
                 logger.info("Running WellbeingSensor pipeline (Layer 1-4)...")
@@ -326,7 +348,7 @@ class LLMSchedulerAgent:
                 sensing_result = self.wellbeing_sensor.analyze(
                     raw_days,
                     calendar=calendar_events,
-                    user_prefs=None,
+                    user_prefs=sensor_user_prefs,
                     feedback_history=feedback_history,
                     with_llm=True,
                 )
@@ -362,15 +384,15 @@ class LLMSchedulerAgent:
 
             # 5. Orchestrator: one structured-prompt call over all tool outputs
             logger.info("Running orchestrator (schedule proposals)...")
-            proposals = self.llm_client.generate_schedule_proposals(
+            proposals = _json_safe(self.llm_client.generate_schedule_proposals(
                 journal_narrative=journal_narrative,
                 behavioral_prose=behavioral_prose,
                 risk_level=risk_level,
                 calendar_summary=calendar_summary,
                 research_context=research_suggestions,
-                user_preferences=None,
+                user_preferences=memory_preferences,
                 feedback_history=feedback_history,
-            )
+            ))
 
             final_risk = proposals.get('risk_level', risk_level)
             results['journal_summary'] = proposals.get('summary', behavioral_prose or journal_narrative)
@@ -380,6 +402,7 @@ class LLMSchedulerAgent:
                 'positive_indicators': proposals.get('positives', []),
                 'behavioral_context': behavioral_prose or "",
             }
+            self.memory.record_wellbeing_assessment(effective_user_id, final_risk)
             results['ui_summary'] = _build_ui_summary(proposals, results, final_risk)
             results['recommendations'] = proposals.get('recommendations', [])
             proposed_changes = proposals.get('proposed_changes', [])
@@ -449,17 +472,20 @@ class LLMSchedulerAgent:
                 if not start_t:
                     continue  # not time-specific — skip calendar conversion
 
-                # Build full ISO datetimes using the next conflict-free day within 7 days
-                def _to_iso(time_str: str) -> str:
-                    # Accept "HH:MM" or already a full ISO string
+                # Build full ISO datetimes using the next conflict-free day within 7 days.
+                # Find the free date once from start_t so that start and end always
+                # land on the same calendar day (avoids midnight-spanning events).
+                def _to_iso(time_str: str, anchor_date: str | None = None) -> str:
                     if 'T' in time_str or len(time_str) > 8:
                         return time_str
-                    best_date = _find_free_date(time_str)
-                    return f"{best_date}T{time_str}:00"
+                    date = anchor_date or _find_free_date(time_str)
+                    return f"{date}T{time_str}:00"
 
                 try:
                     start_iso = _to_iso(start_t)
-                    end_iso = _to_iso(end_t) if end_t else None
+                    # Reuse the date from start so end never lands on a different day.
+                    start_date = start_iso.split('T')[0]
+                    end_iso = _to_iso(end_t, anchor_date=start_date) if end_t else None
 
                     # Default end_time: 30 minutes after start if not provided
                     if not end_iso:
@@ -513,7 +539,7 @@ class LLMSchedulerAgent:
         if not isinstance(results.get('ui_summary'), dict):
             results['ui_summary'] = _build_ui_summary({}, results, "unknown")
         results['analysis_details'] = _build_analysis_details(results, research_suggestions)
-        return results
+        return _json_safe(results)
 
     def run(self, mode: str = "daily") -> Dict[str, Any]:
         """Run the full agent workflow, reading journals from the filesystem."""
@@ -557,11 +583,13 @@ class LLMSchedulerAgent:
 
         # Save user comments to memory if provided
         if user_comments:
-            self.memory.storage.save('user_feedback', f'calendar_{datetime.now().strftime("%Y%m%d")}', {
-                'comments': user_comments,
-                'timestamp': datetime.now().isoformat()
-            })
-            logger.info("Saved user comments to memory")
+            parsed_feedback = self.llm_client.parse_user_feedback(user_comments)
+            self.memory.record_feedback(
+                user_id=user_id,
+                raw_feedback=user_comments,
+                parsed_feedback=parsed_feedback,
+            )
+            logger.info("Saved structured user feedback to memory")
 
         results = {
             'applied': [],
@@ -615,6 +643,12 @@ class LLMSchedulerAgent:
                                     action='accept',
                                     behavioral_state_summary=behavioral_state_summary,
                                 )
+                                self.memory.record_suggestion_feedback(
+                                    user_id=user_id,
+                                    suggestion=change_title,
+                                    action='accept',
+                                    behavioral_state_summary=behavioral_state_summary,
+                                )
                             else:
                                 results['failed'].append(change)
 
@@ -635,6 +669,12 @@ class LLMSchedulerAgent:
                                     action='accept',
                                     behavioral_state_summary=behavioral_state_summary,
                                 )
+                                self.memory.record_suggestion_feedback(
+                                    user_id=user_id,
+                                    suggestion=change_title,
+                                    action='accept',
+                                    behavioral_state_summary=behavioral_state_summary,
+                                )
                             else:
                                 results['failed'].append(change)
 
@@ -649,6 +689,12 @@ class LLMSchedulerAgent:
                                 applied_titles.add(change_title.strip().lower())
                                 feedback.record(
                                     user_id,
+                                    suggestion=change_title,
+                                    action='accept',
+                                    behavioral_state_summary=behavioral_state_summary,
+                                )
+                                self.memory.record_suggestion_feedback(
+                                    user_id=user_id,
                                     suggestion=change_title,
                                     action='accept',
                                     behavioral_state_summary=behavioral_state_summary,
@@ -675,6 +721,12 @@ class LLMSchedulerAgent:
                 if title and title not in applied_titles:
                     feedback.record(
                         user_id,
+                        suggestion=proposal.get('title', ''),
+                        action='reject',
+                        behavioral_state_summary=behavioral_state_summary,
+                    )
+                    self.memory.record_suggestion_feedback(
+                        user_id=user_id,
                         suggestion=proposal.get('title', ''),
                         action='reject',
                         behavioral_state_summary=behavioral_state_summary,

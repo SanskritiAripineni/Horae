@@ -39,6 +39,9 @@ class MainActivity : ComponentActivity() {
         val denied = permissions.filterValues { !it }.keys
         if (denied.isNotEmpty()) {
             Log.w("MainActivity", "Permissions denied: $denied — some features may not work")
+            com.google.mediapipe.examples.llminference.data.DebugRepository.setServiceRunning(false)
+        } else {
+            toggleAutoLifeService(true)
         }
     }
 
@@ -138,6 +141,8 @@ class MainActivity : ComponentActivity() {
         val missing = missingRuntimePermissions()
         if (missing.isNotEmpty()) {
             requestPermissionLauncher.launch(missing)
+        } else {
+            toggleAutoLifeService(true)
         }
     }
 

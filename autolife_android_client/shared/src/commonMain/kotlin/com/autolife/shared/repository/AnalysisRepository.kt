@@ -28,6 +28,8 @@ object AnalysisRepository {
     val lastRunMs: StateFlow<Long?> = _lastRunMs.asStateFlow()
     val selectedProposals: StateFlow<List<ProposedChange>> = _selectedProposals.asStateFlow()
 
+    var userId: String = "default"
+
     fun setResult(r: ProcessJournalsResponse?) {
         _result.value = r
         if (r != null) _lastRunMs.value = currentTimeMillis()

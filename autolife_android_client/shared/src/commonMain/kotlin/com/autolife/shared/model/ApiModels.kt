@@ -10,7 +10,8 @@ import kotlinx.serialization.json.JsonElement
 data class EnrollRequest(
     val user_id: String = "default",
     val consented_at: Long,
-    val study_id: String = "RIDE_2026"
+    val study_id: String = "RIDE_2026",
+    val version: String = "1.0"
 )
 
 @Serializable
@@ -72,6 +73,7 @@ data class ProcessJournalsRequest(
 @Serializable
 data class ApplyCalendarRequest(
     val changes: List<ProposedChange>,
+    val proposed_changes: List<ProposedChange> = emptyList(),
     val user_comments: String = "",
     val user_id: String = "default"
 )
@@ -171,7 +173,10 @@ data class UserMemoryData(
     val user_id: String = "",
     val preferences: UserPrefs = UserPrefs(),
     val mental_health: MemoryHealthSummary? = null,
-    val wellbeing: MemoryHealthSummary? = null
+    val wellbeing: MemoryHealthSummary? = null,
+    val feedback: MemoryFeedback = MemoryFeedback(),
+    val total_items: Int = 0,
+    val updated_today: Int = 0
 ) {
     val health: MemoryHealthSummary
         get() = mental_health ?: wellbeing ?: MemoryHealthSummary()
@@ -182,7 +187,12 @@ data class UserPrefs(
     val goals: List<String> = emptyList(),
     val work_hours: List<Int> = listOf(9, 17),
     val preferred_interventions: List<String> = emptyList(),
-    val max_daily_hours: Double = 8.0
+    val max_daily_hours: Double = 8.0,
+    val sleep_target_hours: Double = 7.5,
+    val evening_screen_limit_hour: Int = 21,
+    val explicit_preferences: List<String> = emptyList(),
+    val disliked_activities: List<String> = emptyList(),
+    val preferred_activities: List<String> = emptyList(),
 )
 
 @Serializable
@@ -198,4 +208,28 @@ data class HealthHistoryEntry(
     val total: Int = 0,
     val risk_level: String = "unknown",
     val timestamp: String = ""
+)
+
+@Serializable
+data class MemoryFeedback(
+    val comments: List<FeedbackComment> = emptyList(),
+    val accepted_suggestions: List<SuggestionFeedbackEntry> = emptyList(),
+    val rejected_suggestions: List<SuggestionFeedbackEntry> = emptyList(),
+)
+
+@Serializable
+data class FeedbackComment(
+    val raw_feedback: String = "",
+    val preference: String = "",
+    val dislikes: List<String> = emptyList(),
+    val prefers: List<String> = emptyList(),
+    val should_save: Boolean = false,
+    val timestamp: String = "",
+)
+
+@Serializable
+data class SuggestionFeedbackEntry(
+    val suggestion: String = "",
+    val behavioral_state_summary: String = "",
+    val timestamp: String = "",
 )

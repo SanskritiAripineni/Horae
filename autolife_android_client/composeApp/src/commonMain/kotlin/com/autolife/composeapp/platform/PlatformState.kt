@@ -20,7 +20,7 @@ data class MotionDisplayState(
 )
 
 data class ServiceDisplayState(
-    val isRunning: Boolean = false,
+    val isRunning: Boolean = true,
     val isDemoMode: Boolean = false,
 )
 
@@ -30,7 +30,38 @@ data class LocationDisplayState(
     val longitude: Double = 0.0,
     val ssids: List<String> = emptyList(),
     val lastInference: String = "No inference yet",
-)
+    val geocoderContext: String? = null,
+    val osmContext: String? = null,
+    val wifiContext: String? = null,
+    val inferenceSource: String = "Unavailable",
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is LocationDisplayState) return false
+        return mapPreviewBytes.contentEquals(other.mapPreviewBytes) &&
+            latitude == other.latitude &&
+            longitude == other.longitude &&
+            ssids == other.ssids &&
+            lastInference == other.lastInference &&
+            geocoderContext == other.geocoderContext &&
+            osmContext == other.osmContext &&
+            wifiContext == other.wifiContext &&
+            inferenceSource == other.inferenceSource
+    }
+
+    override fun hashCode(): Int {
+        var result = mapPreviewBytes.contentHashCode()
+        result = 31 * result + latitude.hashCode()
+        result = 31 * result + longitude.hashCode()
+        result = 31 * result + ssids.hashCode()
+        result = 31 * result + lastInference.hashCode()
+        result = 31 * result + geocoderContext.hashCode()
+        result = 31 * result + osmContext.hashCode()
+        result = 31 * result + wifiContext.hashCode()
+        result = 31 * result + inferenceSource.hashCode()
+        return result
+    }
+}
 
 data class BatteryDisplayState(
     val currentBatteryPercent: Int? = null,
@@ -65,6 +96,8 @@ object PlatformStateProvider {
 
     private var platformName: String = "Unknown"
 
+    var isDebugBuild: Boolean = false
+
     var onDemoModeChanged: ((Boolean) -> Unit)? = null
     var onPermanentMotionChanged: ((Boolean) -> Unit)? = null
     var onExportRequested: (() -> Unit)? = null
@@ -96,8 +129,22 @@ object PlatformStateProvider {
         ssids: List<String>,
         inference: String,
         mapPreviewBytes: ByteArray? = _locationState.value.mapPreviewBytes,
+        geocoderContext: String? = _locationState.value.geocoderContext,
+        osmContext: String? = _locationState.value.osmContext,
+        wifiContext: String? = _locationState.value.wifiContext,
+        inferenceSource: String = _locationState.value.inferenceSource,
     ) {
-        _locationState.value = LocationDisplayState(mapPreviewBytes, latitude, longitude, ssids, inference)
+        _locationState.value = LocationDisplayState(
+            mapPreviewBytes = mapPreviewBytes,
+            latitude = latitude,
+            longitude = longitude,
+            ssids = ssids,
+            lastInference = inference,
+            geocoderContext = geocoderContext,
+            osmContext = osmContext,
+            wifiContext = wifiContext,
+            inferenceSource = inferenceSource,
+        )
     }
 
     fun updateLocationSsids(ssids: List<String>) {

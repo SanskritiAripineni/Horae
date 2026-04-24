@@ -30,7 +30,8 @@ data class LocationContextCacheEntry(
     val mapContext: String,
     val mapSourceLat: Double,
     val mapSourceLon: Double,
-    val updatedAtMs: Long
+    val updatedAtMs: Long,
+    val osmContext: String? = null,
 )
 
 @Serializable
@@ -40,6 +41,7 @@ data class ContextLog(
     val motionCandidates: List<String>,
     val calibratedMotion: String,
     val mapContext: String? = null,
+    val osmContext: String? = null,
     val ssidContext: String? = null,
     val fusedLocationContext: String? = null,
     val locationGridKey: String? = null,

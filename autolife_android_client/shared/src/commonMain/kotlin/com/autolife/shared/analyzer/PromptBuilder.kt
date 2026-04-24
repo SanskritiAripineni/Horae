@@ -47,20 +47,26 @@ object PromptBuilder {
         Summary: <short location context, or "SSID context unavailable" if the SSIDs are not informative>
         """.trimIndent()
 
-    fun buildLocationFusionPrompt(mapContext: String?, ssidContext: String?): String =
+    fun buildLocationFusionPrompt(mapContext: String?, osmContext: String?, ssidContext: String?): String =
         """
         You are fusing location context for life journaling.
 
         Inputs:
         - Geocoder-based location context: ${mapContext ?: "Unavailable"}
+        - OpenStreetMap nearby feature context: ${osmContext ?: "Unavailable"}
         - Wi-Fi SSID-based location context: ${ssidContext ?: "Unavailable"}
 
         Task:
-        Keep the most specific accurate location context. Prefer the SSID context when it adds a concrete venue or place, otherwise keep the geocoder context.
+        Keep the most specific accurate location context.
+        - Preserve useful geographic/address detail from the geocoder when available.
+        - Use OpenStreetMap features for surrounding scene/geography such as campus, grass, water, pools, parking, paths, roads, and buildings.
+        - Add Wi-Fi context when it clarifies venue type or indoor setting.
+        - Do not replace a real address or road/city context with only a generic Wi-Fi label.
+        - Keep the final summary concise but informative.
 
         Response format:
         Reasoning: <brief comparison>
-        Summary: <single fused location context>
+        Summary: <single fused location context with geography/address plus venue/environment when available>
         """.trimIndent()
 
     fun buildJournalPrompt(refinedSegments: String): String =

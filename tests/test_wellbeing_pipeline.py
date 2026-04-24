@@ -42,6 +42,15 @@ class TestMarkersFromRaw:
         assert rec.coverage["sleep_onset_hour"] == 0.0
         assert "sleep_onset_hour" not in rec.markers
 
+    def test_api_date_string_is_coerced_to_date(self):
+        raw = {
+            "date": "2024-05-10",
+            "sleep_duration_hours": 7.5,
+        }
+        rec = markers_from_raw(raw)
+
+        assert rec.day == date(2024, 5, 10)
+
     def test_coverage_override(self):
         raw = {
             "date": date(2024, 5, 10),

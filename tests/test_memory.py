@@ -23,55 +23,53 @@ from memory import MemoryModule
 
 class TestMemoryStorage:
 
-    def test_save_and_load_round_trip(self, tmp_path):
+    def test_load_user_memory_returns_default_shape_for_new_user(self, tmp_path):
         storage = MemoryStorage(data_dir=str(tmp_path))
-        data = {"name": "Alice", "score": 42}
-        assert storage.save("test_category", "key1", data) is True
-        loaded = storage.load("test_category", "key1")
-        assert loaded == data
+        loaded = storage.load_user_memory("u1")
+        assert loaded["user_id"] == "u1"
+        assert loaded["preferences"] == {}
+        assert loaded["wellbeing"]["history"] == []
+        assert loaded["feedback"]["comments"] == []
 
-    def test_load_returns_none_for_missing_key(self, tmp_path):
+    def test_save_and_load_user_memory_round_trip(self, tmp_path):
         storage = MemoryStorage(data_dir=str(tmp_path))
-        assert storage.load("nonexistent", "nope") is None
+        data = {
+            "user_id": "u1",
+            "preferences": {"explicit_preferences": ["Avoid meditation"]},
+            "wellbeing": {"history": [{"risk_level": "mild"}]},
+            "feedback": {"comments": [{"raw_feedback": "Prefer walking"}]},
+        }
+        assert storage.save_user_memory("u1", data) is True
+        loaded = storage.load_user_memory("u1")
+        assert loaded["preferences"]["explicit_preferences"] == ["Avoid meditation"]
+        assert loaded["wellbeing"]["history"][0]["risk_level"] == "mild"
+        assert loaded["feedback"]["comments"][0]["raw_feedback"] == "Prefer walking"
 
-    def test_save_creates_category_directory(self, tmp_path):
+    def test_save_creates_users_directory(self, tmp_path):
         storage = MemoryStorage(data_dir=str(tmp_path))
-        storage.save("new_category", "k", {"hello": "world"})
-        assert (tmp_path / "new_category").is_dir()
+        storage.save_user_memory("u1", {"user_id": "u1"})
+        assert (tmp_path / "users").is_dir()
 
-    def test_overwrites_existing_data(self, tmp_path):
+    def test_update_user_memory_overwrites_existing_data(self, tmp_path):
         storage = MemoryStorage(data_dir=str(tmp_path))
-        storage.save("cat", "key", {"v": 1})
-        storage.save("cat", "key", {"v": 2})
-        loaded = storage.load("cat", "key")
-        assert loaded["v"] == 2
+        storage.save_user_memory("u1", {"user_id": "u1", "preferences": {"foo": "bar"}})
+        storage.update_user_memory("u1", lambda memory: {**memory, "preferences": {"foo": "baz"}})
+        loaded = storage.load_user_memory("u1")
+        assert loaded["preferences"]["foo"] == "baz"
 
-    def test_saves_various_types(self, tmp_path):
+    def test_saves_user_file_as_plain_json_document(self, tmp_path):
         storage = MemoryStorage(data_dir=str(tmp_path))
-
-        storage.save("cat", "list_key", [1, 2, 3])
-        assert storage.load("cat", "list_key") == [1, 2, 3]
-
-        storage.save("cat", "str_key", "hello")
-        assert storage.load("cat", "str_key") == "hello"
-
-        nested = {"a": {"b": {"c": 1}}}
-        storage.save("cat", "nested_key", nested)
-        assert storage.load("cat", "nested_key") == nested
+        storage.save_user_memory("u1", {"user_id": "u1", "preferences": {"a": 1}})
+        file_path = tmp_path / "users" / "u1.json"
+        with open(file_path) as f:
+            raw = json.load(f)
+        assert raw["user_id"] == "u1"
+        assert raw["preferences"]["a"] == 1
 
     def test_creates_data_dir_if_missing(self, tmp_path):
         new_dir = tmp_path / "deep" / "nested"
         storage = MemoryStorage(data_dir=str(new_dir))
         assert new_dir.exists()
-
-    def test_file_format_is_json_with_data_wrapper(self, tmp_path):
-        storage = MemoryStorage(data_dir=str(tmp_path))
-        storage.save("cat", "key", {"val": 99})
-        file_path = tmp_path / "cat" / "key.json"
-        with open(file_path) as f:
-            raw = json.load(f)
-        assert "data" in raw
-        assert raw["data"]["val"] == 99
 
 
 
@@ -188,6 +186,39 @@ class TestUserPreferencesManager:
         assert "goals" in d
         assert "work_hours" in d
 
+    def test_merge_feedback_updates_explicit_preferences(self, tmp_path):
+        storage = MemoryStorage(data_dir=str(tmp_path))
+        mgr = UserPreferencesManager(storage)
+
+        mgr.merge_feedback(
+            user_id="u1",
+            preference="User prefers walking to meditation",
+            dislikes=["meditation"],
+            prefers=["walking"],
+        )
+
+        loaded = mgr.get_preferences("u1")
+        assert "User prefers walking to meditation" in loaded.explicit_preferences
+        assert "meditation" in loaded.disliked_activities
+        assert "walking" in loaded.preferred_activities
+        assert "walking" in loaded.preferred_interventions
+
+    def test_get_prompt_preferences_returns_only_explicit_signals(self, tmp_path):
+        storage = MemoryStorage(data_dir=str(tmp_path))
+        mgr = UserPreferencesManager(storage)
+
+        mgr.merge_feedback(
+            user_id="u1",
+            preference="No meditation suggestions",
+            dislikes=["meditation"],
+            prefers=["walking"],
+        )
+
+        prompt_prefs = mgr.get_prompt_preferences("u1")
+        assert "No meditation suggestions" in prompt_prefs
+        assert "Avoid: meditation" in prompt_prefs
+        assert "Prefer: walking" in prompt_prefs
+
 
 
 # MemoryModule (integration)
@@ -202,6 +233,7 @@ class TestMemoryModule:
         assert isinstance(ctx["preferences"], dict)
         assert ctx["wellbeing"]["risk_level"] == "unknown"
         assert ctx["wellbeing"]["trend"] == "insufficient_data"
+        assert ctx["feedback"]["comments"] == []
 
     def test_get_user_context_with_data(self, tmp_path):
         module = MemoryModule(data_dir=str(tmp_path))
@@ -212,3 +244,34 @@ class TestMemoryModule:
 
         ctx = module.get_user_context("u1")
         assert ctx["wellbeing"]["risk_level"] == "mild"
+
+    def test_record_wellbeing_assessment_persists_history(self, tmp_path):
+        module = MemoryModule(data_dir=str(tmp_path))
+
+        module.record_wellbeing_assessment("u1", "moderate")
+
+        history = module.wellbeing_tracker.get_history("u1")
+        assert len(history) == 1
+        assert history[0]["risk_level"] == "moderate"
+
+    def test_record_feedback_updates_preferences_and_feedback_store(self, tmp_path):
+        module = MemoryModule(data_dir=str(tmp_path))
+
+        module.record_feedback(
+            "u1",
+            raw_feedback="I do not want meditation. Suggest walking instead.",
+            parsed_feedback={
+                "preference": "Avoid meditation and prefer walking",
+                "dislikes": ["meditation"],
+                "prefers": ["walking"],
+                "should_save": True,
+            },
+        )
+
+        prefs = module.preferences.get_preferences("u1")
+        user_memory = module.storage.load_user_memory("u1")
+
+        assert "Avoid meditation and prefer walking" in prefs.explicit_preferences
+        assert "meditation" in prefs.disliked_activities
+        assert "walking" in prefs.preferred_activities
+        assert len(user_memory["feedback"]["comments"]) == 1

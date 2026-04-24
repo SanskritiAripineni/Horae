@@ -25,7 +25,11 @@ object DebugRepository {
         val latitude: Double = 0.0,
         val longitude: Double = 0.0,
         val ssids: List<String> = emptyList(),
-        val lastInference: String = "No inference yet"
+        val lastInference: String = "No inference yet",
+        val geocoderContext: String? = null,
+        val osmContext: String? = null,
+        val wifiContext: String? = null,
+        val inferenceSource: String = "Unavailable",
     )
 
     private val _locationInfo = MutableStateFlow(LocationDebugInfo())
@@ -39,7 +43,7 @@ object DebugRepository {
     private val _isDemoMode = MutableStateFlow(false)
     val isDemoMode: StateFlow<Boolean> = _isDemoMode.asStateFlow()
 
-    private val _isServiceRunning = MutableStateFlow(false)
+    private val _isServiceRunning = MutableStateFlow(true)
     val isServiceRunning: StateFlow<Boolean> = _isServiceRunning.asStateFlow()
 
     private val _isPermanentMotionEnabled = MutableStateFlow(false)
@@ -70,8 +74,20 @@ object DebugRepository {
         _locationInfo.value = _locationInfo.value.copy(ssids = ssids)
     }
 
-    fun updateLocationInference(text: String) {
-        _locationInfo.value = _locationInfo.value.copy(lastInference = text)
+    fun updateLocationInference(
+        text: String,
+        geocoderContext: String? = _locationInfo.value.geocoderContext,
+        osmContext: String? = _locationInfo.value.osmContext,
+        wifiContext: String? = _locationInfo.value.wifiContext,
+        inferenceSource: String = _locationInfo.value.inferenceSource,
+    ) {
+        _locationInfo.value = _locationInfo.value.copy(
+            lastInference = text,
+            geocoderContext = geocoderContext,
+            osmContext = osmContext,
+            wifiContext = wifiContext,
+            inferenceSource = inferenceSource,
+        )
     }
 
     fun updateLastJournal(journal: String) {

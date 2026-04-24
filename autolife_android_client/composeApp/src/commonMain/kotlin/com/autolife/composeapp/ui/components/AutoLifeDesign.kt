@@ -169,6 +169,7 @@ fun PracticeRow(
     accent: Color,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
+    showChevron: Boolean = true,
 ) {
     SurfaceCard(
         modifier = modifier.then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
@@ -197,7 +198,9 @@ fun PracticeRow(
                     }
                 }
             }
-            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (showChevron) {
+                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }

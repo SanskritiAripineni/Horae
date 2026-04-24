@@ -16,6 +16,7 @@
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Screen-time markers via UsageStatsManager. User grants via Settings → Apps → Special access → Usage access. -->
@@ -36,7 +37,7 @@
 
         <service
             android:name=".AutoLifeService"
-            android:foregroundServiceType="location"
+            android:foregroundServiceType="location|dataSync"
             android:enabled="true"
             android:exported="false" />
 

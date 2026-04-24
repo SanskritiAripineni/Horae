@@ -80,6 +80,10 @@ class AutoLifeApp : Application() {
                     ssids = loc.ssids,
                     inference = loc.lastInference,
                     mapPreviewBytes = loc.mapImageBytes,
+                    geocoderContext = loc.geocoderContext,
+                    osmContext = loc.osmContext,
+                    wifiContext = loc.wifiContext,
+                    inferenceSource = loc.inferenceSource,
                 )
             }
         }
@@ -97,6 +101,7 @@ class AutoLifeApp : Application() {
         // Register action callbacks so the cross-platform DevDashboardScreen
         // can trigger Android-specific operations.
         val appContext = this
+        PlatformStateProvider.isDebugBuild = BuildConfig.DEBUG
         PlatformStateProvider.onDemoModeChanged = { DebugRepository.setDemoMode(it) }
         PlatformStateProvider.onPermanentMotionChanged = {
             DebugRepository.setPermanentMotionEnabled(it && BuildConfig.DEBUG)

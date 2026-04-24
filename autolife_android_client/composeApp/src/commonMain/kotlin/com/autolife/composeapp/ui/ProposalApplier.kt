@@ -21,8 +21,14 @@ object ProposalApplier {
         if (changes.isEmpty() || _isApplying.value) return
         _isApplying.value = true
         try {
-            val resp = AutoLifeApi.applyCalendar(ApplyCalendarRequest(changes = changes))
             val current = AnalysisRepository.result.value
+            val resp = AutoLifeApi.applyCalendar(
+                ApplyCalendarRequest(
+                    changes = changes,
+                    proposed_changes = current?.proposed_changes ?: emptyList(),
+                    user_id = AnalysisRepository.userId,
+                )
+            )
             if (current != null) {
                 AnalysisRepository.setResult(
                     current.copy(

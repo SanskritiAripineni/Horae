@@ -219,14 +219,13 @@ def interactive_mode(agent: LLMSchedulerAgent, results: dict):
                 if parsed.get('should_save', True):
                     preference = parsed.get('preference', raw_comments)
                     user_preferences.append(preference)
-                    
+
                     # Save to memory
-                    agent.memory.storage.save('user_feedback', f'cli_{datetime.now().strftime("%Y%m%d_%H%M%S")}', {
-                        'preference': preference,
-                        'dislikes': parsed.get('dislikes', []),
-                        'prefers': parsed.get('prefers', []),
-                        'timestamp': results.get('timestamp', '')
-                    })
+                    agent.memory.record_feedback(
+                        user_id=agent.user_id,
+                        raw_feedback=raw_comments,
+                        parsed_feedback=parsed,
+                    )
                     print(f"\n  Saved to memory: \"{preference}\"")
                     
                     # Regenerate proposals with user preferences

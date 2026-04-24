@@ -301,7 +301,7 @@ class ScheduleViewModel : ViewModel() {
     fun checkCalendarStatus() {
         viewModelScope.launch {
             try {
-                calendarConnected = AutoLifeApi.getOAuthStatus().connected
+                calendarConnected = AutoLifeApi.getOAuthStatus(AnalysisRepository.userId).connected
             } catch (_: Exception) {
                 calendarConnected = false
             }
@@ -314,7 +314,7 @@ class ScheduleViewModel : ViewModel() {
         oauthError = null
         viewModelScope.launch {
             try {
-                val response = AutoLifeApi.getOAuthAuthorizeUrl()
+                val response = AutoLifeApi.getOAuthAuthorizeUrl(AnalysisRepository.userId)
                 pendingAuthUrl = response.auth_url
             } catch (_: Exception) {
                 oauthError = "Could not reach server. Check your connection."
@@ -429,12 +429,6 @@ fun ScheduleScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             item {
-                ScreenIntro(
-                    title = "Schedule",
-                    subtitle = "Connect calendar context, then run analysis to review proposed changes.",
-                )
-            }
-            item {
                 SurfaceCard {
                     ActionableEmptyState(
                         icon = Icons.AutoMirrored.Filled.EventNote,
@@ -528,13 +522,6 @@ fun ScheduleScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item {
-                ScreenIntro(
-                    title = "Schedule",
-                    subtitle = "Review weekly calendar context and participant-safe proposals.",
-                )
-            }
-
             // Calendar connect card
             item {
                 CalendarConnectCard(

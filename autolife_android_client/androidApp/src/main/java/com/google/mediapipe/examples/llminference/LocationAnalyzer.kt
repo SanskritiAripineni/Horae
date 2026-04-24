@@ -29,6 +29,7 @@ data class LocationResolutionResult(
     val snapshot: LocationSnapshot?,
     val gridKey: String?,
     val mapContext: String?,
+    val osmContext: String?,
     val ssidContext: String?,
     val fusedLocationContext: String?,
     val reusedMapContext: Boolean,
@@ -82,6 +83,7 @@ class LocationAnalyzer(private val context: Context) : Closeable {
 
     private val fileStorage = FileStorage(context)
     private val cacheStorage = LocationContextCacheStorage(context)
+    private val osmFeatureProvider = OverpassFeatureProvider()
 
     suspend fun resolveLocationContext(
         location: Location?,
@@ -117,11 +119,17 @@ class LocationAnalyzer(private val context: Context) : Closeable {
             location != null -> generateGeocoderContext(location, gridKey)
             else -> null
         }
+        val osmContext = when {
+            !cachedMap?.osmContext.isNullOrBlank() -> cachedMap?.osmContext
+            location != null -> generateOsmContext(location, gridKey, mapContext)
+            else -> null
+        }
 
         val fusedLocationContext = when {
             previousGridMatches && previousSsidMatches && !previousLog?.fusedLocationContext.isNullOrBlank() -> previousLog?.fusedLocationContext
-            !ssidContext.isNullOrBlank() && !mapContext.isNullOrBlank() -> fuseLocationContexts(mapContext, ssidContext)
+            listOf(mapContext, osmContext, ssidContext).count { !it.isNullOrBlank() } >= 2 -> fuseLocationContexts(mapContext, osmContext, ssidContext)
             !ssidContext.isNullOrBlank() -> ssidContext
+            !osmContext.isNullOrBlank() -> listOfNotNull(mapContext, osmContext).joinToString(". ")
             else -> mapContext
         }
 
@@ -132,7 +140,22 @@ class LocationAnalyzer(private val context: Context) : Closeable {
             lon = snapshot?.longitude ?: 0.0
         )
         com.google.mediapipe.examples.llminference.data.DebugRepository.updateLocationSSIDs(sanitizedSsids)
-        com.google.mediapipe.examples.llminference.data.DebugRepository.updateLocationInference(fusedLocationContext ?: "No location context")
+        com.google.mediapipe.examples.llminference.data.DebugRepository.updateLocationInference(
+            text = fusedLocationContext ?: "No location context",
+            geocoderContext = mapContext,
+            osmContext = osmContext,
+            wifiContext = ssidContext,
+            inferenceSource = when {
+                !mapContext.isNullOrBlank() && !osmContext.isNullOrBlank() && !ssidContext.isNullOrBlank() -> "Geocoder + OSM + Wi-Fi fused by Gemini"
+                !mapContext.isNullOrBlank() && !osmContext.isNullOrBlank() -> "Geocoder + OSM map features"
+                !osmContext.isNullOrBlank() && !ssidContext.isNullOrBlank() -> "OSM + Wi-Fi fused by Gemini"
+                !mapContext.isNullOrBlank() && !ssidContext.isNullOrBlank() -> "Geocoder + Wi-Fi fused by Gemini"
+                !mapContext.isNullOrBlank() -> "Android reverse geocoder"
+                !osmContext.isNullOrBlank() -> "OpenStreetMap nearby features"
+                !ssidContext.isNullOrBlank() -> "Wi-Fi SSIDs summarized by Gemini"
+                else -> "Unavailable"
+            }
+        )
 
         fusedLocationContext?.let { fileStorage.saveLLMResponseIfChanged(it) }
 
@@ -140,6 +163,7 @@ class LocationAnalyzer(private val context: Context) : Closeable {
             snapshot = snapshot,
             gridKey = gridKey,
             mapContext = mapContext,
+            osmContext = osmContext,
             ssidContext = ssidContext,
             fusedLocationContext = fusedLocationContext,
             reusedMapContext = reusedMapContext,
@@ -184,14 +208,40 @@ class LocationAnalyzer(private val context: Context) : Closeable {
         return response?.takeUnless { it.equals("SSID context unavailable", ignoreCase = true) }
     }
 
-    private suspend fun fuseLocationContexts(mapContext: String?, ssidContext: String?): String? {
+    private suspend fun generateOsmContext(
+        location: Location,
+        gridKey: String?,
+        mapContext: String?
+    ): String? {
+        val response = osmFeatureProvider.getNearbyFeatureContext(
+            latitude = location.latitude,
+            longitude = location.longitude
+        )?.trim()?.takeIf { it.isNotEmpty() }
+
+        if (gridKey != null && !mapContext.isNullOrBlank()) {
+            cacheStorage.put(
+                LocationContextCacheEntry(
+                    gridKey = gridKey,
+                    mapContext = mapContext,
+                    mapSourceLat = location.latitude,
+                    mapSourceLon = location.longitude,
+                    updatedAtMs = System.currentTimeMillis(),
+                    osmContext = response
+                )
+            )
+        }
+
+        return response
+    }
+
+    private suspend fun fuseLocationContexts(mapContext: String?, osmContext: String?, ssidContext: String?): String? {
         val response = runCatching {
-            extractSummary(AiClientProvider.client.generate(PromptBuilder.buildLocationFusionPrompt(mapContext, ssidContext)))
+            extractSummary(AiClientProvider.client.generate(PromptBuilder.buildLocationFusionPrompt(mapContext, osmContext, ssidContext)))
         }.getOrElse { error ->
             Log.w(TAG, "Location fusion failed", error)
             null
         }
-        return response ?: ssidContext ?: mapContext
+        return response ?: listOfNotNull(mapContext, osmContext, ssidContext).joinToString(". ").takeIf { it.isNotBlank() }
     }
 
     private fun extractSummary(response: String?): String? {

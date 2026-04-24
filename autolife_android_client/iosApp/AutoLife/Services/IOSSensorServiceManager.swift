@@ -11,7 +11,6 @@ class IOSSensorServiceManager {
     private let locationProvider = IOSLocationProvider()
     private let motionProvider = IOSMotionSensorProvider()
     private let wifiProvider = IOSWifiNetworkProvider()
-
     private var pollTimer: Timer?
     private(set) var isRunning = false
     private var isDemoMode = false
@@ -145,14 +144,18 @@ class IOSSensorServiceManager {
                 }
 
                 let locationContext: String
+                let inferenceSource: String
                 if let geocoderContext, let ssidContext {
                     let fusionPrompt = PromptBuilder.shared.buildLocationFusionPrompt(
                         mapContext: geocoderContext,
+                        osmContext: nil,
                         ssidContext: ssidContext
                     )
                     locationContext = try await AiClientProvider.shared.client.generate(prompt: fusionPrompt)
+                    inferenceSource = "Fused geocoder + Wi-Fi"
                 } else {
                     locationContext = geocoderContext ?? ssidContext ?? "Location unavailable"
+                    inferenceSource = geocoderContext != nil ? "Reverse geocoder" : "Wi-Fi"
                 }
 
                 lastLocationContext = locationContext
@@ -161,7 +164,11 @@ class IOSSensorServiceManager {
                     longitude: loc.longitude,
                     ssids: ssids,
                     inference: locationContext,
-                    mapPreviewBytes: nil
+                    mapPreviewBytes: nil,
+                    geocoderContext: geocoderContext,
+                    osmContext: nil,
+                    wifiContext: ssidContext,
+                    inferenceSource: inferenceSource
                 )
 
                 DatabaseRepository.shared.insertLog(log: SensorLog(
@@ -179,7 +186,11 @@ class IOSSensorServiceManager {
                     longitude: loc.longitude,
                     ssids: ssids,
                     inference: geocoderContext ?? "Analysis unavailable: \(error.localizedDescription)",
-                    mapPreviewBytes: nil
+                    mapPreviewBytes: nil,
+                    geocoderContext: geocoderContext,
+                    osmContext: nil,
+                    wifiContext: nil,
+                    inferenceSource: geocoderContext != nil ? "Reverse geocoder" : "Unavailable"
                 )
             }
         }

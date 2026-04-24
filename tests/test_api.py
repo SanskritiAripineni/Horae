@@ -16,6 +16,7 @@ Coverage:
 """
 
 from unittest.mock import MagicMock, patch
+from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -172,6 +173,19 @@ class TestProcessJournals:
         assert response.status_code == 200
         assert response.json() == sample_pipeline_result
 
+    def test_timedelta_response_values_are_json_safe(
+        self, client, mock_agent, valid_journals_payload, sample_pipeline_result
+    ):
+        result = dict(sample_pipeline_result)
+        result["analysis_details"] = {"duration_seconds": timedelta(seconds=2)}
+        mock_agent.run_from_journals.return_value = result
+
+        with patch("api.db.log_session"):
+            response = client.post("/api/process_journals", json=valid_journals_payload)
+
+        assert response.status_code == 200
+        assert response.json()["analysis_details"]["duration_seconds"] == 2.0
+
 
 # /api/apply_calendar
 
@@ -200,7 +214,12 @@ class TestApplyCalendar:
 
         assert response.status_code == 200
         assert response.json()["applied"][0]["event_id"] == "e1"
-        mock_agent.apply_calendar_changes.assert_called_once_with(changes, "thanks", user_id="u1")
+        mock_agent.apply_calendar_changes.assert_called_once_with(
+            changes,
+            "thanks",
+            None,
+            user_id="u1",
+        )
         log_cal.assert_called_once()
 
     def test_empty_changes_is_422(self, client):

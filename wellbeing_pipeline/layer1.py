@@ -11,7 +11,7 @@ Key ideas:
 """
 from __future__ import annotations
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 import numpy as np
 
@@ -99,6 +99,20 @@ class PersonalBaseline:
 
 # ---------- Interface for plugging in StudentLife / K-EmoPhone / live data ----------
 
+def _coerce_day(value) -> date:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        return date.fromisoformat(value)
+    if hasattr(value, "date"):
+        maybe_date = value.date()
+        if isinstance(maybe_date, date):
+            return maybe_date
+    raise TypeError(f"Unsupported raw day date value: {value!r}")
+
+
 def markers_from_raw(raw_day: dict) -> DayRecord:
     """
     Adapter: map a dict of raw/extracted per-day features into a DayRecord.
@@ -122,9 +136,9 @@ def markers_from_raw(raw_day: dict) -> DayRecord:
             '_coverage': {marker: 0..1, ...}   # optional per-marker coverage
         }
     """
-    day = raw_day["date"]
+    day = _coerce_day(raw_day["date"])
     markers, coverage = {}, {}
-    cov_override = raw_day.get("_coverage", {})
+    cov_override = raw_day.get("coverage") or raw_day.get("_coverage") or {}
     for m in MARKER_SPECS:
         if m in raw_day and raw_day[m] is not None:
             markers[m] = float(raw_day[m])

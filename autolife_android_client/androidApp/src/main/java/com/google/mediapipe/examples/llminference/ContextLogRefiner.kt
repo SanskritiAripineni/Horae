@@ -56,7 +56,7 @@ object ContextLogRefiner {
         segments.joinToString(separator = "|") { "${it.motion}:${it.locationContext}:${it.startMs / 60000}:${it.endMs / 60000}" }
 
     private fun bestLocation(log: ContextLog): String =
-        preferMoreSpecific(log.ssidContext, preferMoreSpecific(log.fusedLocationContext, log.mapContext))
+        preferMoreSpecific(log.ssidContext, preferMoreSpecific(log.fusedLocationContext, preferMoreSpecific(log.osmContext, log.mapContext)))
             .ifBlank { "Unknown location" }
 
     private fun buildSummary(log: ContextLog): String {
@@ -65,6 +65,7 @@ object ContextLogRefiner {
             parts += "candidates=${log.motionCandidates.joinToString("/")}"
         }
         log.mapContext?.takeIf { it.isNotBlank() }?.let { parts += "map=$it" }
+        log.osmContext?.takeIf { it.isNotBlank() }?.let { parts += "osm=$it" }
         log.ssidContext?.takeIf { it.isNotBlank() }?.let { parts += "ssid=$it" }
         if (log.reusedMapContext) parts += "reused-map"
         if (log.reusedSsidContext) parts += "reused-ssid"

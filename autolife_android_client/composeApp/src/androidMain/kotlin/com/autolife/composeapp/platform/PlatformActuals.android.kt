@@ -1,17 +1,14 @@
 package com.autolife.composeapp.platform
 
 import android.graphics.BitmapFactory
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import com.autolife.composeapp.ui.screens.DevDashboardScreen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.Alignment
@@ -21,32 +18,30 @@ import com.autolife.shared.model.RawDayMarkers
 
 @Composable
 actual fun ServiceToggle(isRunning: Boolean, onToggle: (Boolean) -> Unit) {
-    val color = if (isRunning) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
-    AssistChip(
-        onClick = { onToggle(!isRunning) },
-        label = {
-            Text(
-                text = if (isRunning) "Collecting" else "Paused",
-                style = MaterialTheme.typography.labelLarge,
-            )
-        },
-        leadingIcon = {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .background(color, CircleShape),
-            )
-        },
-        colors = AssistChipDefaults.assistChipColors(
-            containerColor = color.copy(alpha = 0.09f),
-            labelColor = color,
-            leadingIconContentColor = color,
-        ),
-        border = BorderStroke(1.dp, color.copy(alpha = 0.22f)),
-        modifier = Modifier
-            .heightIn(min = 40.dp)
-            .padding(end = 2.dp),
-    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(end = 4.dp)
+    ) {
+        Text(
+            text = if (isRunning) "Collecting" else "Paused",
+            style = MaterialTheme.typography.labelMedium,
+            color = if (isRunning) MaterialTheme.colorScheme.secondary
+                    else MaterialTheme.colorScheme.error,
+        )
+        Spacer(Modifier.width(6.dp))
+        Switch(
+            checked = isRunning,
+            onCheckedChange = onToggle,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                checkedTrackColor = MaterialTheme.colorScheme.secondary,
+                uncheckedThumbColor = MaterialTheme.colorScheme.error,
+                uncheckedTrackColor = MaterialTheme.colorScheme.error.copy(alpha = 0.16f),
+                uncheckedBorderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.36f),
+            ),
+            modifier = Modifier.height(24.dp),
+        )
+    }
 }
 
 @Composable

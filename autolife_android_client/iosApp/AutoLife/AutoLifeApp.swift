@@ -112,6 +112,9 @@ struct AutoLifeApp: App {
         PlatformStateProvider.shared.setPlatformName(name: "iOS")
         PlatformStateProvider.shared.loadBatteryAssessments()
         PlatformStateProvider.shared.refreshBatteryLevel()
+        #if DEBUG
+        PlatformStateProvider.shared.isDebugBuild = true
+        #endif
     }
 
     private func currentAppVersion() -> String {
