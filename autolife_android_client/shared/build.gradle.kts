@@ -1,18 +1,17 @@
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.library)
+    alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.sqldelight)
 }
 
 kotlin {
-    androidTarget {
-        compilations.all {
-            compileTaskProvider.configure {
-                compilerOptions {
-                    jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-                }
-            }
+    android {
+        namespace = "com.autolife.shared"
+        compileSdk = 35
+        minSdk = 24
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
     }
 
@@ -46,18 +45,6 @@ kotlin {
             api(libs.ktor.client.darwin)
             api(libs.sqldelight.native.driver)
         }
-    }
-}
-
-android {
-    namespace = "com.autolife.shared"
-    compileSdk = 35
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-    defaultConfig {
-        minSdk = 24
     }
 }
 

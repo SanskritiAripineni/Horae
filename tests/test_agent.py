@@ -460,8 +460,14 @@ class TestApplyCalendarChanges:
 
     def test_saves_user_comments_to_memory(self):
         agent = _make_agent()
+        agent.llm_client.parse_user_feedback.return_value = {"preference": "mornings"}
         agent.apply_calendar_changes([], user_comments="I prefer mornings")
-        agent.memory.storage.save.assert_called_once()
+        agent.llm_client.parse_user_feedback.assert_called_once_with("I prefer mornings")
+        agent.memory.record_feedback.assert_called_once_with(
+            user_id="default",
+            raw_feedback="I prefer mornings",
+            parsed_feedback={"preference": "mornings"},
+        )
 
     def test_no_memory_save_without_comments(self):
         agent = _make_agent()

@@ -11,6 +11,7 @@ class IOSLocationProvider: NSObject, LocationProvider, CLLocationManagerDelegate
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
+        manager.pausesLocationUpdatesAutomatically = false
     }
 
     func requestPermission() {
@@ -23,6 +24,7 @@ class IOSLocationProvider: NSObject, LocationProvider, CLLocationManagerDelegate
             requestPermission()
             return nil
         }
+        manager.allowsBackgroundLocationUpdates = false
 
         return await withCheckedContinuation { continuation in
             // Resume any pending continuation to prevent leaks from concurrent calls

@@ -9,12 +9,19 @@ import com.autolife.composeapp.ui.screens.DevDashboardScreen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.autolife.shared.model.RawDayMarkers
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 actual fun ServiceToggle(isRunning: Boolean, onToggle: (Boolean) -> Unit) {
@@ -39,7 +46,13 @@ actual fun ServiceToggle(isRunning: Boolean, onToggle: (Boolean) -> Unit) {
                 uncheckedTrackColor = MaterialTheme.colorScheme.error.copy(alpha = 0.16f),
                 uncheckedBorderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.36f),
             ),
-            modifier = Modifier.height(24.dp),
+            modifier = Modifier
+                .height(24.dp)
+                .semantics {
+                    contentDescription = "AutoLife background collection"
+                    stateDescription = if (isRunning) "Collecting" else "Paused"
+                    role = Role.Switch
+                },
         )
     }
 }
@@ -70,7 +83,9 @@ actual fun rememberLocationPreviewImage(imageBytes: ByteArray?): ImageBitmap? {
 }
 
 actual suspend fun getBehavioralMarkers(nDays: Int): List<RawDayMarkers> =
-    BehavioralMarkerAggregator.aggregate(nDays)
+    withContext(Dispatchers.IO) {
+        BehavioralMarkerAggregator.aggregate(nDays)
+    }
 
 actual fun openNativeCalendar() {
     val ctx = AppContextHolder.context ?: return

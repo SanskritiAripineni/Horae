@@ -115,6 +115,18 @@ class TestPersonalBaseline:
         assert s["n"] == 10
         assert s["mean"] == pytest.approx(7.5)
 
+    def test_stats_uses_robust_std_floor_for_flat_history(self):
+        b = PersonalBaseline(warmup_days=10)
+        start = date(2024, 5, 1)
+        for i in range(10):
+            b.add(markers_from_raw({
+                "date": start + timedelta(days=i),
+                "sleep_duration_hours": 7.5,
+            }))
+        s = b.stats("sleep_duration_hours", days_back=10)
+        assert s is not None
+        assert s["std"] == pytest.approx(0.4)
+
     def test_stats_returns_none_for_absent_marker(self):
         b = self._populated(days=10)
         # mobility_entropy was never populated above.
@@ -178,6 +190,24 @@ class TestDetectDeviations:
         )
         assert len(pronounced_only) <= len(any_magnitude)
 
+    def test_flat_history_does_not_create_false_pronounced_screen_deviation(self):
+        b = PersonalBaseline(warmup_days=10)
+        start = date(2024, 5, 1)
+        for i in range(30):
+            b.add(markers_from_raw({
+                "date": start + timedelta(days=i),
+                "total_screen_min": 240.0,
+            }))
+        for i in range(30, 34):
+            b.add(markers_from_raw({
+                "date": start + timedelta(days=i),
+                "total_screen_min": 245.0,
+            }))
+
+        devs = detect_deviations(b, as_of=b.history[-1].day, recent_days=4, baseline_days=28)
+        screen_devs = [d for d in devs if d.marker == "total_screen_min"]
+        assert screen_devs == []
+
 
 class TestCoherentPatterns:
     def test_empty_deviations_returns_empty(self):
@@ -228,6 +258,22 @@ class TestBuildStateDescription:
         assert len(state["structured"]["deviations"]) == len(devs)
         assert isinstance(state["prose"], str) and state["prose"]
         assert "as_of" in state["structured"]
+
+    def test_low_coverage_generates_caveats_and_low_confidence(self):
+        b = PersonalBaseline(warmup_days=7)
+        start = date(2024, 5, 1)
+        for i in range(7):
+            b.add(markers_from_raw({
+                "date": start + timedelta(days=i),
+                "sleep_duration_hours": 7.0 + (0.1 if i >= 4 else 0.0),
+                "_coverage": {"sleep_duration_hours": 0.2},
+            }))
+        devs = detect_deviations(b, as_of=b.history[-1].day, recent_days=4, baseline_days=3)
+        state = build_state_description(b, deviations=devs, patterns=[], as_of=b.history[-1].day)
+
+        assert state["structured"]["baseline_state"]["overall_confidence"] == "low"
+        notes = state["structured"]["coverage_notes"]
+        assert any("sleep/sleep_duration_hours: coverage low" in note for note in notes)
 
 
 class TestRenderLLMInput:

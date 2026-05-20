@@ -24,6 +24,8 @@ internal object UsageStatsCollector {
         val totalScreenMin: Float,
         val lateNightScreenMin: Float,
         val appSwitchingRate: Float,
+        val totalCoverage: Float,
+        val lateNightCoverage: Float,
     )
 
     fun hasPermission(context: Context): Boolean {
@@ -56,6 +58,7 @@ internal object UsageStatsCollector {
 
         val events = usm.queryEvents(dayStart, minOf(dayEnd, System.currentTimeMillis()))
             ?: return null
+        val queryEnd = minOf(dayEnd, System.currentTimeMillis())
 
         val lastForeground = mutableMapOf<String, Long>()  // pkg → MOVE_TO_FOREGROUND timestamp
         var totalMs = 0L
@@ -80,7 +83,7 @@ internal object UsageStatsCollector {
         }
         // Close any apps still foregrounded at end of window
         for (foreStart in lastForeground.values) {
-            accumulateDwell(foreStart, dayEnd, lateNightStart, lateNightEnd,
+            accumulateDwell(foreStart, queryEnd, lateNightStart, lateNightEnd,
                 onTotal = { totalMs += it },
                 onLateNight = { lateNightMs += it })
         }
@@ -88,11 +91,22 @@ internal object UsageStatsCollector {
         val totalMin = totalMs / 60_000f
         val lateNightMin = lateNightMs / 60_000f
         val switchRate = if (totalMin > 0f) switchCount / totalMin else 0f
+        val totalCoverage = BehavioralMarkerMath.coverageFraction(queryEnd - dayStart, dayEnd - dayStart)
+        val lateNightObservedMs = maxOf(
+            0L,
+            minOf(queryEnd, lateNightEnd) - maxOf(dayStart, lateNightStart),
+        )
+        val lateNightCoverage = BehavioralMarkerMath.coverageFraction(
+            lateNightObservedMs,
+            lateNightEnd - lateNightStart,
+        )
 
         return ScreenMarkers(
             totalScreenMin = totalMin,
             lateNightScreenMin = lateNightMin,
             appSwitchingRate = switchRate,
+            totalCoverage = totalCoverage,
+            lateNightCoverage = lateNightCoverage,
         )
     }
 

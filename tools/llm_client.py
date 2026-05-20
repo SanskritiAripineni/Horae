@@ -312,6 +312,7 @@ STRICT RULES — follow every one exactly:
         wellbeing_history: Optional[Dict[str, Any]] = None,
         behavioral_state: Optional[Dict[str, Any]] = None,
         raw_days: Optional[List[Dict[str, Any]]] = None,
+        llm_analysis: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Orchestrator call: compose journal narrative + behavioral sensing + calendar
         + research evidence into a complete schedule proposal.
@@ -378,7 +379,35 @@ STRICT RULES — follow every one exactly:
                 ts = rec.get("timestamp", "")[:10]
                 lines.append(f"  [{ts}] {change!r} — {action}")
             if lines:
-                history_text = "\nPAST SUGGESTION HISTORY (most recent last):\n" + "\n".join(lines)
+                history_text = (
+                    "\nPAST SUGGESTION HISTORY (most recent last — do NOT re-propose rejected items; "
+                    "build on accepted categories with complementary follow-ups):\n"
+                    + "\n".join(lines)
+                )
+
+        layer4_section = ""
+        if llm_analysis and isinstance(llm_analysis, dict):
+            sal = llm_analysis.get("salience_reasoning", "")
+            l4_patterns = llm_analysis.get("coherent_patterns") or []
+            l4_questions = llm_analysis.get("questions_for_user") or []
+            parts = []
+            if l4_patterns:
+                pnames = "; ".join(
+                    f"{p.get('name', '?')} ({p.get('interpretation', '')[:80]})"
+                    for p in l4_patterns
+                )
+                parts.append(f"  Detected patterns: {pnames}")
+            if sal:
+                parts.append(f"  Salience reasoning: {sal}")
+            if l4_questions:
+                parts.append(f"  Open questions: {'; '.join(l4_questions[:3])}")
+            if parts:
+                layer4_section = (
+                    "\nBEHAVIORAL PATTERN ANALYSIS (pre-computed by reasoning layer — "
+                    "use to calibrate risk and suggestion priority):\n"
+                    + "\n".join(parts)
+                    + "\n"
+                )
 
         behavioral_text = self._text(behavioral_prose)
         journal_text = self._text(journal_narrative)
@@ -406,7 +435,7 @@ STRICT RULES — follow every one exactly:
                 sri_str = f"{sri:.0f}/100" if sri is not None else "—"
                 screen_late_str = f"{screen_late:.0f}min" if screen_late is not None else "—"
                 screen_total_str = f"{screen_total:.0f}min" if screen_total is not None else "—"
-                app_sw_str = f"{app_sw:.1f}/hr" if app_sw is not None else "—"
+                app_sw_str = f"{app_sw:.2f}/active-min" if app_sw is not None else "—"
                 mob_str = f"{mob:.2f}" if mob is not None else "—"
                 revisit_str = f"{revisit:.2f}" if revisit is not None else "—"
                 social_str = f"{social:.2f}" if social is not None else "—"
@@ -420,8 +449,8 @@ STRICT RULES — follow every one exactly:
                     f"social_rhythm={social_str}, comm_reciprocity={comm_str}"
                 )
             raw_values_section = (
-                "RAW SENSOR VALUES (absolute daily measurements — judge sleep health by these absolute values, "
-                "not just relative deviation from baseline; e.g. sleep_onset >2h = late regardless of baseline):\n"
+                "RAW SENSOR VALUES (absolute daily measurements — personal-baseline deviations take precedence, "
+                "but flag absolute-standard violations as a secondary check when baseline is unavailable):\n"
                 + "\n".join(lines)
             )
 
@@ -438,16 +467,31 @@ STRICT RULES — follow every one exactly:
                 marker = dv.get("marker", "?")
                 direction = dv.get("direction", "?")
                 magnitude = dv.get("magnitude", "?")
-                description = dv.get("description", "")
-                recent_val = dv.get("recent_value")
-                baseline = dv.get("baseline_typical", {})
-                baseline_mean = baseline.get("mean")
+                finding = dv.get("finding", "")
+                recent_val = dv.get("recent_mean")
+                baseline_mean = dv.get("baseline_mean")
+                trajectory = dv.get("trajectory")
+                coverage = dv.get("coverage")
+                details = []
+                if trajectory:
+                    details.append(f"trajectory={trajectory}")
+                if coverage:
+                    details.append(f"coverage={coverage}")
+                if recent_val is not None and baseline_mean is not None:
+                    details.append(f"recent={recent_val:.2f}, baseline_mean={baseline_mean:.2f}")
                 dev_lines.append(
-                    f"  • {marker}: {direction} ({magnitude}) — {description}"
-                    + (f" | recent={recent_val:.2f}, baseline_mean={baseline_mean:.2f}" if recent_val is not None and baseline_mean is not None else "")
+                    f"  • {marker}: {direction} ({magnitude}) — {finding or 'No finding text provided.'}"
+                    + (f" | {'; '.join(details)}" if details else "")
                 )
 
-            pattern_lines = [f"  • {p.get('description', '')} [{p.get('confidence', '?')} confidence]" for p in patterns]
+            pattern_lines = []
+            for pattern in patterns:
+                interpretation = pattern.get("interpretation", "")
+                implicated = pattern.get("implicated", [])
+                pattern_lines.append(
+                    f"  • {interpretation or pattern.get('name', 'Unnamed pattern')}"
+                    + (f" [signals: {', '.join(implicated)}]" if implicated else "")
+                )
 
             days_history = baseline_info.get("days_of_history", 0)
             confidence = baseline_info.get("overall_confidence", "unknown")
@@ -503,7 +547,7 @@ JOURNAL NARRATIVE (contextual record of the user's recent activities — not a w
 {journal_text[:3000]}
 
 {sensing_section}
-{history_section}
+{history_section}{layer4_section}
 PRELIMINARY RISK ESTIMATE (from behavioral sensing heuristic): {risk_level}
 Risk guide: minimal=healthy normal functioning | mild=some stress indicators | moderate=intervention recommended | severe=immediate support needed
 
@@ -587,8 +631,13 @@ STRICT RULES:
 9. If no sensor data is available, still produce recommendations and proposals from journal + research context alone
 10. ui_summary must be UI-friendly and compact; keep dense evidence in summary/recommendations/proposed_changes, not in the labels
 11. positives and protective_signals MUST be grounded in sensor data (coverage ≥ 0.5) or an explicit journal mention — do NOT infer or assume positive signals not evidenced in the data
-12. When judging sleep health from RAW SENSOR VALUES, use absolute standards (sleep_onset >2h = late, sleep_duration <6h = short) even if the deviation from personal baseline is small
-13. If no sensor data is available, confidence_label MUST be "Low confidence — no sensor data" """
+12. When judging sleep health from RAW SENSOR VALUES, use absolute standards as a secondary check (sleep_onset >2:00 AM = late, sleep_duration <6h = short), but personal-baseline deviations take precedence — flag absolute-standard violations only when deviation from baseline is also present or baseline is unknown
+13. confidence_label tiers — pick the most conservative that applies:
+    "High confidence" → baseline warm + ≥8 of 10 markers present
+    "Medium confidence" → baseline warm but some markers missing, OR <28 days of history
+    "Low confidence — learning baseline" → baseline_warm=false (still in warmup window)
+    "Low confidence — no sensor data" → no sensor data at all
+14. proposed_changes must use "action": "add" only — "modify", "delete", and other actions are not supported and will be silently dropped """
 
         response = self.generate(prompt, max_tokens=8192)
         data = self._parse_json_response(response, None)

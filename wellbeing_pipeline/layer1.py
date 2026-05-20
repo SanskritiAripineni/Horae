@@ -19,26 +19,42 @@ import numpy as np
 # Add/replace freely; Layer 2 is marker-agnostic.
 MARKER_SPECS = {
     "sleep_onset_hour":        {"domain": "sleep",    "unit": "hour_of_day",
-                                "note": "Fractional hour [0,24); values >24 allowed for post-midnight"},
-    "sleep_duration_hours":    {"domain": "sleep",    "unit": "hours"},
+                                "note": "Fractional hour [0,24); values >24 allowed for post-midnight",
+                                "min_robust_std": 0.5},
+    "sleep_duration_hours":    {"domain": "sleep",    "unit": "hours",
+                                "min_robust_std": 0.4},
     "sleep_regularity_index":  {"domain": "sleep",    "unit": "0-100",
-                                "note": "Phillips et al. 2017; higher = more consistent"},
+                                "note": "Phillips et al. 2017; higher = more consistent",
+                                "min_robust_std": 5.0},
     "late_night_screen_min":   {"domain": "screen",   "unit": "minutes",
-                                "note": "Screen-on time 23:00–04:00"},
-    "total_screen_min":        {"domain": "screen",   "unit": "minutes"},
+                                "note": "Screen-on time 23:00–04:00",
+                                "min_robust_std": 15.0},
+    "total_screen_min":        {"domain": "screen",   "unit": "minutes",
+                                "min_robust_std": 30.0},
     "app_switching_rate":      {"domain": "screen",   "unit": "switches/active-min",
-                                "note": "Fragmented attention proxy"},
+                                "note": "Fragmented attention proxy",
+                                "min_robust_std": 0.25},
     "mobility_entropy":        {"domain": "mobility", "unit": "nats",
-                                "note": "Shannon entropy of dwell time across locations"},
+                                "note": "Shannon entropy of dwell time across locations",
+                                "min_robust_std": 0.15},
     "location_revisit_ratio":  {"domain": "mobility", "unit": "fraction",
-                                "note": "Fraction of time at top-3 most-visited places"},
+                                "note": "Fraction of time at top-3 most-visited places",
+                                "min_robust_std": 0.08},
     "social_rhythm_metric":    {"domain": "social",   "unit": "0-1",
-                                "note": "Monk et al. SRM; consistency of routine event times"},
+                                "note": "Monk et al. SRM; consistency of routine event times",
+                                "min_robust_std": 0.08},
     "comm_reciprocity":        {"domain": "social",   "unit": "ratio",
-                                "note": "outgoing / (outgoing + incoming) messages"},
+                                "note": "outgoing / (outgoing + incoming) messages",
+                                "min_robust_std": 0.1},
 }
 
 DOMAIN_OF = {m: spec["domain"] for m, spec in MARKER_SPECS.items()}
+
+
+def _scaled_mad(values: np.ndarray) -> float:
+    med = float(np.median(values))
+    mad = float(np.median(np.abs(values - med)))
+    return 1.4826 * mad
 
 
 @dataclass
@@ -79,8 +95,12 @@ class PersonalBaseline:
         if len(vals) < 3:
             return None
         a = np.array(vals, dtype=float)
+        std = float(a.std())
+        robust_std = _scaled_mad(a)
+        min_std = float(MARKER_SPECS.get(marker, {}).get("min_robust_std", 1e-3))
         return {
-            "n": len(vals), "mean": float(a.mean()), "std": float(a.std() + 1e-9),
+            "n": len(vals), "mean": float(a.mean()),
+            "std": float(max(std, robust_std, min_std)),
             "median": float(np.median(a)), "p20": float(np.percentile(a, 20)),
             "p80": float(np.percentile(a, 80)), "min": float(a.min()), "max": float(a.max()),
         }

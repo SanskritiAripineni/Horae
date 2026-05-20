@@ -31,6 +31,7 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
     }
 
     override suspend fun generate(prompt: String): String {
+        requireUsableApiKey()
         val body = buildJsonObject {
             putJsonArray("contents") {
                 addJsonObject {
@@ -51,6 +52,7 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
 
     @OptIn(ExperimentalEncodingApi::class)
     override suspend fun generateWithImage(prompt: String, imageBytes: ByteArray): String {
+        requireUsableApiKey()
         val b64 = Base64.encode(imageBytes)
         val body = buildJsonObject {
             putJsonArray("contents") {
@@ -94,5 +96,12 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
             ?.jsonPrimitive?.content
             ?.takeIf { it.isNotBlank() }
             ?: throw IllegalStateException("Gemini returned no text")
+    }
+
+    private fun requireUsableApiKey() {
+        val trimmed = apiKey.trim()
+        require(trimmed.isNotEmpty() && !trimmed.startsWith("$(")) {
+            "Gemini API key is not configured for this build"
+        }
     }
 }

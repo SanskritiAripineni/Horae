@@ -26,13 +26,11 @@ import platform.Foundation.timeIntervalSince1970
 import platform.HealthKit.HKCategorySample
 import platform.HealthKit.HKCategoryTypeIdentifierSleepAnalysis
 import platform.HealthKit.HKHealthStore
-import platform.HealthKit.HKObjectQueryNoLimit
 import platform.HealthKit.HKObjectType
 import platform.HealthKit.HKSampleQuery
 import platform.UIKit.UIApplication
 import kotlin.coroutines.resume
 import kotlin.math.abs
-import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.sqrt
 
@@ -87,6 +85,14 @@ actual fun openNativeCalendar() {
     UIApplication.sharedApplication.openURL(url)
 }
 
+private data class SleepMarkerSnapshot(
+    val onset: Float?,
+    val durationHours: Float?,
+    val sri: Float?,
+    val episodeCoverage: Float,
+    val sriCoverage: Float,
+)
+
 actual suspend fun getBehavioralMarkers(nDays: Int): List<RawDayMarkers> {
     val nowMs = currentTimeMillis()
     val dayMs = 24L * 60L * 60L * 1000L
@@ -107,11 +113,12 @@ actual suspend fun getBehavioralMarkers(nDays: Int): List<RawDayMarkers> {
         val mobilityEntropy: Float?,
         val revisitRatio: Float?,
         val firstActiveHour: Double?,
+        val mobilityCoverage: Float,
     )
 
     val dailyRaw = dayKeys.map { dayKey ->
         val logs = byDay[dayKey].orEmpty()
-        if (logs.isEmpty()) return@map DayRaw(dayKey, null, null, null)
+        if (logs.isEmpty()) return@map DayRaw(dayKey, null, null, null, 0f)
 
         val dwellMs = mutableMapOf<String, Long>()
         var totalDwell = 0L
@@ -124,24 +131,12 @@ actual suspend fun getBehavioralMarkers(nDays: Int): List<RawDayMarkers> {
             totalDwell += dwell
         }
 
-        val entropy = when {
-            totalDwell > 0 && dwellMs.size > 1 -> {
-                var h = 0.0
-                dwellMs.values.forEach { dwell ->
-                    val p = dwell.toDouble() / totalDwell
-                    if (p > 0.0) h -= p * (ln(p) / ln(2.0))
-                }
-                h.toFloat().coerceIn(0f, 10f)
-            }
-            totalDwell > 0 -> 0f
-            else -> null
-        }
-
-        val revisit = if (totalDwell > 0) {
-            (dwellMs.values.max().toDouble() / totalDwell).toFloat().coerceIn(0f, 1f)
-        } else {
-            null
-        }
+        val entropy = BehavioralMarkerMath.entropyNats(dwellMs.values)
+        val revisit = BehavioralMarkerMath.topKRevisitRatio(dwellMs.values, topK = 3)
+        val mobilityCoverage = BehavioralMarkerMath.coverageFraction(
+            totalDwell,
+            12L * 60L * 60L * 1000L,
+        )
 
         val firstActive = logs
             .filter { !it.calibratedMotion.equals("stationary", ignoreCase = true) }
@@ -151,7 +146,7 @@ actual suspend fun getBehavioralMarkers(nDays: Int): List<RawDayMarkers> {
             }
             .minOrNull()
 
-        DayRaw(dayKey, entropy, revisit, firstActive)
+        DayRaw(dayKey, entropy, revisit, firstActive, mobilityCoverage)
     }
 
     val validHours = dailyRaw.mapNotNull { it.firstActiveHour }
@@ -170,16 +165,16 @@ actual suspend fun getBehavioralMarkers(nDays: Int): List<RawDayMarkers> {
             null
         }
 
-        val (sleepOnset, sleepDuration, sleepSri) = sleepMarkers[day.date] ?: Triple(null, null, null)
+        val sleep = sleepMarkers[day.date]
 
         RawDayMarkers(
             date = day.date,
             mobility_entropy = day.mobilityEntropy,
             location_revisit_ratio = day.revisitRatio,
             social_rhythm_metric = socialRhythm,
-            sleep_onset_hour = sleepOnset,
-            sleep_duration_hours = sleepDuration,
-            sleep_regularity_index = sleepSri,
+            sleep_onset_hour = sleep?.onset,
+            sleep_duration_hours = sleep?.durationHours,
+            sleep_regularity_index = sleep?.sri,
             // iOS has no UsageStatsManager equivalent without FamilyControls UX burden
             total_screen_min = null,
             late_night_screen_min = null,
@@ -187,12 +182,12 @@ actual suspend fun getBehavioralMarkers(nDays: Int): List<RawDayMarkers> {
             // iOS doesn't allow third-party apps to read SMS/call logs
             comm_reciprocity = null,
             coverage = buildMap {
-                put("mobility_entropy", if (day.mobilityEntropy != null) 1f else 0f)
-                put("location_revisit_ratio", if (day.revisitRatio != null) 1f else 0f)
-                put("social_rhythm_metric", if (socialRhythm != null) 1f else 0f)
-                put("sleep_onset_hour", if (sleepOnset != null) 1f else 0f)
-                put("sleep_duration_hours", if (sleepDuration != null) 1f else 0f)
-                put("sleep_regularity_index", if (sleepSri != null) 1f else 0f)
+                put("mobility_entropy", if (day.mobilityEntropy != null) day.mobilityCoverage else 0f)
+                put("location_revisit_ratio", if (day.revisitRatio != null) day.mobilityCoverage else 0f)
+                put("social_rhythm_metric", if (socialRhythm != null) day.mobilityCoverage else 0f)
+                put("sleep_onset_hour", sleep?.episodeCoverage ?: 0f)
+                put("sleep_duration_hours", sleep?.episodeCoverage ?: 0f)
+                put("sleep_regularity_index", sleep?.sriCoverage ?: 0f)
                 put("total_screen_min", 0f)
                 put("late_night_screen_min", 0f)
                 put("app_switching_rate", 0f)
@@ -208,7 +203,7 @@ actual suspend fun getBehavioralMarkers(nDays: Int): List<RawDayMarkers> {
 private suspend fun fetchHealthKitSleepMarkers(
     dayKeys: List<String>,
     startMs: Long,
-): Map<String, Triple<Float?, Float?, Float?>> = runCatching {
+): Map<String, SleepMarkerSnapshot> = runCatching {
     if (!HKHealthStore.isHealthDataAvailable()) return@runCatching emptyMap()
 
     val store = HKHealthStore()
@@ -226,12 +221,13 @@ private suspend fun fetchHealthKitSleepMarkers(
     val extendedStartMs = startMs - 24L * 60L * 60L * 1000L
     val nowMs = currentTimeMillis()
 
-    // Fetch all samples, filter by date in Kotlin to avoid HKQuery class-method naming issues
+    // Kotlin/Native does not consistently expose HKQuery's date predicate helper,
+    // so keep the existing local date filter but never issue an unbounded query.
     val rawSamples = suspendCancellableCoroutine<List<HKCategorySample>> { cont ->
         val query = HKSampleQuery(
             sampleType = sleepType,
             predicate = null,
-            limit = HKObjectQueryNoLimit,
+            limit = 512u,
             sortDescriptors = null,
         ) { _, results, _ ->
             val typed = (results as? List<*>)
@@ -258,7 +254,7 @@ private suspend fun fetchHealthKitSleepMarkers(
         }
         .sortedBy { it.first }
 
-    data class SleepEpisode(val onset: Double, val durationHours: Double)
+    data class SleepEpisode(val onset: Double, val durationHours: Double, val coverage: Float)
 
     val episodesByDay = mutableMapOf<String, SleepEpisode>()
     for (dayKey in dayKeys) {
@@ -271,10 +267,13 @@ private suspend fun fetchHealthKitSleepMarkers(
         val main = merged.maxByOrNull { (s, e) -> e - s } ?: continue
         val durationMs = main.second - main.first
         if (durationMs < 60L * 60L * 1000L) continue
+        val observedMs = clipped.sumOf { (s, e) -> maxOf(0L, e - s) }
+        val episodeCoverage = BehavioralMarkerMath.coverageFraction(observedMs, nightEnd - nightStart)
 
         episodesByDay[dayKey] = SleepEpisode(
             onset = hourOfDay(main.first),
             durationHours = durationMs.toDouble() / (60.0 * 60.0 * 1000.0),
+            coverage = episodeCoverage,
         )
     }
 
@@ -285,9 +284,20 @@ private suspend fun fetchHealthKitSleepMarkers(
         (100.0 * (1.0 - sqrt(variance) / 4.0)).coerceIn(0.0, 100.0).toFloat()
     } else null
 
+    val sriCoverage = BehavioralMarkerMath.coverageFraction(
+        episodesByDay.size.toLong(),
+        dayKeys.size.toLong().coerceAtLeast(1L),
+    )
+
     dayKeys.associateWith { dayKey ->
         val ep = episodesByDay[dayKey]
-        Triple(ep?.onset?.toFloat(), ep?.durationHours?.toFloat()?.coerceIn(0f, 16f), sri)
+        SleepMarkerSnapshot(
+            onset = ep?.onset?.toFloat(),
+            durationHours = ep?.durationHours?.toFloat()?.coerceIn(0f, 16f),
+            sri = sri,
+            episodeCoverage = ep?.coverage ?: 0f,
+            sriCoverage = if (sri != null) sriCoverage else 0f,
+        )
     }
 }.getOrDefault(emptyMap())
 

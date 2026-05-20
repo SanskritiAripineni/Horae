@@ -111,7 +111,7 @@ class AutoLifeApp : Application() {
                 val ok = DataExporter.exportJournals(appContext)
                 Toast.makeText(
                     appContext,
-                    if (ok) "Exported to Downloads/AutoLife" else "Export failed",
+                    if (ok) "Exported to private app storage" else "Export failed",
                     Toast.LENGTH_LONG,
                 ).show()
             }
@@ -144,13 +144,32 @@ class AutoLifeApp : Application() {
                         kotlinx.coroutines.delay(100)
                         PlatformStateProvider.updateServiceState(false)
                     }
-                } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    appContext.startForegroundService(intent)
                 } else {
-                    appContext.startService(intent)
+                    try {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            appContext.startForegroundService(intent)
+                        } else {
+                            appContext.startService(intent)
+                        }
+                    } catch (e: IllegalStateException) {
+                        PlatformStateProvider.updateServiceState(false)
+                        Toast.makeText(
+                            appContext,
+                            "AutoLife could not start background collection from the current app state.",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    } catch (e: SecurityException) {
+                        PlatformStateProvider.updateServiceState(false)
+                        Toast.makeText(
+                            appContext,
+                            "AutoLife needs background collection permissions before it can start.",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
                 }
             } else {
                 appContext.stopService(intent)
+                DebugRepository.setServiceRunning(false)
             }
         }
         PlatformStateProvider.setPlatformName("Android")

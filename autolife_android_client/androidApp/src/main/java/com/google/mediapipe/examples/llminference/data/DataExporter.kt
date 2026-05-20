@@ -1,18 +1,12 @@
 package com.google.mediapipe.examples.llminference.data
 
-import android.content.ContentValues
 import android.content.Context
-import android.net.Uri
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
 import android.util.Log
 import com.autolife.shared.db.DatabaseRepository
 import com.autolife.shared.model.JournalEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -33,15 +27,10 @@ object DataExporter {
             val fileName = "all_journals_$timestamp.txt"
             val formattedContent = formatJournals(journals)
 
-            // 1. Export to Internal App Storage (Local Project Directory)
             val internalFile = exportToInternalStorage(context, fileName, formattedContent)
             Log.d(TAG, "Internal export: ${internalFile?.absolutePath}")
 
-            // 2. Export to Public Download Folder
-            val publicUri = exportToPublicDownloads(context, fileName, formattedContent)
-            Log.d(TAG, "Public export: $publicUri")
-
-            return@withContext internalFile != null || publicUri != null
+            return@withContext internalFile != null
         } catch (e: Exception) {
             Log.e(TAG, "Export failed", e)
             return@withContext false
@@ -99,46 +88,10 @@ object DataExporter {
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
             val fileName = "${fileNamePrefix}_$timestamp.md"
             val internalFile = exportToInternalStorage(context, fileName, content)
-            val publicUri = exportToPublicDownloads(context, fileName, content)
-            internalFile != null || publicUri != null
+            internalFile != null
         } catch (e: Exception) {
             Log.e(TAG, "Text export failed", e)
             false
-        }
-    }
-
-    private fun exportToPublicDownloads(context: Context, fileName: String, content: String): Uri? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Use MediaStore for Android 10+
-            val contentValues = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
-                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/AutoLife")
-            }
-
-            val resolver = context.contentResolver
-            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-            
-            uri?.let {
-                resolver.openOutputStream(it)?.use { outputStream ->
-                    outputStream.write(content.toByteArray())
-                }
-            }
-            uri
-        } else {
-            // Legacy way for older Android
-            try {
-                val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                val autoLifeDir = File(downloadDir, "AutoLife")
-                if (!autoLifeDir.exists()) autoLifeDir.mkdirs()
-                
-                val file = File(autoLifeDir, fileName)
-                file.writeText(content)
-                Uri.fromFile(file)
-            } catch (e: Exception) {
-                Log.e(TAG, "Public Download export failed (Legacy)", e)
-                null
-            }
         }
     }
 }

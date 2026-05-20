@@ -607,11 +607,12 @@ private fun ToolDetailSheet(
 private fun AutoLifeDetail() {
     val motionState by PlatformStateProvider.motionState.collectAsState()
     val locationState by PlatformStateProvider.locationState.collectAsState()
+    val serviceState by PlatformStateProvider.serviceState.collectAsState()
     SurfaceCard {
         SectionHeader(title = "Live Sensor Data")
         DataRow("Activity", motionState.detectedClass)
         DataRow("Acceleration", "${DateFormat.fmtFloat3(motionState.acceleration)} m/s²")
-        DataRow("Status", "Active — collecting continuously")
+        DataRow("Status", if (serviceState.isRunning) "Active" else "Paused")
     }
     SurfaceCard {
         SectionHeader(title = "Description")

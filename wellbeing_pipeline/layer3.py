@@ -26,7 +26,12 @@ def _overall_confidence(deviations: list[Deviation],
                         baseline: PersonalBaseline) -> str:
     if not baseline.is_warm():
         return "low-cold-start"
-    covs = [d.coverage for d in deviations] or ["high"]
+    covs = [d.coverage for d in deviations]
+    if not covs:
+        covs = [
+            baseline.coverage_quality(marker, days_back=7)
+            for marker in MARKER_SPECS
+        ]
     score = sum({"high": 2, "medium": 1, "low": 0, "none": -1}.get(c, 0) for c in covs)
     if score >= 2 * len(covs):  return "high"
     if score >= len(covs):      return "medium"

@@ -65,10 +65,14 @@ class TestBaselineWarmth:
         assert isinstance(result["prose"], str)
 
     def test_custom_warmup_threshold(self, cold_raw_days):
-        """Lowering warmup_days flips a 5-day history from cold to warm."""
+        """Even a low explicit warmup must leave enough pre-recent baseline history."""
         sensor = WellbeingSensor(warmup_days=3)
         result = sensor.analyze(cold_raw_days, with_llm=False)
-        assert result["baseline_warm"] is True
+        assert result["baseline_warm"] is False
+
+    def test_effective_warmup_requires_prior_baseline_outside_recent_window(self):
+        sensor = WellbeingSensor(warmup_days=3, recent_days=4)
+        assert sensor.effective_warmup_days == 7
 
 
 class TestLLMGating:

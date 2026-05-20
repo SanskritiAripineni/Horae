@@ -62,9 +62,9 @@ fun ConsentScreen(
                     "• Motion patterns — to infer activity levels (walking, stationary, etc.)\n" +
                     "• Location context — generalised area only; raw GPS coordinates are never transmitted\n" +
                     "• WiFi network names — to infer home/work/other contexts\n" +
-                    "• Life journals — AI-generated narrative summaries of your day (created on-device using Gemini)\n" +
+                    "• Life journals — AI-generated narrative summaries of your day (created after consent using Gemini)\n" +
                     "• Calendar events — read-only access to suggest schedule optimizations\n\n" +
-                    "Raw sensor data (GPS, accelerometer) stays on your device. Only AI-generated journal summaries and anonymized usage data are sent to our server."
+                    "Raw sensor data (GPS, accelerometer) stays on your device. Context summaries may be sent to Gemini for AI generation after you consent. Only AI-generated journal summaries and anonymized usage data are sent to our server."
             )
 
             // How it's stored

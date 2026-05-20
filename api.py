@@ -38,6 +38,10 @@ from pydantic import BaseModel, Field, field_validator
 
 import db
 from agent import LLMSchedulerAgent
+from tools.calendar_api import (
+    calendar_token_path_for_user,
+    legacy_calendar_token_path_for_user,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -109,8 +113,11 @@ def _make_user_token(user_id: str) -> str:
 async def _require_auth(authorization: str = Header(default="")) -> str | None:
     secret = _get_api_secret()
     if not secret:
-        logger.warning("API_SECRET_KEY not set — authentication is DISABLED")
-        return None
+        logger.error("API_SECRET_KEY is not configured; refusing protected request")
+        raise HTTPException(
+            status_code=503,
+            detail="API_SECRET_KEY is not configured on the server",
+        )
     if not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=401, detail="Missing or malformed Authorization header"
@@ -124,6 +131,15 @@ async def _require_auth(authorization: str = Header(default="")) -> str | None:
     if not hmac.compare_digest(expected, sig):
         raise HTTPException(status_code=401, detail="Invalid authentication token")
     return uid
+
+
+def _require_token_user(auth_uid: str | None, user_id: str | None) -> str:
+    requested_uid = _sanitize_user_id(user_id) or "default"
+    if auth_uid != requested_uid:
+        raise HTTPException(
+            status_code=403, detail="Token user does not match requested user_id"
+        )
+    return requested_uid
 
 
 # ── Proposal signing helpers (C2) ────────────────────────────────────────────
@@ -420,17 +436,21 @@ async def oauth_callback(code: str, state: str = "default"):
             )
 
         user_id = _sanitize_user_id(user_id) or "default"
-        token_path = Path(f"data/tokens/{user_id}/calendar_token.json")
+        token_path = calendar_token_path_for_user(user_id)
         token_path.parent.mkdir(parents=True, exist_ok=True)
         # Store in the format google.oauth2.credentials.Credentials.from_authorized_user_info expects
         scopes = token_data.get("scope", "")
+        scope_list = (
+            scopes.split()
+            if isinstance(scopes, str) and scopes.strip()
+            else (scopes or SCOPES)
+        )
         token_file = {
             "token": token_data.get("access_token"),
             "refresh_token": token_data.get("refresh_token"),
             "token_uri": "https://oauth2.googleapis.com/token",
             "client_id": client_config["client_id"],
-            "client_secret": client_config["client_secret"],
-            "scopes": scopes.split() if isinstance(scopes, str) else scopes,
+            "scopes": scope_list,
         }
         with open(token_path, "w") as f:
             json.dump(token_file, f)
@@ -457,24 +477,32 @@ async def oauth_callback(code: str, state: str = "default"):
 
 
 @app.get("/api/oauth/status")
-async def oauth_status(user_id: str = "default"):
+async def oauth_status(
+    user_id: str = "default", _auth_uid: str | None = Depends(_require_auth)
+):
     """Check if a user has a stored Google Calendar OAuth token."""
-    from pathlib import Path
-
-    user_id = _sanitize_user_id(user_id) or "default"
-    token_path = Path(f"data/tokens/{user_id}/calendar_token.json")
-    return {"connected": token_path.exists()}
+    user_id = _require_token_user(_auth_uid, user_id)
+    token_path = calendar_token_path_for_user(user_id)
+    legacy_token_path = legacy_calendar_token_path_for_user(user_id)
+    return {"connected": token_path.exists() or legacy_token_path.exists()}
 
 
 @app.delete("/api/oauth/token")
-async def oauth_reset(user_id: str = "default"):
+async def oauth_reset(
+    user_id: str = "default", _auth_uid: str | None = Depends(_require_auth)
+):
     """Delete stored OAuth token for a user, forcing re-authentication."""
-    from pathlib import Path
-
-    user_id = _sanitize_user_id(user_id) or "default"
-    token_path = Path(f"data/tokens/{user_id}/calendar_token.json")
-    if token_path.exists():
-        token_path.unlink()
+    user_id = _require_token_user(_auth_uid, user_id)
+    token_paths = [
+        calendar_token_path_for_user(user_id),
+        legacy_calendar_token_path_for_user(user_id),
+    ]
+    deleted = False
+    for token_path in dict.fromkeys(token_paths):
+        if token_path.exists():
+            token_path.unlink()
+            deleted = True
+    if deleted:
         logger.info(f"OAuth token deleted for user_id={user_id[:8]}...")
         return {"message": "Token deleted. OAuth flow will restart on next authorize."}
     return {"message": "No token found for this user."}
@@ -493,10 +521,7 @@ async def process_journals(
             status_code=503, detail="Agent not initialized — server is starting up"
         )
 
-    if _auth_uid is not None and _auth_uid != (request.user_id or "default"):
-        raise HTTPException(
-            status_code=403, detail="Token user does not match request user_id"
-        )
+    _require_token_user(_auth_uid, request.user_id)
 
     # Validate that journal entries have non-empty content
     empty_content = [j.id for j in request.journals if not j.content.strip()]
@@ -545,10 +570,7 @@ async def apply_calendar(
             status_code=503, detail="Agent not initialized — server is starting up"
         )
 
-    if _auth_uid is not None and _auth_uid != (request.user_id or "default"):
-        raise HTTPException(
-            status_code=403, detail="Token user does not match request user_id"
-        )
+    _require_token_user(_auth_uid, request.user_id)
 
     if not request.changes:
         raise HTTPException(status_code=422, detail="No calendar changes provided")
@@ -598,10 +620,7 @@ async def get_memory(
             status_code=503, detail="Agent not initialized — server is starting up"
         )
 
-    if _auth_uid is not None and _auth_uid != (user_id or "default"):
-        raise HTTPException(
-            status_code=403, detail="Token user does not match requested user_id"
-        )
+    user_id = _require_token_user(_auth_uid, user_id)
 
     try:
         ctx = agent_instance.memory.get_user_context(user_id)

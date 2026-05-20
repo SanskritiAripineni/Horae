@@ -16,6 +16,7 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
@@ -45,6 +46,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @OptIn(ExperimentalComposeUiApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -154,6 +156,7 @@ class MainActivity : ComponentActivity() {
         val intent = Intent(this, AutoLifeService::class.java)
         if (!shouldStart) {
             stopService(intent)
+            com.google.mediapipe.examples.llminference.data.DebugRepository.setServiceRunning(false)
             return
         }
 
@@ -167,10 +170,28 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        } catch (e: IllegalStateException) {
+            Log.w("MainActivity", "Unable to start AutoLife foreground service", e)
+            com.google.mediapipe.examples.llminference.data.DebugRepository.setServiceRunning(false)
+            Toast.makeText(
+                this,
+                "AutoLife could not start background collection from the current app state.",
+                Toast.LENGTH_LONG,
+            ).show()
+        } catch (e: SecurityException) {
+            Log.w("MainActivity", "Unable to start AutoLife foreground service without required permission", e)
+            com.google.mediapipe.examples.llminference.data.DebugRepository.setServiceRunning(false)
+            Toast.makeText(
+                this,
+                "AutoLife needs background collection permissions before it can start.",
+                Toast.LENGTH_LONG,
+            ).show()
         }
     }
 

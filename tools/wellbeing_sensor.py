@@ -49,6 +49,12 @@ class WellbeingSensor:
         self.baseline_days = baseline_days
         self.model = model  # None → uses wellbeing_pipeline/config.DEFAULT_MODEL
 
+    @property
+    def effective_warmup_days(self) -> int:
+        # Layer 2 compares the recent window against prior history, so "warm"
+        # should guarantee at least a minimal baseline exists outside that window.
+        return max(self.warmup_days, self.recent_days + 3)
+
     def analyze(self,
                 raw_days: list[dict],
                 calendar: Optional[list] = None,
@@ -70,7 +76,7 @@ class WellbeingSensor:
         if not raw_days:
             return {"behavioral_state": None, "prose": "", "llm_analysis": None, "baseline_warm": True}
 
-        baseline = PersonalBaseline(warmup_days=self.warmup_days)
+        baseline = PersonalBaseline(warmup_days=self.effective_warmup_days)
         for raw in raw_days:
             baseline.add(markers_from_raw(raw))
 
@@ -105,4 +111,3 @@ class WellbeingSensor:
             "llm_analysis": llm_result,
             "baseline_warm": baseline_warm,
         }
-

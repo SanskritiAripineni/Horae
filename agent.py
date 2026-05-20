@@ -396,6 +396,7 @@ class LLMSchedulerAgent:
                 wellbeing_history=wellbeing_context,
                 behavioral_state=sensing_result.get("behavioral_state") if raw_days else None,
                 raw_days=raw_days,
+                llm_analysis=llm_analysis if raw_days else None,
             ))
 
             final_risk = proposals.get('risk_level', risk_level)

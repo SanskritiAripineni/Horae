@@ -6,6 +6,7 @@ API Key loaded securely from .env file.
 """
 
 import os
+from pathlib import Path
 import streamlit as st
 import numpy as np
 from dotenv import load_dotenv
@@ -33,8 +34,14 @@ WELLNESS_CATEGORIES = [
     "Mindfulness"
 ]
 
-CHROMA_DIR = "chroma_db"
-COLLECTION_NAME = "wellness_papers"
+try:
+    from config import settings
+
+    COLLECTION_NAME = settings.VECTORDB_COLLECTION
+except Exception:
+    COLLECTION_NAME = os.getenv("VECTORDB_COLLECTION", "wellness_papers_gemini")
+
+CHROMA_DIR = str(Path(__file__).resolve().parent / "chroma_db")
 
 # System prompt for the LLM
 SYSTEM_PROMPT = """You are an expert academic wellness scheduler. Your goal is to convert research abstracts into a strict, actionable plan.

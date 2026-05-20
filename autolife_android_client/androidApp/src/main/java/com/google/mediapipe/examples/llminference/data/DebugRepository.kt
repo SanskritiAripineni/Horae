@@ -43,7 +43,7 @@ object DebugRepository {
     private val _isDemoMode = MutableStateFlow(false)
     val isDemoMode: StateFlow<Boolean> = _isDemoMode.asStateFlow()
 
-    private val _isServiceRunning = MutableStateFlow(true)
+    private val _isServiceRunning = MutableStateFlow(false)
     val isServiceRunning: StateFlow<Boolean> = _isServiceRunning.asStateFlow()
 
     private val _isPermanentMotionEnabled = MutableStateFlow(false)

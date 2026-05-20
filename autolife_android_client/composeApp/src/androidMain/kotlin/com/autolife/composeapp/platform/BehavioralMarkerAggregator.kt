@@ -5,7 +5,6 @@ import com.autolife.shared.model.ContextLogCodec
 import com.autolife.shared.model.RawDayMarkers
 import java.util.Calendar
 import kotlin.math.abs
-import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.sqrt
 
@@ -15,7 +14,7 @@ import kotlin.math.sqrt
  *
  * Phase 1 — ContextLog (no permissions):
  *   mobility_entropy        Shannon entropy of location-cluster dwell distribution
- *   location_revisit_ratio  Fraction of dwell time at the most-visited cluster
+ *   location_revisit_ratio  Fraction of dwell time at the top-3 most-visited clusters
  *   social_rhythm_metric    Per-day regularity of first-active-movement onset (0–1)
  *
  * Phase 2 — SLEEP_STATE events (no permissions):
@@ -54,11 +53,12 @@ internal object BehavioralMarkerAggregator {
             val mobilityEntropy: Float?,
             val revisitRatio: Float?,
             val firstActiveHour: Double?,
+            val mobilityCoverage: Float,
         )
 
         val dailyRaw = dayKeys.map { dayKey ->
             val logs = byDay[dayKey] ?: emptyList()
-            if (logs.isEmpty()) return@map DayRaw(dayKey, null, null, null)
+            if (logs.isEmpty()) return@map DayRaw(dayKey, null, null, null, 0f)
 
             val dwellMs = mutableMapOf<String, Long>()
             var totalDwell = 0L
@@ -71,22 +71,12 @@ internal object BehavioralMarkerAggregator {
                 totalDwell += dwell
             }
 
-            val entropy: Float? = when {
-                totalDwell > 0 && dwellMs.size > 1 -> {
-                    var h = 0.0
-                    for (dwell in dwellMs.values) {
-                        val p = dwell.toDouble() / totalDwell
-                        if (p > 0.0) h -= p * (ln(p) / ln(2.0))
-                    }
-                    h.toFloat().coerceIn(0f, 10f)
-                }
-                totalDwell > 0 -> 0f
-                else -> null
-            }
-
-            val revisit: Float? = if (totalDwell > 0)
-                (dwellMs.values.max().toDouble() / totalDwell).toFloat().coerceIn(0f, 1f)
-            else null
+            val entropy = BehavioralMarkerMath.entropyNats(dwellMs.values)
+            val revisit = BehavioralMarkerMath.topKRevisitRatio(dwellMs.values, topK = 3)
+            val mobilityCoverage = BehavioralMarkerMath.coverageFraction(
+                totalDwell,
+                12L * 60L * 60L * 1000L,
+            )
 
             val firstActive = logs
                 .filter { it.calibratedMotion != "stationary" }
@@ -97,7 +87,7 @@ internal object BehavioralMarkerAggregator {
                 }
                 .minOrNull()
 
-            DayRaw(dayKey, entropy, revisit, firstActive)
+            DayRaw(dayKey, entropy, revisit, firstActive, mobilityCoverage)
         }
 
         val validHours = dailyRaw.mapNotNull { it.firstActiveHour }
@@ -131,30 +121,29 @@ internal object BehavioralMarkerAggregator {
                     .coerceIn(0.0, 1.0).toFloat()
             else null
 
-            val (sleepOnset, sleepDuration, sleepSri) =
-                sleepMarkers[day.date] ?: Triple(null, null, null)
+            val sleep = sleepMarkers[day.date]
 
             val screen = screenByDay[day.date]
             val comm = commByDay[day.date]
 
             val coverage = buildMap {
-                put("mobility_entropy", if (day.mobilityEntropy != null) 1f else 0f)
-                put("location_revisit_ratio", if (day.revisitRatio != null) 1f else 0f)
-                put("social_rhythm_metric", if (srm != null) 1f else 0f)
-                put("sleep_onset_hour", if (sleepOnset != null) 1f else 0f)
-                put("sleep_duration_hours", if (sleepDuration != null) 1f else 0f)
-                put("sleep_regularity_index", if (sleepSri != null) 1f else 0f)
-                put("total_screen_min", if (screen?.totalScreenMin != null) 1f else 0f)
-                put("late_night_screen_min", if (screen?.lateNightScreenMin != null) 1f else 0f)
-                put("app_switching_rate", if (screen?.appSwitchingRate != null) 1f else 0f)
+                put("mobility_entropy", if (day.mobilityEntropy != null) day.mobilityCoverage else 0f)
+                put("location_revisit_ratio", if (day.revisitRatio != null) day.mobilityCoverage else 0f)
+                put("social_rhythm_metric", if (srm != null) day.mobilityCoverage else 0f)
+                put("sleep_onset_hour", sleep?.episodeCoverage ?: 0f)
+                put("sleep_duration_hours", sleep?.episodeCoverage ?: 0f)
+                put("sleep_regularity_index", sleep?.sriCoverage ?: 0f)
+                put("total_screen_min", screen?.totalCoverage ?: 0f)
+                put("late_night_screen_min", screen?.lateNightCoverage ?: 0f)
+                put("app_switching_rate", screen?.totalCoverage ?: 0f)
                 put("comm_reciprocity", comm?.coverage ?: 0f)
             }
 
             RawDayMarkers(
                 date = day.date,
-                sleep_onset_hour = sleepOnset,
-                sleep_duration_hours = sleepDuration,
-                sleep_regularity_index = sleepSri,
+                sleep_onset_hour = sleep?.onset,
+                sleep_duration_hours = sleep?.durationHours,
+                sleep_regularity_index = sleep?.sri,
                 total_screen_min = screen?.totalScreenMin,
                 late_night_screen_min = screen?.lateNightScreenMin,
                 app_switching_rate = screen?.appSwitchingRate,
@@ -169,12 +158,18 @@ internal object BehavioralMarkerAggregator {
 
     // ─────────────────────── sleep helpers ───────────────────────────────────
 
-    private data class SleepEpisode(val onset: Double, val durationHours: Double)
+    private data class SleepMarkerSnapshot(
+        val onset: Float?,
+        val durationHours: Float?,
+        val sri: Float?,
+        val episodeCoverage: Float,
+        val sriCoverage: Float,
+    )
 
     private fun computeSleepMarkers(
         dayKeys: List<String>,
         startMs: Long,
-    ): Map<String, Triple<Float?, Float?, Float?>> {
+    ): Map<String, SleepMarkerSnapshot> {
         val extendedStart = startMs - 24L * 60 * 60 * 1000
         val nowMs = System.currentTimeMillis()
 
@@ -199,9 +194,12 @@ internal object BehavioralMarkerAggregator {
         }
         lastOff?.let { (s, l) -> offIntervals.add(OffInterval(s, nowMs, l)) }
 
+        data class SleepEpisode(val onset: Double, val durationHours: Double, val coverage: Float)
+
         val episodesByDay = mutableMapOf<String, SleepEpisode>()
         for (dayKey in dayKeys) {
             val (nightStart, nightEnd) = nightWindowMs(dayKey)
+            val nightEvents = rawEvents.filter { (_, ts, _) -> ts in nightStart until nightEnd }
             val candidates = offIntervals.filter { iv ->
                 iv.start < nightEnd && iv.end > nightStart &&
                     (iv.end - iv.start) >= 60 * 60 * 1000L
@@ -211,11 +209,27 @@ internal object BehavioralMarkerAggregator {
                     compareByDescending<OffInterval> { if (it.lux == null || it.lux < 20f) 1 else 0 }
                         .thenByDescending { it.end - it.start }
                 )
-                .firstOrNull() ?: continue
+                .firstOrNull()
 
-            val onset = msToHourOfDay(sleep.start)
-            val duration = (sleep.end - sleep.start).toDouble() / (60 * 60 * 1000)
-            episodesByDay[dayKey] = SleepEpisode(onset, duration)
+            if (sleep == null && nightEvents.isEmpty()) {
+                continue
+            }
+
+            val observedSpanMs = if (nightEvents.isNotEmpty()) {
+                nightEvents.last().second - nightEvents.first().second
+            } else {
+                minOf(sleep!!.end, nightEnd) - maxOf(sleep.start, nightStart)
+            }
+            val episodeCoverage = BehavioralMarkerMath.coverageFraction(
+                observedSpanMs,
+                nightEnd - nightStart,
+            )
+
+            if (sleep != null) {
+                val onset = msToHourOfDay(sleep.start)
+                val duration = (sleep.end - sleep.start).toDouble() / (60 * 60 * 1000)
+                episodesByDay[dayKey] = SleepEpisode(onset, duration, episodeCoverage)
+            }
         }
 
         val onsets = episodesByDay.values.map { it.onset }
@@ -225,9 +239,20 @@ internal object BehavioralMarkerAggregator {
             (100.0 * (1.0 - sqrt(variance) / 4.0)).coerceIn(0.0, 100.0).toFloat()
         } else null
 
+        val sriCoverage = BehavioralMarkerMath.coverageFraction(
+            episodesByDay.size.toLong(),
+            dayKeys.size.toLong().coerceAtLeast(1L),
+        )
+
         return dayKeys.associateWith { dayKey ->
             val ep = episodesByDay[dayKey]
-            Triple(ep?.onset?.toFloat(), ep?.durationHours?.toFloat()?.coerceIn(0f, 16f), sri)
+            SleepMarkerSnapshot(
+                onset = ep?.onset?.toFloat(),
+                durationHours = ep?.durationHours?.toFloat()?.coerceIn(0f, 16f),
+                sri = sri,
+                episodeCoverage = ep?.coverage ?: 0f,
+                sriCoverage = if (sri != null) sriCoverage else 0f,
+            )
         }
     }
 

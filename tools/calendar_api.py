@@ -5,6 +5,7 @@ Full OAuth 2.0 authentication with event and task management.
 
 import logging
 import os
+import hashlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional, TypedDict
@@ -55,6 +56,63 @@ SCOPES = [
     'https://www.googleapis.com/auth/calendar',
     'https://www.googleapis.com/auth/tasks'
 ]
+
+
+def calendar_token_path_for_user(
+    user_id: str = "default",
+    default_token_path: str = "data/tokens/calendar_token.json",
+) -> Path:
+    """Return the canonical token path without embedding raw user ids."""
+    normalized = (user_id or "default").strip() or "default"
+    if normalized == "default":
+        return Path(default_token_path)
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:32]
+    return Path("data/tokens/users") / digest / "calendar_token.json"
+
+
+def legacy_calendar_token_path_for_user(user_id: str = "default") -> Path:
+    """Previous per-user path, used only for backward-compatible reads/deletes."""
+    normalized = (user_id or "default").strip() or "default"
+    if normalized == "default":
+        return Path("data/tokens/default/calendar_token.json")
+    return Path("data/tokens") / normalized / "calendar_token.json"
+
+
+def _token_json_without_client_secret(credentials: Any) -> Dict[str, Any]:
+    import json
+
+    data = json.loads(credentials.to_json())
+    data.pop("client_secret", None)
+    return data
+
+
+def _load_client_config(credentials_path: Path) -> Dict[str, Any]:
+    import json
+
+    with open(credentials_path) as f:
+        config = json.load(f)
+    return config.get("web") or config.get("installed") or {}
+
+
+def _with_client_secret_for_google(
+    token_data: Dict[str, Any],
+    credentials_path: Path,
+) -> Dict[str, Any]:
+    """Add client metadata in memory for google-auth refreshes, not on disk."""
+    if token_data.get("client_secret") and token_data.get("client_id"):
+        return token_data
+    try:
+        client_config = _load_client_config(credentials_path)
+    except Exception as e:
+        logger.warning(f"OAuth client config load failed: {e}")
+        return token_data
+
+    hydrated = dict(token_data)
+    if not hydrated.get("client_id") and client_config.get("client_id"):
+        hydrated["client_id"] = client_config["client_id"]
+    if not hydrated.get("client_secret") and client_config.get("client_secret"):
+        hydrated["client_secret"] = client_config["client_secret"]
+    return hydrated
 
 @dataclass
 class CalendarEvent:
@@ -112,12 +170,8 @@ class CalendarAPI:
         user_id: str = "default",
     ):
         self.credentials_path = Path(credentials_path)
-        # Per-user token path: data/tokens/{user_id}/calendar_token.json
-        # Falls back to the provided token_path for the legacy "default" user
-        if user_id != "default":
-            self.token_path = Path(f"data/tokens/{user_id}/calendar_token.json")
-        else:
-            self.token_path = Path(token_path)
+        self.token_path = calendar_token_path_for_user(user_id, token_path)
+        self.legacy_token_path = legacy_calendar_token_path_for_user(user_id)
         self.user_id = user_id
         self.suggest_only = suggest_only
         self.target_calendar_name = target_calendar_name
@@ -157,18 +211,29 @@ class CalendarAPI:
         # 2. Fall back to token file (local dev / persistent volume)
         if not self.credentials:
             logger.info(f"Token file exists: {self.token_path.exists()} ({self.token_path.resolve()})")
-            if self.token_path.exists():
+            candidate_paths = [self.token_path]
+            if self.legacy_token_path != self.token_path:
+                candidate_paths.append(self.legacy_token_path)
+
+            for candidate_path in candidate_paths:
+                if not candidate_path.exists():
+                    continue
                 try:
-                    with open(self.token_path, 'r') as f:
+                    with open(candidate_path, 'r') as f:
                         token_data = _json.load(f)
+                    token_data = _with_client_secret_for_google(
+                        token_data, self.credentials_path
+                    )
                     self.credentials = OAuthCredentials.from_authorized_user_info(token_data, SCOPES)
                     logger.info("Loaded calendar token from JSON file")
+                    break
                 except Exception as e:
                     logger.warning(f"JSON token file load failed: {e}")
                     try:
-                        with open(self.token_path, 'rb') as f:
+                        with open(candidate_path, 'rb') as f:
                             self.credentials = pickle.load(f)
                         logger.info("Loaded calendar token from pickle file")
+                        break
                     except Exception as e2:
                         logger.warning(f"Pickle token file load failed: {e2}")
 
@@ -177,9 +242,8 @@ class CalendarAPI:
                 self.credentials.refresh(Request())
                 # Persist refreshed token back as JSON
                 try:
-                    import json
                     with open(self.token_path, 'w') as f:
-                        json.dump(json.loads(self.credentials.to_json()), f)
+                        _json.dump(_token_json_without_client_secret(self.credentials), f)
                 except Exception:
                     pass
             except Exception as e:
@@ -200,9 +264,8 @@ class CalendarAPI:
 
         # Persist as JSON (canonical format for Railway)
         try:
-            import json
             with open(self.token_path, 'w') as f:
-                json.dump(json.loads(self.credentials.to_json()), f)
+                _json.dump(_token_json_without_client_secret(self.credentials), f)
         except Exception:
             # Fall back to pickle if to_json() not available (older google-auth)
             try:
@@ -285,6 +348,8 @@ class CalendarAPI:
                         orderBy='startTime'
                     ).execute()
                     for item in events_result.get('items', []):
+                        if item.get('visibility') == 'private':
+                            continue
                         event_id = item.get('id')
                         if event_id and event_id in seen_ids:
                             continue

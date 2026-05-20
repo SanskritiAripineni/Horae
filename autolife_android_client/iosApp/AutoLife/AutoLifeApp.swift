@@ -12,11 +12,16 @@ struct AutoLifeApp: App {
             ?? "http://localhost:8000"
         AutoLifeApi.shared.doInit(baseUrl: backendUrl)
 
-        let geminiKey = Bundle.main.object(forInfoDictionaryKey: "GEMINI_API_KEY") as? String ?? ""
-        AiClientProvider.shared.doInit(client: GeminiAiClient(apiKey: geminiKey))
-
         let driver = DriverFactory_iosKt.createNativeDriver()
         DatabaseRepository.shared.doInit(driver: driver)
+
+        if let geminiKey = configuredRemoteAIKey() {
+            AiClientProvider.shared.doInit(client: GeminiAiClient(apiKey: geminiKey))
+        } else {
+            AiClientProvider.shared.doInit(
+                client: UnavailableAiClient(reason: "Remote AI is not configured for this iOS build")
+            )
+        }
 
         // Wire up PlatformStateProvider callbacks (mirrors Android AutoLifeApp.bridgeDebugToPlatformState)
         setupPlatformCallbacks()
@@ -121,6 +126,17 @@ struct AutoLifeApp: App {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
         return "\(version) (\(build))"
+    }
+
+    private func configuredRemoteAIKey() -> String? {
+        guard let raw = Bundle.main.object(forInfoDictionaryKey: "GEMINI_API_KEY") as? String else {
+            return nil
+        }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.hasPrefix("$(") else {
+            return nil
+        }
+        return trimmed
     }
 }
 

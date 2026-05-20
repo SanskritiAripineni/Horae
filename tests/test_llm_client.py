@@ -95,6 +95,75 @@ class TestGenerateScheduleProposals:
         prompt = mock.models.generate_content.call_args.kwargs.get("contents", "")
         assert behavioral_prose in prompt
 
+    def test_behavioral_state_fields_are_rendered_with_current_schema(self):
+        client, mock = _make_client()
+        _set_generate_response(mock, json.dumps({
+            "risk_level": "minimal", "summary": "", "concerns": [], "positives": [],
+            "recommendations": [], "proposed_changes": [],
+        }))
+
+        behavioral_state = {
+            "baseline_state": {"days_of_history": 14, "overall_confidence": "low"},
+            "deviations": [
+                {
+                    "marker": "sleep_duration_hours",
+                    "direction": "down",
+                    "magnitude": "moderate",
+                    "finding": "Sleep has averaged 5.2h versus a typical 7.6h.",
+                    "trajectory": "sustained-4d",
+                    "coverage": "medium",
+                    "recent_mean": 5.2,
+                    "baseline_mean": 7.6,
+                }
+            ],
+            "coherent_patterns": [
+                {
+                    "name": "fragmented-attention-with-sleep-loss",
+                    "interpretation": "Attention is more fragmented while sleep is shorter.",
+                    "implicated": ["app_switching_rate", "sleep_duration_hours"],
+                }
+            ],
+            "coverage_notes": ["sleep/sleep_duration_hours: coverage low"],
+        }
+
+        client.generate_schedule_proposals(
+            journal_narrative="normal day",
+            behavioral_prose="behavioral prose",
+            risk_level="mild",
+            calendar_summary=self._base_calendar(),
+            research_context=[],
+            behavioral_state=behavioral_state,
+        )
+
+        prompt = mock.models.generate_content.call_args.kwargs.get("contents", "")
+        assert "Sleep has averaged 5.2h versus a typical 7.6h." in prompt
+        assert "trajectory=sustained-4d" in prompt
+        assert "coverage=medium" in prompt
+        assert "Attention is more fragmented while sleep is shorter." in prompt
+        assert "signals: app_switching_rate, sleep_duration_hours" in prompt
+        assert "0.20/active-min" not in prompt
+
+    def test_raw_sensor_section_uses_active_min_units(self):
+        client, mock = _make_client()
+        _set_generate_response(mock, json.dumps({
+            "risk_level": "minimal", "summary": "", "concerns": [], "positives": [],
+            "recommendations": [], "proposed_changes": [],
+        }))
+        client.generate_schedule_proposals(
+            journal_narrative="normal day",
+            behavioral_prose="behavioral prose",
+            risk_level="minimal",
+            calendar_summary=self._base_calendar(),
+            research_context=[],
+            raw_days=[{
+                "date": "2026-04-24",
+                "app_switching_rate": 0.2,
+            }],
+        )
+        prompt = mock.models.generate_content.call_args.kwargs.get("contents", "")
+        assert "0.20/active-min" in prompt
+        assert "/hr" not in prompt
+
     def test_prompt_requests_ui_summary_contract(self):
         client, mock = _make_client()
         _set_generate_response(mock, json.dumps({

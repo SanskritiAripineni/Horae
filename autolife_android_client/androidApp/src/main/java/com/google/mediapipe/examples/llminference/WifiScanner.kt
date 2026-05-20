@@ -1,16 +1,22 @@
 package com.google.mediapipe.examples.llminference
 
 import android.Manifest
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.wifi.WifiManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.autolife.shared.platform.WifiNetworkProvider
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class WifiScanner(private val context: Context) : WifiNetworkProvider {
     companion object {
         private const val TAG = "WifiScanner"
+        private const val FORCE_SCAN_TIMEOUT_MS = 2_000L
         private data class CachedWifiSnapshot(
             val ssids: List<String>,
             val capturedAtMs: Long
@@ -60,6 +66,9 @@ class WifiScanner(private val context: Context) : WifiNetworkProvider {
         }
 
         return try {
+            if (forceRefresh) {
+                awaitFreshScan(wifiManager)
+            }
             val results = wifiManager.scanResults
 
             if (results == null) {
@@ -93,6 +102,44 @@ class WifiScanner(private val context: Context) : WifiNetworkProvider {
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected error in WifiScanner", e)
             listOf("Error: ${e.message}")
+        }
+    }
+
+    private fun awaitFreshScan(wifiManager: WifiManager) {
+        val latch = CountDownLatch(1)
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == WifiManager.SCAN_RESULTS_AVAILABLE_ACTION) {
+                    latch.countDown()
+                }
+            }
+        }
+
+        val registered = runCatching {
+            ContextCompat.registerReceiver(
+                context,
+                receiver,
+                IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION),
+                ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+        }.isSuccess
+
+        try {
+            @Suppress("DEPRECATION")
+            val started = wifiManager.startScan()
+            if (!started) {
+                Log.w(TAG, "Fresh WiFi scan request was throttled or rejected; using latest available results")
+                return
+            }
+            latch.await(FORCE_SCAN_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Fresh WiFi scan request missing permission; using latest available results", e)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+        } finally {
+            if (registered) {
+                runCatching { context.unregisterReceiver(receiver) }
+            }
         }
     }
 }

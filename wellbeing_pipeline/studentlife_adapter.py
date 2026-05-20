@@ -17,6 +17,7 @@ remain unchanged.
 from __future__ import annotations
 from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -26,9 +27,8 @@ import pandas as pd
 from layer1 import DayRecord, MARKER_SPECS
 
 # ---------- Paths ----------
-DATASET_ROOT = Path(
-    "/Users/rishisim/Documents/projects/Behavioral Emotional Sensing/studentlife/dataset"
-)
+_DEFAULT_DATASET_ROOT = "/Users/rishisim/Documents/projects/Behavioral Emotional Sensing/studentlife/dataset"
+DATASET_ROOT = Path(os.environ.get("STUDENTLIFE_DATASET_ROOT", _DEFAULT_DATASET_ROOT)).expanduser()
 SENSING = DATASET_ROOT / "sensing"
 APP_USAGE = DATASET_ROOT / "app_usage"
 CALL_LOG = DATASET_ROOT / "call_log"

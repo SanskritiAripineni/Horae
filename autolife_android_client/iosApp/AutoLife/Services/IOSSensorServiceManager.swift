@@ -30,6 +30,10 @@ class IOSSensorServiceManager {
 
     func start() {
         guard !isRunning else { return }
+        guard DatabaseRepository.shared.hasConsented() else {
+            PlatformStateProvider.shared.updateServiceState(isRunning: false, isDemoMode: isDemoMode)
+            return
+        }
         isRunning = true
 
         locationProvider.requestPermission()
@@ -102,6 +106,11 @@ class IOSSensorServiceManager {
     // MARK: - Poll cycle (mirrors Android's startLoop + startAnalysisCycle)
 
     private func runPollCycle() async {
+        guard DatabaseRepository.shared.hasConsented() else {
+            stop()
+            return
+        }
+
         let now = Int64(Date().timeIntervalSince1970 * 1000)
 
         // 1. Location
@@ -219,12 +228,15 @@ class IOSSensorServiceManager {
 
     func generateJournalNow() {
         Task {
+            guard DatabaseRepository.shared.hasConsented() else { return }
             let now = Int64(Date().timeIntervalSince1970 * 1000)
             await tryGenerateJournal(endTime: now, periodDurationMs: DEMO_JOURNAL_INTERVAL)
         }
     }
 
     private func tryGenerateJournal(endTime: Int64, periodDurationMs: Int64) async {
+        guard DatabaseRepository.shared.hasConsented() else { return }
+
         let startTime = endTime - periodDurationMs
         let logs = DatabaseRepository.shared.getLogsBetween(start: startTime, end: endTime)
 

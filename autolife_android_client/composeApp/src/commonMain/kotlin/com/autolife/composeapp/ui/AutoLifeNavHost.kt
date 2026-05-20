@@ -12,6 +12,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.autolife.composeapp.ui.components.withSerif
 import androidx.navigation.NavBackStackEntry
@@ -85,7 +87,7 @@ fun AutoLifeNavHost(
                 navigationIcon = {
                     if (!isTopLevel) {
                         IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Navigate back")
                         }
                     }
                 },
@@ -100,7 +102,7 @@ fun AutoLifeNavHost(
                         IconButton(onClick = { navController.navigate("dev_dashboard") }) {
                             Icon(
                                 Icons.Default.BugReport,
-                                "Dev tools",
+                                "Open developer tools",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(20.dp),
                             )
@@ -124,7 +126,7 @@ fun AutoLifeNavHost(
                             onClick = {
                                 navigateTopLevel(screen.route)
                             },
-                            icon = { Icon(screen.icon, screen.label, modifier = Modifier.size(24.dp)) },
+                            icon = { Icon(screen.icon, contentDescription = null, modifier = Modifier.size(24.dp)) },
                             label = { Text(screen.label, style = MaterialTheme.typography.labelSmall) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.onPrimary,
@@ -133,7 +135,11 @@ fun AutoLifeNavHost(
                                 unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             ),
-                            modifier = Modifier.testTag("nav_${screen.route}"),
+                            modifier = Modifier
+                                .testTag("nav_${screen.route}")
+                                .semantics {
+                                    contentDescription = "${screen.label} tab"
+                                },
                         )
                     }
                 }

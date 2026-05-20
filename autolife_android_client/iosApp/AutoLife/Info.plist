@@ -34,8 +34,6 @@
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>AutoLife needs your location to analyze where you are and generate contextual life journals.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>AutoLife uses background location to continuously track your movements for life journaling.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>AutoLife uses motion sensors to detect your activity (walking, driving, etc.) for context-aware journaling.</string>
 	<key>NSHealthShareUsageDescription</key>
@@ -48,9 +46,5 @@
 	<string>$(MAPS_API_KEY)</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>location</string>
-	</array>
 </dict>
 </plist>

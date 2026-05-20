@@ -20,7 +20,7 @@ data class MotionDisplayState(
 )
 
 data class ServiceDisplayState(
-    val isRunning: Boolean = true,
+    val isRunning: Boolean = false,
     val isDemoMode: Boolean = false,
 )
 

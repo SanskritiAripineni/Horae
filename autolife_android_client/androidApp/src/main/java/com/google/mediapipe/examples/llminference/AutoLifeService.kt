@@ -87,7 +87,7 @@ class AutoLifeService : Service() {
             startPermanentMotionObserver()
         }
         com.google.mediapipe.examples.llminference.data.DebugRepository.setServiceRunning(true)
-        return START_STICKY
+        return restartPolicy()
     }
 
     private fun hasLocationPermission(): Boolean =
@@ -123,8 +123,14 @@ class AutoLifeService : Service() {
         } catch (e: SecurityException) {
             Log.w("AutoLifeService", "Cannot promote AutoLife service to a location foreground service", e)
             return false
+        } catch (e: IllegalStateException) {
+            Log.w("AutoLifeService", "Cannot promote AutoLife service from the current app state", e)
+            return false
         }
     }
+
+    private fun restartPolicy(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) START_NOT_STICKY else START_STICKY
 
     private fun startLoop() {
         serviceScope.launch {
