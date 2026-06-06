@@ -119,7 +119,7 @@ fun MemoryScreen(viewModel: MemoryViewModel = viewModel { MemoryViewModel() }) {
                         title = if (viewModel.fetchError == null) "No memory data yet"
                                 else "Memory is unavailable",
                         description = if (viewModel.fetchError == null)
-                            "Run analysis to build personalized preferences and wellbeing history."
+                            "Memory fills in after completed analyses and direct feedback. Nothing is inferred here until the backend returns confirmed history or preferences."
                         else
                             "The backend could not be reached. Retry when the connection is available.",
                         action = {
@@ -189,7 +189,7 @@ fun MemoryScreen(viewModel: MemoryViewModel = viewModel { MemoryViewModel() }) {
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            text = "Run an analysis to start building a real trend instead of placeholder memory.",
+                            text = "Run analysis after journals exist to start a recorded wellbeing trend.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -304,7 +304,7 @@ private fun MemoryPageIntro(
                     color = MaterialTheme.colorScheme.onBackground,
                 )
                 Text(
-                    text = "A quiet record of what the system actually knows so far.",
+                    text = "Confirmed preferences, feedback, and wellbeing history that the backend has stored so far.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -41,6 +41,7 @@ data class ProposedChange(
     val action: String? = null,
     val reason: String? = null,
     val source: String? = null,
+    val user_timezone: String? = null,
     val change_token: String? = null,
     val event_id: String? = null
 )

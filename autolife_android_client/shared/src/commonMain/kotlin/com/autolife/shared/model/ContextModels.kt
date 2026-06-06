@@ -34,6 +34,7 @@ data class LocationContextCacheEntry(
     val osmContext: String? = null,
     val ssidContext: String? = null,
     val fusedLocationContext: String? = null,
+    val ssidFingerprint: String? = null,
 )
 
 @Serializable

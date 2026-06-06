@@ -13,6 +13,9 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import com.autolife.shared.db.DatabaseRepository
 import com.autolife.shared.model.ContextLogCodec
 import com.autolife.shared.model.RawDayMarkers
@@ -38,7 +41,12 @@ import kotlin.math.sqrt
 actual fun ServiceToggle(isRunning: Boolean, onToggle: (Boolean) -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(end = 4.dp)
+        modifier = Modifier
+            .padding(end = 4.dp)
+            .semantics {
+                contentDescription = "App background collection"
+                stateDescription = if (isRunning) "Collecting" else "Paused"
+            }
     ) {
         Text(
             text = if (isRunning) "Collecting" else "Paused",

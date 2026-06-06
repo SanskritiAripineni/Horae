@@ -330,7 +330,7 @@ object BatteryAssessmentLogic {
 
     fun buildReport(records: List<BatteryAssessmentRecord>, summary: BatteryAssessmentSummary): String {
         val sb = StringBuilder()
-        sb.append("# AutoLife Battery Assessment Report\n\n")
+        sb.append("# App Battery Assessment Report\n\n")
         sb.append("Generated: ").append(formatTimestamp(currentTimeMillis())).append("\n\n")
 
         if (records.isEmpty()) {

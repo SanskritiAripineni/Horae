@@ -48,6 +48,7 @@ class VectorDBClient:
         self._genai_client = None
         self._embedding_model = None
         self._collection_name = None
+        self._embedding_cache: Dict[str, List[float]] = {}
         logger.info(f"Initialized VectorDBClient with chroma_dir: {chroma_dir}")
 
     def _load_config(self):
@@ -99,6 +100,9 @@ class VectorDBClient:
     def _embed_query(self, text: str) -> List[float]:
         """Embed a text query using Gemini Embedding 2 with retry."""
         self._load_config()
+        cache_key = " ".join((text or "").split()).lower()
+        if cache_key in self._embedding_cache:
+            return self._embedding_cache[cache_key]
         client = self._get_genai_client()
 
         last_error: Optional[Exception] = None
@@ -108,7 +112,9 @@ class VectorDBClient:
                     model=self._embedding_model,
                     contents=text,
                 )
-                return result.embeddings[0].values
+                values = result.embeddings[0].values
+                self._embedding_cache[cache_key] = values
+                return values
             except Exception as e:
                 last_error = e
                 if attempt < MAX_RETRIES and self._is_retryable(e):
@@ -192,7 +198,13 @@ class VectorDBClient:
             logger.error(f"Retrieval failed: {e}")
             return []
 
-    def get_intervention_suggestions(self, risk_level: str, journal_summary: str = "") -> List[WellnessConcept]:
+    def get_intervention_suggestions(
+        self,
+        risk_level: str,
+        journal_summary: str = "",
+        behavioral_state: Optional[Dict[str, Any]] = None,
+        llm_analysis: Optional[Dict[str, Any]] = None,
+    ) -> List[WellnessConcept]:
         """
         Get research-backed intervention suggestions based on wellbeing state.
 
@@ -204,13 +216,43 @@ class VectorDBClient:
             List of intervention suggestions from research papers
         """
         level = (risk_level or "mild").lower()
+        context_terms: List[str] = []
+        if behavioral_state:
+            for deviation in behavioral_state.get("deviations", [])[:4]:
+                marker = deviation.get("marker")
+                finding = deviation.get("finding")
+                if marker:
+                    context_terms.append(str(marker).replace("_", " "))
+                if finding:
+                    context_terms.append(str(finding)[:120])
+            for pattern in behavioral_state.get("coherent_patterns", [])[:3]:
+                name = pattern.get("name") or pattern.get("interpretation")
+                if name:
+                    context_terms.append(str(name).replace("-", " "))
+        if llm_analysis:
+            for pattern in (llm_analysis.get("coherent_patterns") or [])[:3]:
+                name = pattern.get("name") or pattern.get("interpretation")
+                if name:
+                    context_terms.append(str(name).replace("-", " "))
+            salience = llm_analysis.get("salience_reasoning")
+            if salience:
+                context_terms.append(str(salience)[:180])
+        if journal_summary:
+            context_terms.append(journal_summary[:240])
+        context = " ".join(context_terms).strip()
+
         if level == "severe":
-            queries = ["emotional coping strategies", "social support wellness"]
+            base_queries = ["emotional coping strategies", "social support wellness"]
         elif level == "moderate":
-            queries = ["stress reduction techniques", "sleep improvement mental health"]
+            base_queries = ["stress reduction techniques", "sleep improvement mental health"]
         else:
             # minimal / mild — preventive
-            queries = ["habit formation daily routine", "mindfulness practice"]
+            base_queries = ["habit formation daily routine", "mindfulness practice"]
+
+        queries = [
+            f"{query} {context}".strip()
+            for query in base_queries
+        ]
 
         all_suggestions = []
         for query in queries:

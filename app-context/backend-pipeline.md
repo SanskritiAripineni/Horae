@@ -308,7 +308,7 @@ Railway health check. Returns `{"status": "ok"}`.
 | Embedding model | `gemini-embedding-2-preview` |
 | Embedding dimensions | 3072 |
 | VectorDB collection | `wellness_papers_gemini` |
-| Calendar timezone | `America/Chicago` |
+| Calendar timezone | Required `user_timezone` request field |
 | Work hours | 9:00 – 17:00 |
 | Max daily hours | 8.0 |
 | Calendar look-ahead | 7 days |

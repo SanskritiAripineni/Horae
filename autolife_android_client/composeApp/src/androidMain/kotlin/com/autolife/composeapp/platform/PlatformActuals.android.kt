@@ -49,7 +49,7 @@ actual fun ServiceToggle(isRunning: Boolean, onToggle: (Boolean) -> Unit) {
             modifier = Modifier
                 .height(24.dp)
                 .semantics {
-                    contentDescription = "AutoLife background collection"
+                    contentDescription = "App background collection"
                     stateDescription = if (isRunning) "Collecting" else "Paused"
                     role = Role.Switch
                 },

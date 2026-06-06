@@ -52,32 +52,38 @@ fun ConsentScreen(
             // Purpose
             ConsentSection(
                 title = "What is this study?",
-                body = "This research investigates how AI-optimized scheduling and personalized calendar suggestions affect mental wellbeing, stress, and daily productivity. You are being invited to participate because you are 18 or older and use a smartphone regularly."
+                body = "App studies how AI-assisted life summaries and scheduling suggestions may relate to wellbeing, stress, and daily routines. You are being invited to participate because you are 18 or older and use a smartphone regularly."
             )
 
             // Data collected
             ConsentSection(
                 title = "What data is collected?",
-                body = "The app collects the following from your phone:\n\n" +
-                    "• Motion patterns — to infer activity levels (walking, stationary, etc.)\n" +
-                    "• Location context — generalised area only; raw GPS coordinates are never transmitted\n" +
-                    "• WiFi network names — to infer home/work/other contexts\n" +
-                    "• Life journals — AI-generated narrative summaries of your day (created after consent using Gemini)\n" +
-                    "• Calendar events — read-only access to suggest schedule optimizations\n\n" +
-                    "Raw sensor data (GPS, accelerometer) stays on your device. Context summaries may be sent to Gemini for AI generation after you consent. Only AI-generated journal summaries and anonymized usage data are sent to our server."
+                body = "With your consent and permissions, the app may collect:\n\n" +
+                    "• Motion patterns — to estimate activity such as walking or being stationary\n" +
+                    "• Location context — used to understand general place-based routines\n" +
+                    "• WiFi network names — used to infer home, work, or other repeated contexts\n" +
+                    "• Calendar events — read-only access used for schedule suggestions\n" +
+                    "• Life journals — narrative summaries generated from recent context\n\n" +
+                    "The app summarizes recent context and sends the information needed for journal generation to Gemini. Generated journals and study usage data may be sent to the App backend for research storage and analysis."
+            )
+
+            // Permissions
+            ConsentSection(
+                title = "If you deny permissions",
+                body = "You can deny or revoke phone permissions at any time in system settings. When a permission is denied, App will not collect that category of data, and related journals or schedule suggestions may be missing, less detailed, or unavailable. Denying permissions does not enroll you in additional collection, and you can still leave the study by uninstalling the app or contacting the research team."
             )
 
             // How it's stored
             ConsentSection(
                 title = "How is your data stored?",
-                body = "Your data is identified by a random user ID that is SHA-256 hashed before storage — we cannot re-identify you from stored data. Journals and wellbeing assessments are stored on a secure server (Railway cloud). Data is retained for the duration of the study (up to 12 months) and then deleted."
+                body = "Your study data is associated with a random user ID that is hashed before storage. Journals, wellbeing assessments, and related study records are stored on the App backend hosted in Railway cloud. Data is retained for the duration of the study (up to 12 months) and then deleted."
             )
 
             // Risks and benefits
             ConsentSection(
                 title = "Risks and benefits",
                 body = "Risks: Minimal. Some battery usage from background sensor collection. You may find AI-generated journal summaries occasionally inaccurate.\n\n" +
-                    "Benefits: Personalized schedule insights and wellbeing feedback at no cost. Contribution to research on AI-assisted mental wellness."
+                    "Benefits: Personalized schedule insights and wellbeing feedback at no cost. Contribution to research on AI-assisted wellbeing and daily planning."
             )
 
             // Withdrawal
@@ -89,7 +95,7 @@ fun ConsentScreen(
             // Contact
             ConsentSection(
                 title = "Contact",
-                body = "AutoLife Research Team\nEmail: autolife.study@gmail.com\n\nIf you have concerns about your rights as a research participant, contact your institution's IRB office."
+                body = "App Research Team\nEmail: autolife.study@gmail.com\n\nIf you have concerns about your rights as a research participant, contact your institution's IRB office."
             )
 
             HorizontalDivider()

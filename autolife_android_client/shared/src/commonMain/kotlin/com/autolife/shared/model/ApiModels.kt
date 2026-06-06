@@ -66,6 +66,7 @@ data class RawDayMarkers(
 @Serializable
 data class ProcessJournalsRequest(
     val journals: List<ApiJournalEntry>,
+    val user_timezone: String,
     val raw_days: List<RawDayMarkers>? = null,
     val user_id: String = "default"
 )
@@ -73,6 +74,7 @@ data class ProcessJournalsRequest(
 @Serializable
 data class ApplyCalendarRequest(
     val changes: List<ProposedChange>,
+    val user_timezone: String,
     val proposed_changes: List<ProposedChange> = emptyList(),
     val user_comments: String = "",
     val user_id: String = "default"

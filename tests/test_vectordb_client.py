@@ -188,13 +188,51 @@ class TestGetInterventionSuggestions:
         assert len(suggestions) <= 4
 
     def test_journal_summary_parameter_accepted(self, tmp_path):
-        """The journal_summary parameter is accepted even if not directly used in queries."""
+        """The journal summary now participates in the retrieval query."""
         client = _patched_client(tmp_path)
         suggestions = client.get_intervention_suggestions(
             risk_level="mild",
             journal_summary="User is feeling stressed about exams"
         )
         assert isinstance(suggestions, list)
+        first_query = client._embed_query.call_args_list[0].args[0]
+        assert "stressed about exams" in first_query
+
+    def test_behavioral_context_included_in_queries(self, tmp_path):
+        client = _patched_client(tmp_path)
+        client.get_intervention_suggestions(
+            risk_level="moderate",
+            behavioral_state={
+                "deviations": [
+                    {
+                        "marker": "sleep_duration_hours",
+                        "finding": "Sleep has averaged 5.2h versus baseline.",
+                    }
+                ],
+                "coherent_patterns": [{"name": "fragmented-attention-with-sleep-loss"}],
+            },
+            llm_analysis={"salience_reasoning": "Protect sleep opportunity this week."},
+        )
+
+        first_query = client._embed_query.call_args_list[0].args[0]
+        assert "sleep duration hours" in first_query
+        assert "fragmented attention with sleep loss" in first_query
+        assert "Protect sleep opportunity" in first_query
+
+    def test_embedding_cache_reuses_identical_query(self, tmp_path):
+        client = VectorDBClient(chroma_dir=str(tmp_path))
+        client._embedding_model = "test-model"
+        embedding = MagicMock()
+        embedding.values = [0.1, 0.2]
+        result = MagicMock()
+        result.embeddings = [embedding]
+        genai_client = MagicMock()
+        genai_client.models.embed_content.return_value = result
+        client._get_genai_client = MagicMock(return_value=genai_client)
+
+        assert client._embed_query("Sleep tips") == [0.1, 0.2]
+        assert client._embed_query("  sleep   tips  ") == [0.1, 0.2]
+        assert genai_client.models.embed_content.call_count == 1
 
 
 

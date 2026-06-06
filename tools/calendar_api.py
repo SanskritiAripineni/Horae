@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional, TypedDict
 from dataclasses import dataclass
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,7 @@ class ScheduleSummary(TypedDict):
     days_covered: int
     tasks: List[FormattedTask]
     task_count: int
+    user_timezone: str
 
 # Google API scopes
 SCOPES = [
@@ -124,13 +126,13 @@ class CalendarEvent:
     end_time: datetime
     location: Optional[str] = None
     
-    def to_google_format(self) -> Dict[str, Any]:
+    def to_google_format(self, timezone_name: str = "UTC") -> Dict[str, Any]:
         return {
             'summary': self.summary,
             'description': self.description,
             'location': self.location or '',
-            'start': {'dateTime': self.start_time.isoformat(), 'timeZone': 'America/Chicago'},
-            'end': {'dateTime': self.end_time.isoformat(), 'timeZone': 'America/Chicago'},
+            'start': {'dateTime': self.start_time.isoformat(), 'timeZone': timezone_name},
+            'end': {'dateTime': self.end_time.isoformat(), 'timeZone': timezone_name},
         }
     
     @classmethod
@@ -166,13 +168,15 @@ class CalendarAPI:
         credentials_path: str = "credentials.json",
         token_path: str = "data/tokens/calendar_token.json",
         suggest_only: bool = True,
-        target_calendar_name: str = "RIDE Agent",
+        target_calendar_name: str = "primary",
         user_id: str = "default",
+        user_timezone: str = "UTC",
     ):
         self.credentials_path = Path(credentials_path)
         self.token_path = calendar_token_path_for_user(user_id, token_path)
         self.legacy_token_path = legacy_calendar_token_path_for_user(user_id)
         self.user_id = user_id
+        self.user_timezone = self._coerce_timezone(user_timezone)
         self.suggest_only = suggest_only
         self.target_calendar_name = target_calendar_name
         self.target_calendar_id = None  # Will be resolved on first use
@@ -181,6 +185,15 @@ class CalendarAPI:
         self.credentials = None
         self.token_path.parent.mkdir(parents=True, exist_ok=True)
         logger.info(f"Initialized CalendarAPI (suggest_only={suggest_only}, target={target_calendar_name})")
+
+    @staticmethod
+    def _coerce_timezone(user_timezone: str) -> str:
+        try:
+            ZoneInfo(user_timezone)
+            return user_timezone
+        except (ZoneInfoNotFoundError, TypeError):
+            logger.warning("Invalid timezone %r, falling back to UTC", user_timezone)
+            return "UTC"
     
     def authenticate(self) -> bool:
         """Authenticate with Google APIs using OAuth 2.0."""
@@ -284,9 +297,13 @@ class CalendarAPI:
             return False
     
     def get_target_calendar_id(self) -> str:
-        """Get the calendar ID for the target calendar (RIDE Agent). Falls back to primary."""
+        """Get the calendar ID for writes. Defaults to the user's primary calendar."""
         if self.target_calendar_id:
             return self.target_calendar_id
+
+        if self.target_calendar_name.lower() in {"", "primary"}:
+            self.target_calendar_id = "primary"
+            return "primary"
         
         if not self.calendar_service:
             if not self.authenticate():
@@ -315,14 +332,11 @@ class CalendarAPI:
                 return []
 
         try:
-            # Start from the Monday of the current week so the full week is always visible
-            today = datetime.utcnow()
-            days_since_monday = today.weekday()  # 0 = Monday
-            week_start = (today - timedelta(days=days_since_monday)).replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
-            time_min = week_start.isoformat() + 'Z'
-            time_max = (today + timedelta(days=days)).isoformat() + 'Z'
+            # Proposal correctness depends on seeing the actual future window,
+            # not the whole current week with past events competing for slots.
+            now = datetime.now(ZoneInfo(self.user_timezone))
+            time_min = now.isoformat()
+            time_max = (now + timedelta(days=days)).isoformat()
 
             # Fetch all calendars the user has access to
             try:
@@ -420,7 +434,7 @@ class CalendarAPI:
             calendar_id = self.get_target_calendar_id()
             result = self.calendar_service.events().insert(
                 calendarId=calendar_id,
-                body=event.to_google_format()
+                body=event.to_google_format(self.user_timezone)
             ).execute()
             logger.info(f"Created event: {result.get('id')}")
             return result.get('id')
@@ -449,12 +463,12 @@ class CalendarAPI:
         
         # Format for LLM
         formatted_events = []
-        for event in events[:20]:
+        for event in events:
             formatted_events.append({
                 "id": event.id,
                 "title": event.summary,
-                "start": event.start_time.strftime('%Y-%m-%d %H:%M'),
-                "end": event.end_time.strftime('%Y-%m-%d %H:%M'),
+                "start": event.start_time.isoformat(timespec="minutes"),
+                "end": event.end_time.isoformat(timespec="minutes"),
                 "duration_hours": round((event.end_time - event.start_time).total_seconds() / 3600, 1)
             })
         
@@ -474,5 +488,6 @@ class CalendarAPI:
             "busiest_day": busiest_day,
             "days_covered": len(events_by_day),
             "tasks": formatted_tasks,
-            "task_count": len(tasks)
+            "task_count": len(tasks),
+            "user_timezone": self.user_timezone,
         }

@@ -53,7 +53,11 @@ def signed_changes(changes):
 
 @pytest.fixture
 def valid_journals_payload(sample_journals):
-    return {"journals": sample_journals, "user_id": "test-user"}
+    return {
+        "journals": sample_journals,
+        "user_id": "test-user",
+        "user_timezone": "America/Phoenix",
+    }
 
 
 @pytest.fixture
@@ -61,6 +65,7 @@ def sample_pipeline_result():
     return {
         "status": "completed",
         "user_id": "test-user",
+        "user_timezone": "America/Phoenix",
         "journal_count": 2,
         "wellbeing": {"risk_level": "mild"},
         "mental_health": {"risk_level": "mild"},
@@ -98,16 +103,22 @@ class TestProcessJournals:
         assert response.status_code == 200
         assert response.json() == sample_pipeline_result
         mock_agent.run_from_journals.assert_called_once()
-        # Args: journals list, user_id, raw_days
+        # Args: journals list, user_id, raw_days, user_timezone
         args, _ = mock_agent.run_from_journals.call_args
         assert args[1] == "test-user"
         assert args[2] is None
+        assert args[3] == "America/Phoenix"
         log_session.assert_called_once()
 
     def test_raw_days_forwarded(self, client, mock_agent, sample_journals, sample_pipeline_result):
         mock_agent.run_from_journals.return_value = sample_pipeline_result
         raw_days = [{"date": "2026-04-20", "sleep_onset_hour": 23.5}]
-        payload = {"journals": sample_journals, "user_id": "u1", "raw_days": raw_days}
+        payload = {
+            "journals": sample_journals,
+            "user_id": "u1",
+            "raw_days": raw_days,
+            "user_timezone": "America/Phoenix",
+        }
 
         with patch("api.db.log_session"):
             response = client.post(
@@ -128,7 +139,7 @@ class TestProcessJournals:
         with patch("api.db.log_session"):
             response = client.post(
                 "/api/process_journals",
-                json={"journals": sample_journals},
+                json={"journals": sample_journals, "user_timezone": "America/Phoenix"},
                 headers=auth_headers(),
             )
 
@@ -138,14 +149,27 @@ class TestProcessJournals:
 
     def test_missing_journals_key_is_422(self, client):
         response = client.post(
-            "/api/process_journals", json={"user_id": "u"}, headers=auth_headers("u")
+            "/api/process_journals",
+            json={"user_id": "u", "user_timezone": "America/Phoenix"},
+            headers=auth_headers("u"),
+        )
+        assert response.status_code == 422
+        assert response.json()["error"] == "validation_error"
+
+    def test_missing_timezone_is_422(self, client, sample_journals):
+        response = client.post(
+            "/api/process_journals",
+            json={"journals": sample_journals, "user_id": "u"},
+            headers=auth_headers("u"),
         )
         assert response.status_code == 422
         assert response.json()["error"] == "validation_error"
 
     def test_empty_journals_list_is_422(self, client):
         response = client.post(
-            "/api/process_journals", json={"journals": []}, headers=auth_headers()
+            "/api/process_journals",
+            json={"journals": [], "user_timezone": "America/Phoenix"},
+            headers=auth_headers(),
         )
         assert response.status_code == 422
         assert response.json()["error"] == "validation_error"
@@ -153,7 +177,11 @@ class TestProcessJournals:
     def test_blank_user_id_is_422(self, client, sample_journals):
         response = client.post(
             "/api/process_journals",
-            json={"journals": sample_journals, "user_id": "   "},
+            json={
+                "journals": sample_journals,
+                "user_id": "   ",
+                "user_timezone": "America/Phoenix",
+            },
             headers=auth_headers(),
         )
         assert response.status_code == 422
@@ -163,7 +191,10 @@ class TestProcessJournals:
         bad["content"] = "   "
         response = client.post(
             "/api/process_journals",
-            json={"journals": [bad, sample_journals[1]]},
+            json={
+                "journals": [bad, sample_journals[1]],
+                "user_timezone": "America/Phoenix",
+            },
             headers=auth_headers(),
         )
         assert response.status_code == 422
@@ -244,6 +275,7 @@ class TestApplyCalendar:
                 "title": "Meditate",
                 "start_time": "2026-05-01T07:00:00",
                 "end_time": "2026-05-01T07:15:00",
+                "user_timezone": "America/Phoenix",
             }
         ]
         signed = signed_changes(changes)
@@ -254,6 +286,7 @@ class TestApplyCalendar:
                 json={
                     "changes": signed,
                     "user_id": "u1",
+                    "user_timezone": "America/Phoenix",
                     "user_comments": "thanks",
                 },
                 headers=auth_headers("u1"),
@@ -266,18 +299,23 @@ class TestApplyCalendar:
             "thanks",
             None,
             user_id="u1",
+            user_timezone="America/Phoenix",
         )
         log_cal.assert_called_once()
 
     def test_empty_changes_is_422(self, client):
         response = client.post(
-            "/api/apply_calendar", json={"changes": []}, headers=auth_headers()
+            "/api/apply_calendar",
+            json={"changes": [], "user_timezone": "America/Phoenix"},
+            headers=auth_headers(),
         )
         assert response.status_code == 422
 
     def test_missing_changes_is_422(self, client):
         response = client.post(
-            "/api/apply_calendar", json={"user_id": "u"}, headers=auth_headers("u")
+            "/api/apply_calendar",
+            json={"user_id": "u", "user_timezone": "America/Phoenix"},
+            headers=auth_headers("u"),
         )
         assert response.status_code == 422
 
@@ -292,12 +330,32 @@ class TestApplyCalendar:
         with patch("api.db.log_calendar_accepted"):
             response = client.post(
                 "/api/apply_calendar",
-                json={"changes": signed_changes([{"action": "add"}])},
+                json={
+                    "changes": signed_changes([{"action": "add", "user_timezone": "America/Phoenix"}]),
+                    "user_timezone": "America/Phoenix",
+                },
                 headers=auth_headers(),
             )
 
         assert response.status_code == 200
         assert len(response.json()["failed"]) == 1
+
+    def test_apply_rejects_timezone_mismatch(self, client, mock_agent):
+        change = signed_changes([
+            {
+                "action": "add",
+                "user_timezone": "America/New_York",
+            }
+        ])
+
+        response = client.post(
+            "/api/apply_calendar",
+            json={"changes": change, "user_timezone": "America/Phoenix"},
+            headers=auth_headers(),
+        )
+
+        assert response.status_code == 403
+        mock_agent.apply_calendar_changes.assert_not_called()
 
     def test_agent_not_initialized_returns_503(self, client):
         original = api.agent_instance
@@ -305,7 +363,10 @@ class TestApplyCalendar:
         try:
             response = client.post(
                 "/api/apply_calendar",
-                json={"changes": signed_changes([{"action": "add"}])},
+                json={
+                    "changes": signed_changes([{"action": "add", "user_timezone": "America/Phoenix"}]),
+                    "user_timezone": "America/Phoenix",
+                },
                 headers=auth_headers(),
             )
         finally:
@@ -316,7 +377,10 @@ class TestApplyCalendar:
         mock_agent.apply_calendar_changes.side_effect = RuntimeError("calendar api down")
         response = client.post(
             "/api/apply_calendar",
-            json={"changes": signed_changes([{"action": "add"}])},
+            json={
+                "changes": signed_changes([{"action": "add", "user_timezone": "America/Phoenix"}]),
+                "user_timezone": "America/Phoenix",
+            },
             headers=auth_headers(),
         )
         assert response.status_code == 500
@@ -327,7 +391,10 @@ class TestApplyCalendar:
         with patch("api.db.log_calendar_accepted", side_effect=Exception("DB down")):
             response = client.post(
                 "/api/apply_calendar",
-                json={"changes": signed_changes([{"action": "add"}])},
+                json={
+                    "changes": signed_changes([{"action": "add", "user_timezone": "America/Phoenix"}]),
+                    "user_timezone": "America/Phoenix",
+                },
                 headers=auth_headers(),
             )
 
@@ -399,7 +466,11 @@ class TestAuth:
     def test_token_user_must_match_body_user(self, client, sample_journals):
         response = client.post(
             "/api/process_journals",
-            json={"journals": sample_journals, "user_id": "u2"},
+            json={
+                "journals": sample_journals,
+                "user_id": "u2",
+                "user_timezone": "America/Phoenix",
+            },
             headers=auth_headers("u1"),
         )
 

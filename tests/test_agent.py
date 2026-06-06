@@ -139,6 +139,29 @@ class TestRunFromJournals:
         agent.wellbeing_sensor.analyze.assert_called_once()
         call_kwargs = agent.llm_client.generate_schedule_proposals.call_args.kwargs
         assert call_kwargs.get("behavioral_prose") == behavioral_prose
+        assert call_kwargs.get("user_timezone") == "UTC"
+
+    def test_structured_risk_drives_vectordb_query(self, sample_journals):
+        agent = _make_agent()
+        agent.wellbeing_sensor.analyze.return_value = {
+            "prose": "Structured behavioral state.",
+            "llm_analysis": {"suggestions": []},
+            "baseline_warm": True,
+            "behavioral_state": {
+                "baseline_state": {"overall_confidence": "medium"},
+                "deviations": [
+                    {"magnitude": "moderate", "coverage": "high", "marker": "sleep_duration_hours"},
+                    {"magnitude": "moderate", "coverage": "high", "marker": "late_night_screen_min"},
+                ],
+                "coherent_patterns": [{"name": "phone-mediated-sleep-delay"}],
+            },
+        }
+
+        agent.run_from_journals(sample_journals, raw_days=[{"date": "2026-04-20"}])
+
+        kwargs = agent.vectordb.get_intervention_suggestions.call_args.kwargs
+        assert kwargs["risk_level"] == "moderate"
+        assert kwargs["behavioral_state"]["coherent_patterns"][0]["name"] == "phone-mediated-sleep-delay"
 
     def test_baseline_not_warm_note_added(self, sample_journals):
         agent = _make_agent()
@@ -306,6 +329,76 @@ class TestConflictFiltering:
 
         result = agent.run_from_journals(sample_journals)
         assert len(result["proposed_changes"]) == 1
+        assert result["proposed_changes"][0]["user_timezone"] == "UTC"
+
+    def test_timezone_aware_conflict_filtering(self, sample_journals):
+        agent = _make_agent()
+        agent.calendar_api.get_schedule_summary.return_value = {
+            "events": [
+                {
+                    "id": "existing1",
+                    "title": "Meeting",
+                    "start": "2026-05-01T10:00:00-07:00",
+                    "end": "2026-05-01T11:00:00-07:00",
+                }
+            ],
+            "tasks": [],
+        }
+        agent.llm_client.generate_schedule_proposals.return_value = {
+            "risk_level": "mild", "summary": "", "concerns": [], "positives": [],
+            "recommendations": [],
+            "proposed_changes": [
+                {
+                    "action": "add",
+                    "title": "Walk",
+                    "start_time": "2026-05-01T10:30:00",
+                    "end_time": "2026-05-01T11:30:00",
+                }
+            ],
+        }
+
+        result = agent.run_from_journals(
+            sample_journals,
+            user_timezone="America/Phoenix",
+        )
+
+        assert len(result["proposed_changes"]) == 0
+        assert agent.calendar_api.user_timezone == "America/Phoenix"
+
+    def test_layer4_duplicate_proposal_is_skipped(self, sample_journals):
+        agent = _make_agent()
+        agent.wellbeing_sensor.analyze.return_value = {
+            "prose": "Sleep shifted later.",
+            "baseline_warm": True,
+            "behavioral_state": {},
+            "llm_analysis": {
+                "suggestions": [
+                    {
+                        "change": "Wind Down",
+                        "rationale": "Protect sleep",
+                        "start_time": "21:00",
+                        "end_time": "21:30",
+                    }
+                ]
+            },
+        }
+        tomorrow = datetime.now() + timedelta(days=1)
+        agent.llm_client.generate_schedule_proposals.return_value = {
+            "risk_level": "mild", "summary": "", "concerns": [], "positives": [],
+            "recommendations": [],
+            "proposed_changes": [
+                {
+                    "action": "add",
+                    "title": "Wind Down",
+                    "start_time": tomorrow.replace(hour=21, minute=0).strftime("%Y-%m-%dT%H:%M:%S"),
+                    "end_time": tomorrow.replace(hour=21, minute=30).strftime("%Y-%m-%dT%H:%M:%S"),
+                }
+            ],
+        }
+
+        result = agent.run_from_journals(sample_journals, raw_days=[{"date": "2026-04-20"}])
+
+        assert len(result["proposed_changes"]) == 1
 
     def test_handles_malformed_proposal_times(self, sample_journals):
         agent = _make_agent()
@@ -324,8 +417,8 @@ class TestConflictFiltering:
         }
 
         result = agent.run_from_journals(sample_journals)
-        # Malformed proposals are NOT considered conflicts (_has_server_conflict returns False)
-        assert len(result["proposed_changes"]) == 1
+        # Malformed proposals are treated as unsafe and dropped before apply.
+        assert len(result["proposed_changes"]) == 0
 
     def test_handles_malformed_event_times(self, sample_journals):
         agent = _make_agent()
@@ -354,6 +447,10 @@ class TestConflictFiltering:
 # apply_calendar_changes
 
 class TestApplyCalendarChanges:
+    @pytest.fixture(autouse=True)
+    def _mock_feedback_writer(self):
+        with patch("agent.WellbeingFeedback"):
+            yield
 
     def test_add_action(self):
         agent = _make_agent()
@@ -373,6 +470,7 @@ class TestApplyCalendarChanges:
         assert len(results["applied"]) == 1
         assert results["applied"][0]["action"] == "created"
         assert results["applied"][0]["event_id"] == "new_event_id"
+        assert results["applied"][0]["start_time"] == "2024-06-01T08:00:00"
 
     def test_add_action_failure(self):
         agent = _make_agent()

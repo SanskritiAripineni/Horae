@@ -7,6 +7,7 @@ import logging
 import threading
 from typing import Any, Dict, List, Optional
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 # Import config FIRST to load .env
 from config import config
@@ -30,6 +31,61 @@ def _infer_risk_from_prose(prose: str) -> str:
     if any(w in lower for w in ["severe", "critical", "crisis", "significant deterioration"]):
         return "moderate"
     if any(w in lower for w in ["notable", "above average", "elevated", "concerning", "irregular", "deviation"]):
+        return "mild"
+    return "minimal"
+
+
+def _valid_timezone(user_timezone: str) -> str:
+    try:
+        ZoneInfo(user_timezone)
+        return user_timezone
+    except (ZoneInfoNotFoundError, TypeError):
+        return "UTC"
+
+
+def _parse_datetime_in_timezone(value: str, user_timezone: str) -> datetime:
+    dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo(user_timezone))
+    return dt.astimezone(ZoneInfo(user_timezone))
+
+
+def _infer_risk_from_behavioral_state(
+    behavioral_state: Optional[Dict[str, Any]],
+    baseline_warm: bool = True,
+    fallback_prose: str = "",
+) -> str:
+    """Derive a preliminary risk from structured sensing before the LLM finalizes it."""
+    if not behavioral_state:
+        return _infer_risk_from_prose(fallback_prose)
+
+    baseline = behavioral_state.get("baseline_state") or {}
+    confidence = str(baseline.get("overall_confidence", "")).lower()
+    deviations = behavioral_state.get("deviations") or []
+    patterns = behavioral_state.get("coherent_patterns") or []
+
+    if not baseline_warm or "low-cold" in confidence:
+        return "minimal"
+
+    magnitude_score = {"mild": 1, "moderate": 2, "pronounced": 3}
+    coverage_score = {"high": 1.0, "medium": 0.75, "low": 0.4, "none": 0.0}
+    score = 0.0
+    moderate_or_worse = 0
+    for deviation in deviations:
+        mag = str(deviation.get("magnitude", "")).lower()
+        cov = str(deviation.get("coverage", "medium")).lower()
+        weighted = magnitude_score.get(mag, 0) * coverage_score.get(cov, 0.75)
+        score += weighted
+        if mag in {"moderate", "pronounced"} and coverage_score.get(cov, 0.75) >= 0.75:
+            moderate_or_worse += 1
+
+    score += min(len(patterns), 3) * 1.25
+
+    if score >= 6 or moderate_or_worse >= 3:
+        return "severe"
+    if score >= 3.5 or moderate_or_worse >= 2 or len(patterns) >= 2:
+        return "moderate"
+    if score >= 1:
         return "mild"
     return "minimal"
 
@@ -246,6 +302,12 @@ def _build_analysis_details(
     }
 
 
+def _proposal_dedupe_key(change: Dict[str, Any]) -> str:
+    title = str(change.get("title") or change.get("change") or "").lower()
+    start = str(change.get("start_time") or "")[:16]
+    return " ".join(title.split())[:48] + "|" + start
+
+
 class LLMSchedulerAgent:
     """
     Main agent that orchestrates the mental health analysis and calendar optimization.
@@ -270,6 +332,7 @@ class LLMSchedulerAgent:
         journals: List[Dict[str, Any]],
         user_id: Optional[str] = None,
         raw_days: Optional[List[Dict[str, Any]]] = None,
+        user_timezone: str = "UTC",
     ) -> Dict[str, Any]:
         """Run the analysis pipeline with pre-loaded journal entries.
 
@@ -288,10 +351,12 @@ class LLMSchedulerAgent:
         """
         start_time = datetime.now()
         effective_user_id = user_id or self.user_id
+        effective_timezone = _valid_timezone(user_timezone)
 
         results = {
             'status': 'running',
             'user_id': effective_user_id,
+            'user_timezone': effective_timezone,
             'journal_summary': None,
             'wellbeing': None,
             'ui_summary': None,
@@ -323,8 +388,13 @@ class LLMSchedulerAgent:
             if effective_user_id == self.user_id:
                 request_calendar = self.calendar_api
                 request_calendar.suggest_only = True
+                request_calendar.user_timezone = effective_timezone
             else:
-                request_calendar = CalendarAPI(suggest_only=True, user_id=effective_user_id)
+                request_calendar = CalendarAPI(
+                    suggest_only=True,
+                    user_id=effective_user_id,
+                    user_timezone=effective_timezone,
+                )
             calendar_summary = _json_safe(request_calendar.get_schedule_summary(days=7))
             results['calendar_summary'] = calendar_summary
             calendar_events = calendar_summary.get('events', []) if calendar_summary else []
@@ -356,18 +426,23 @@ class LLMSchedulerAgent:
                 behavioral_prose = sensing_result.get("prose", "") or None
                 baseline_warm = sensing_result.get("baseline_warm", True)
                 llm_analysis = sensing_result.get("llm_analysis") or {}
+                behavioral_state = sensing_result.get("behavioral_state")
 
                 results['behavioral_sensing'] = {
                     "prose": behavioral_prose,
                     "llm_analysis": llm_analysis,
+                    "behavioral_state": behavioral_state,
                 }
                 if not baseline_warm:
                     results['behavioral_sensing']['baseline_note'] = (
                         "Baseline still building — behavioral patterns will be more reliable after ~10 days of data."
                     )
 
-                # Heuristic risk estimate from Layer 3 prose for VectorDB query
-                risk_level = _infer_risk_from_prose(behavioral_prose or "")
+                risk_level = _infer_risk_from_behavioral_state(
+                    behavioral_state,
+                    baseline_warm=baseline_warm,
+                    fallback_prose=behavioral_prose or "",
+                )
             else:
                 logger.info("No raw_days provided — proceeding without behavioral sensing.")
 
@@ -378,6 +453,8 @@ class LLMSchedulerAgent:
                 research_suggestions = self.vectordb.get_intervention_suggestions(
                     risk_level=risk_level,
                     journal_summary=vectordb_summary,
+                    behavioral_state=sensing_result.get("behavioral_state") if raw_days else None,
+                    llm_analysis=llm_analysis if raw_days else None,
                 )
             else:
                 research_suggestions = []
@@ -397,7 +474,11 @@ class LLMSchedulerAgent:
                 behavioral_state=sensing_result.get("behavioral_state") if raw_days else None,
                 raw_days=raw_days,
                 llm_analysis=llm_analysis if raw_days else None,
+                user_timezone=effective_timezone,
             ))
+            if isinstance(proposals, dict):
+                for err in proposals.get("errors", []):
+                    results['errors'].append(str(err))
 
             final_risk = proposals.get('risk_level', risk_level)
             results['journal_summary'] = proposals.get('summary', behavioral_prose or journal_narrative)
@@ -415,21 +496,16 @@ class LLMSchedulerAgent:
             # Server-side conflict filtering: remove proposals that overlap existing events
             existing_events = calendar_summary.get('events', []) if calendar_summary else []
 
-            def _parse_naive(dt_str: str) -> datetime:
-                """Parse ISO datetime and strip timezone to avoid naive/aware comparison errors."""
-                dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
-                return dt.replace(tzinfo=None)
-
             def _has_server_conflict(proposal: dict) -> bool:
                 try:
-                    p_start = _parse_naive(proposal['start_time'])
-                    p_end   = _parse_naive(proposal['end_time'])
+                    p_start = _parse_datetime_in_timezone(proposal['start_time'], effective_timezone)
+                    p_end = _parse_datetime_in_timezone(proposal['end_time'], effective_timezone)
                 except (ValueError, KeyError, TypeError):
-                    return False
+                    return True
                 for ev in existing_events:
                     try:
-                        e_start = _parse_naive(ev['start'])
-                        e_end   = _parse_naive(ev['end'])
+                        e_start = _parse_datetime_in_timezone(ev['start'], effective_timezone)
+                        e_end = _parse_datetime_in_timezone(ev['end'], effective_timezone)
                     except (ValueError, KeyError, TypeError):
                         continue
                     if p_start < e_end - timedelta(minutes=1) and e_start < p_end - timedelta(minutes=1):
@@ -437,6 +513,8 @@ class LLMSchedulerAgent:
                 return False
 
             safe_changes = [p for p in proposed_changes if p.get("action", "add") == "add"]
+            for change in safe_changes:
+                change["user_timezone"] = change.get("user_timezone") or effective_timezone
             unsafe_count = len(proposed_changes) - len(safe_changes)
             if unsafe_count:
                 logger.warning("Dropped %d non-add proposal(s) from LLM output (prompt injection guard)", unsafe_count)
@@ -448,20 +526,18 @@ class LLMSchedulerAgent:
             # ----------------------------------------------------------------
             # Promote Layer 4 suggestions with start_time → proposed_changes
             # ----------------------------------------------------------------
-            # Build a set of (title-ish) keys already present so we don't duplicate.
-            gemini_titles = {
-                c.get('title', '').strip().lower()
-                for c in filtered_changes
-            }
+            # Build stable keys from title + scheduled slot so Layer 4 and
+            # Gemini do not double-book the same recommendation.
+            existing_proposal_keys = {_proposal_dedupe_key(c) for c in filtered_changes}
 
             def _find_free_date(time_str: str, duration_min: int = 30) -> str:
                 """Return YYYY-MM-DD for the nearest conflict-free day for a HH:MM slot."""
-                today = datetime.now().date()
+                today = datetime.now(ZoneInfo(effective_timezone)).date()
                 for offset in range(1, 8):
                     candidate = today + timedelta(days=offset)
                     candidate_str = candidate.strftime('%Y-%m-%d')
                     start_iso = f"{candidate_str}T{time_str}:00"
-                    end_dt = _parse_naive(start_iso) + timedelta(minutes=duration_min)
+                    end_dt = _parse_datetime_in_timezone(start_iso, effective_timezone) + timedelta(minutes=duration_min)
                     end_iso = end_dt.strftime('%Y-%m-%dT%H:%M:%S')
                     probe = {'start_time': start_iso, 'end_time': end_iso}
                     if not _has_server_conflict(probe):
@@ -494,11 +570,11 @@ class LLMSchedulerAgent:
 
                     # Default end_time: 30 minutes after start if not provided
                     if not end_iso:
-                        start_dt = _parse_naive(start_iso)
+                        start_dt = _parse_datetime_in_timezone(start_iso, effective_timezone)
                         end_iso = (start_dt + timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
                     else:
-                        start_dt = _parse_naive(start_iso)
-                        end_dt = _parse_naive(end_iso)
+                        start_dt = _parse_datetime_in_timezone(start_iso, effective_timezone)
+                        end_dt = _parse_datetime_in_timezone(end_iso, effective_timezone)
                         if end_dt <= start_dt:
                             end_iso = (end_dt + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S')
                 except (ValueError, TypeError):
@@ -506,10 +582,9 @@ class LLMSchedulerAgent:
                     continue
 
                 change_text = suggestion.get('change', '')
-                # Simple de-duplication: skip if a Gemini change with the same
-                # leading words already exists in the filtered set.
-                change_key = change_text.strip().lower()[:40]
-                if any(change_key in t for t in gemini_titles):
+                # Skip Layer 4 additions already emitted by the final Gemini pass.
+                probe_key = _proposal_dedupe_key({"title": change_text, "start_time": start_iso})
+                if probe_key in existing_proposal_keys:
                     continue
 
                 entry: Dict[str, Any] = {
@@ -521,9 +596,11 @@ class LLMSchedulerAgent:
                     'category': 'Wellness',
                     'reason': suggestion.get('rationale', ''),
                     'source': 'behavioral_sensing',
+                    'user_timezone': effective_timezone,
                 }
                 if not _has_server_conflict(entry):
                     layer4_additions.append(entry)
+                    existing_proposal_keys.add(_proposal_dedupe_key(entry))
                 else:
                     logger.info("Layer 4 suggestion conflicts with existing event, skipping: %s", change_text)
 
@@ -566,6 +643,7 @@ class LLMSchedulerAgent:
         proposed_changes: Optional[List[Dict[str, Any]]] = None,
         behavioral_state_summary: str = "",
         user_id: str = "default",
+        user_timezone: str = "UTC",
     ) -> Dict[str, Any]:
         """
         Apply proposed calendar changes.
@@ -585,6 +663,7 @@ class LLMSchedulerAgent:
             alongside each feedback record for future personalisation.
         """
         logger.info("Applying calendar changes...")
+        effective_timezone = _valid_timezone(user_timezone)
 
         # Save user comments to memory if provided
         if user_comments:
@@ -612,8 +691,13 @@ class LLMSchedulerAgent:
                 request_calendar = self.calendar_api
                 previous_suggest_only = request_calendar.suggest_only
                 request_calendar.suggest_only = False
+                request_calendar.user_timezone = effective_timezone
             else:
-                request_calendar = CalendarAPI(suggest_only=False, user_id=user_id)
+                request_calendar = CalendarAPI(
+                    suggest_only=False,
+                    user_id=user_id,
+                    user_timezone=effective_timezone,
+                )
             try:
                 applied_titles: set = set()
 
@@ -623,8 +707,15 @@ class LLMSchedulerAgent:
 
                     try:
                         if action == 'add':
-                            start_time = datetime.fromisoformat(change.get('start_time'))
-                            end_time = datetime.fromisoformat(change.get('end_time'))
+                            change_tz = change.get("user_timezone")
+                            if change_tz and change_tz != effective_timezone:
+                                results['failed'].append({
+                                    **change,
+                                    "error": "Proposal timezone does not match request timezone",
+                                })
+                                continue
+                            start_time = _parse_datetime_in_timezone(change.get('start_time'), effective_timezone)
+                            end_time = _parse_datetime_in_timezone(change.get('end_time'), effective_timezone)
 
                             event = CalendarEvent(
                                 id=None,
@@ -637,6 +728,7 @@ class LLMSchedulerAgent:
                             event_id = request_calendar.create_event(event)
                             if event_id:
                                 results['applied'].append({
+                                    **change,
                                     'action': 'created',
                                     'title': event.summary,
                                     'event_id': event_id

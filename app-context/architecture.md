@@ -99,7 +99,7 @@
 | Layer | Module | Description |
 |-------|--------|-------------|
 | Shared business logic | `:shared` | API client, repositories, models, `MotionClassifier`, `PromptBuilder` |
-| Shared UI | `:composeApp` | All 5 screens + design system + navigation |
+| Shared UI | `:composeApp` | 5-tab participant IA, Dev Dashboard/testing route, design system, navigation |
 | Android host | `:androidApp` | Background service, sensors, Room DB |
 | iOS host | `iosApp/` | SwiftUI wrapper, native sensor providers |
 
@@ -107,7 +107,7 @@
 
 | File | Role |
 |------|------|
-| `AutoLifeNavHost.kt` | Root navigation with 5-tab bottom bar |
+| `AutoLifeNavHost.kt` | Root navigation with retained 5-tab bottom bar plus visible Dev Dashboard/testing route |
 | `AgentScreen.kt` | Run analysis, tool status grid |
 | `HealthScreen.kt` | Wellbeing assessment display |
 | `ScheduleScreen.kt` | Visual calendar + proposal selection |
@@ -124,6 +124,13 @@
 - `AutoLifeTheme` — material theme wrapper
 - Components: `SurfaceCard`, `StatusPill`, `DataRow`, `MetricCard`, `EmptyState`
 - iOS-inspired visual style
+
+### Participant-Pilot UI Runtime Contract
+- The documented mobile mockups are readiness targets, not a guarantee that every screen has populated live data on first launch.
+- The app must tolerate first-run storage with zero journals, zero logs, no memory history, no previous analysis result, no calendar proposals, and missing/expired calendar auth.
+- The retained participant IA is five tabs: Agent, Health, Schedule, Journal, and Memory.
+- Dev tools remain visible during testing through a gear/debug route for demo mode, service controls, backend URL override, and raw output inspection; this route may later evolve into Settings.
+- UI state should distinguish loading, empty, partial, error, low-confidence/warmup, and ready states so sparse data is not oversold as a complete assessment.
 
 ---
 
@@ -185,6 +192,8 @@ BACKEND_URL=http://10.0.2.2:8000   # emulator default; use LAN IP for physical d
 - **Memory:** Filesystem-based under `data/memory/`; acceptable for ~100 research users
 - **Calendar:** `suggest_only=True` by default — apply endpoint requires explicit user action
 - **Cleartext:** `network_security_config.xml` limits HTTP to `10.0.2.2` / `localhost` / `127.0.0.1` only
+- **Participant UI privacy:** Raw location, accelerometer, and debug payloads should not appear in participant-facing screens; debug inspection is limited to the visible Dev Dashboard/testing surface during the pilot.
+- **Destructive UX:** Clearing local journals/logs and applying calendar writes must use explicit confirmation and describe the affected scope before execution.
 
 ---
 

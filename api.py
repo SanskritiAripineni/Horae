@@ -28,6 +28,7 @@ import traceback
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import uvicorn
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -263,6 +264,7 @@ class ProcessJournalsRequest(BaseModel):
     journals: List[JournalEntry] = Field(..., max_length=100)
     raw_days: Optional[List[RawDayMarkers]] = Field(None, max_length=365)
     user_id: Optional[str] = "default"
+    user_timezone: str
 
     @field_validator("journals")
     @classmethod
@@ -278,12 +280,24 @@ class ProcessJournalsRequest(BaseModel):
             raise ValueError("user_id must not be blank")
         return _sanitize_user_id(v)
 
+    @field_validator("user_timezone")
+    @classmethod
+    def timezone_valid(cls, v):
+        if not v or not v.strip():
+            raise ValueError("user_timezone must not be blank")
+        try:
+            ZoneInfo(v)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("user_timezone must be a valid IANA timezone") from exc
+        return v
+
 
 class ApplyCalendarRequest(BaseModel):
     changes: List[Dict[str, Any]]
     proposed_changes: Optional[List[Dict[str, Any]]] = None
     user_comments: Optional[str] = Field("", max_length=2_000)
     user_id: Optional[str] = "default"
+    user_timezone: str
 
     @field_validator("user_id")
     @classmethod
@@ -291,6 +305,17 @@ class ApplyCalendarRequest(BaseModel):
         if v is not None and not v.strip():
             raise ValueError("user_id must not be blank")
         return _sanitize_user_id(v)
+
+    @field_validator("user_timezone")
+    @classmethod
+    def timezone_valid(cls, v):
+        if not v or not v.strip():
+            raise ValueError("user_timezone must not be blank")
+        try:
+            ZoneInfo(v)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("user_timezone must be a valid IANA timezone") from exc
+        return v
 
 
 class EnrollRequest(BaseModel):
@@ -536,7 +561,11 @@ async def process_journals(
 
     try:
         result = await asyncio.to_thread(
-            agent_instance.run_from_journals, journals, request.user_id, raw_days
+            agent_instance.run_from_journals,
+            journals,
+            request.user_id,
+            raw_days,
+            request.user_timezone,
         )
         result = _json_safe(result)
     except Exception as e:
@@ -586,6 +615,16 @@ async def apply_calendar(
                 detail=f"Unsigned or tampered calendar changes at positions {invalid_idx}. Re-fetch proposals from /api/process_journals.",
             )
 
+    timezone_mismatch_idx = [
+        i for i, c in enumerate(request.changes)
+        if c.get("user_timezone") != request.user_timezone
+    ]
+    if timezone_mismatch_idx:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Proposal timezone mismatch at positions {timezone_mismatch_idx}. Re-fetch proposals for {request.user_timezone}.",
+        )
+
     try:
         results = await asyncio.to_thread(
             agent_instance.apply_calendar_changes,
@@ -593,6 +632,7 @@ async def apply_calendar(
             request.user_comments,
             request.proposed_changes,
             user_id=request.user_id or "default",
+            user_timezone=request.user_timezone,
         )
     except Exception as e:
         logger.error(

@@ -1,5 +1,7 @@
 package com.autolife.composeapp.platform
 
+import com.autolife.shared.model.ApiJournalEntry
+import com.autolife.shared.model.ProcessJournalsRequest
 import com.autolife.shared.model.ProcessJournalsResponse
 import com.autolife.shared.model.UserMemoryData
 import kotlinx.serialization.json.Json
@@ -12,6 +14,27 @@ class ApiModelCompatibilityTest {
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
+    }
+
+    @Test
+    fun processJournalsRequestWritesRequiredTimezone() {
+        val request = ProcessJournalsRequest(
+            journals = listOf(
+                ApiJournalEntry(
+                    id = "1",
+                    entry_number = 1,
+                    created_at = "2026-05-01 07:00:00",
+                    period = "Auto-generated",
+                    content = "Journal",
+                    timestamp = "2026-05-01 07:00:00",
+                )
+            ),
+            user_timezone = "America/Phoenix",
+            user_id = "u1",
+        )
+
+        val encoded = json.encodeToString(ProcessJournalsRequest.serializer(), request)
+        assertEquals(true, encoded.contains("\"user_timezone\":\"America/Phoenix\""))
     }
 
     @Test
@@ -112,6 +135,7 @@ class ApiModelCompatibilityTest {
                   "title": "Wind-down",
                   "reason": "Reduce late screen use",
                   "source": "behavioral_sensing",
+                  "user_timezone": "America/Phoenix",
                   "change_token": "signed"
                 }
               ]
@@ -126,6 +150,7 @@ class ApiModelCompatibilityTest {
         assertEquals("paper.pdf", response.analysis_details?.research_sources?.first()?.source)
         assertEquals("Reduce late screen use", response.proposed_changes.first().reason)
         assertEquals("behavioral_sensing", response.proposed_changes.first().source)
+        assertEquals("America/Phoenix", response.proposed_changes.first().user_timezone)
         assertEquals("signed", response.proposed_changes.first().change_token)
     }
 

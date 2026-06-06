@@ -42,7 +42,7 @@ class Config:
     )
     
     # Calendar settings
-    CALENDAR_TIMEZONE: str = "America/Chicago"
+    CALENDAR_TIMEZONE: str = "UTC"
     CALENDAR_SUGGEST_ONLY: bool = True
     
     # Workload settings

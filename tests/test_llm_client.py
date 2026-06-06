@@ -217,6 +217,37 @@ class TestGenerateScheduleProposals:
         assert "No yoga" in prompt
         assert "Prefer running" in prompt
 
+    def test_user_timezone_in_prompt_and_changes(self):
+        client, mock = _make_client()
+        _set_generate_response(mock, json.dumps({
+            "risk_level": "minimal",
+            "summary": "",
+            "concerns": [],
+            "positives": [],
+            "recommendations": [],
+            "proposed_changes": [
+                {
+                    "action": "add",
+                    "title": "Walk",
+                    "start_time": "2026-04-22T07:00:00",
+                    "end_time": "2026-04-22T07:30:00",
+                }
+            ],
+        }))
+
+        result = client.generate_schedule_proposals(
+            journal_narrative="",
+            behavioral_prose=None,
+            risk_level="minimal",
+            calendar_summary=self._base_calendar(),
+            research_context=[],
+            user_timezone="America/Phoenix",
+        )
+
+        prompt = mock.models.generate_content.call_args.kwargs.get("contents", "")
+        assert "timezone: America/Phoenix" in prompt
+        assert result["proposed_changes"][0]["user_timezone"] == "America/Phoenix"
+
     def test_returns_fallback_on_invalid_json(self):
         client, mock = _make_client()
         _set_generate_response(mock, "not json at all")

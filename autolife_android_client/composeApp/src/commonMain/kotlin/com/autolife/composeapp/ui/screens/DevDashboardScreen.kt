@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Battery5Bar
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -61,6 +62,8 @@ import com.autolife.composeapp.ui.components.SectionHeader
 import com.autolife.composeapp.ui.components.StatusPill
 import com.autolife.composeapp.ui.components.SurfaceCard
 import com.autolife.composeapp.ui.theme.AutoLifeSemantic
+import com.autolife.shared.network.AutoLifeApi
+import com.autolife.shared.repository.AnalysisRepository
 import com.autolife.shared.platform.currentTimeMillis
 import kotlinx.coroutines.delay
 import kotlin.math.pow
@@ -85,7 +88,21 @@ fun DevDashboardScreen() {
     val lastJournal by PlatformStateProvider.lastJournal.collectAsState()
     val isPermanentMotion by PlatformStateProvider.isPermanentMotionEnabled.collectAsState()
     val batteryState by PlatformStateProvider.batteryState.collectAsState()
+    val analysisResult by AnalysisRepository.result.collectAsState()
     val locationPreview = rememberLocationPreviewImage(locationState.mapPreviewBytes)
+    val calendarStatus by produceState(initialValue = "Checking") {
+        value = try {
+            if (!AutoLifeApi.isInitialized) {
+                "API not initialized"
+            } else if (AutoLifeApi.getOAuthStatus(AnalysisRepository.userId).connected) {
+                "Connected"
+            } else {
+                "Not connected"
+            }
+        } catch (e: Exception) {
+            "Unknown: ${e.message ?: "status check failed"}"
+        }
+    }
 
     var isGenerating by remember { mutableStateOf(false) }
     var batteryNotes by remember { mutableStateOf("") }
@@ -121,6 +138,18 @@ fun DevDashboardScreen() {
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+
+        SectionHeader("Calendar Diagnostics")
+        SurfaceCard {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(Icons.Default.CalendarMonth, null, Modifier.size(20.dp), tint = AutoLifeSemantic.toolCalendar)
+                Text("Google Calendar", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+            }
+            Spacer(Modifier.height(8.dp))
+            DataRow("Connection", calendarStatus)
+            DataRow("Events in last analysis", (analysisResult?.calendar_summary?.event_count ?: 0).toString())
+            DataRow("Pending proposals", (analysisResult?.proposed_changes?.size ?: 0).toString())
         }
 
         SectionHeader("Controls")

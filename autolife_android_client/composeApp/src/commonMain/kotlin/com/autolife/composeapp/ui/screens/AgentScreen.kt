@@ -41,12 +41,14 @@ import com.autolife.composeapp.ui.theme.AutoLifeSemantic
 import com.autolife.shared.db.DatabaseRepository
 import com.autolife.shared.model.*
 import com.autolife.shared.network.AutoLifeApi
+import com.autolife.shared.platform.currentTimeZoneId
 import com.autolife.shared.repository.AnalysisRepository
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -55,8 +57,15 @@ class AgentViewModel : ViewModel() {
     private var analysisJob: Job? = null
     var lastJournalCount by mutableStateOf(0)
         private set
+    var localJournalCount by mutableStateOf(0)
+        private set
 
     init {
+        viewModelScope.launch {
+            DatabaseRepository.observeJournals()
+                .catch { localJournalCount = 0 }
+                .collect { journals -> localJournalCount = journals.size }
+        }
         // Auto-trigger analysis when requested via deep link / intent
         viewModelScope.launch {
             repo.pendingRunAnalysis.collect { pending ->
@@ -77,7 +86,7 @@ class AgentViewModel : ViewModel() {
                     DatabaseRepository.getAllJournals().takeLast(10)
                 }
                 if (dbJournals.isEmpty()) {
-                    repo.setError("No journals found. Start the AutoLife service to collect data first.")
+                    repo.setError("App is still building its first journal. Keep collection on and try again after a journal appears.")
                     return@launch
                 }
                 lastJournalCount = dbJournals.size
@@ -93,7 +102,12 @@ class AgentViewModel : ViewModel() {
                 }
                 val rawDays = getBehavioralMarkers(14).takeIf { it.isNotEmpty() }
                 val response = AutoLifeApi.processJournals(
-                    ProcessJournalsRequest(journals = apiJournals, raw_days = rawDays, user_id = repo.userId)
+                    ProcessJournalsRequest(
+                        journals = apiJournals,
+                        user_timezone = currentTimeZoneId(),
+                        raw_days = rawDays,
+                        user_id = repo.userId,
+                    )
                 )
                 repo.setResult(response)
                 repo.clearProposals()
@@ -148,9 +162,16 @@ fun AgentScreen(
     var expandedTool by remember { mutableStateOf<ExpandedTool?>(null) }
     val health = result?.health
     val recommendation = result?.recommendations?.firstOrNull()
+    val journalCount = maxOf(
+        viewModel.localJournalCount,
+        viewModel.lastJournalCount,
+        result?.analysis_details?.journal_count ?: 0,
+    )
+    val hasJournals = journalCount > 0
+    val canRunAnalysis = !isLoading && hasJournals
     val sourceCounts = sourceCounts(
         result = result,
-        lastJournalCount = viewModel.lastJournalCount,
+        localJournalCount = journalCount,
         sensorsLive = serviceState.isRunning,
     )
 
@@ -184,12 +205,15 @@ fun AgentScreen(
                             isLoading -> "Analyzing"
                             error != null -> "Needs attention"
                             result != null -> "Analysis ready"
-                            else -> "Awaiting analysis"
+                            serviceState.isRunning && !hasJournals -> "Collecting context"
+                            !serviceState.isRunning -> "Collection paused"
+                            else -> "Ready to analyze"
                         },
                         color = when {
                             isLoading -> MaterialTheme.colorScheme.tertiary
                             error != null -> MaterialTheme.colorScheme.error
                             result != null -> AutoLifeSemantic.riskColor(health?.risk_level)
+                            serviceState.isRunning && !hasJournals -> MaterialTheme.colorScheme.tertiary
                             else -> MaterialTheme.colorScheme.primary
                         },
                         showDot = true,
@@ -197,7 +221,12 @@ fun AgentScreen(
                 }
                 Spacer(Modifier.height(10.dp))
                 SerifHeadline(
-                    text = riskHeadline(health?.risk_level ?: ""),
+                    text = agentHeadline(
+                        riskLevel = health?.risk_level,
+                        isLoading = isLoading,
+                        isCollecting = serviceState.isRunning,
+                        hasJournals = hasJournals,
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(16.dp))
@@ -221,7 +250,10 @@ fun AgentScreen(
                 Text(
                     text = result?.ui_summary?.summary?.takeIf { it.isNotBlank() }
                         ?: health?.behavioral_context?.takeIf { it.isNotBlank() }
-                        ?: "Run analysis when you want AutoLife to combine journals, sensor markers, research, and calendar context into one focused plan.",
+                        ?: agentEmptySummary(
+                            isCollecting = serviceState.isRunning,
+                            hasJournals = hasJournals,
+                        ),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -253,11 +285,12 @@ fun AgentScreen(
                 } else {
                     Button(
                         onClick = { viewModel.runAnalysis() },
+                        enabled = canRunAnalysis,
                         modifier = Modifier.fillMaxWidth().testTag("btn_run_analysis"),
                     ) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Run Analysis")
+                        Text(runAnalysisLabel(isCollecting = serviceState.isRunning, hasJournals = hasJournals))
                     }
                 }
             }
@@ -267,9 +300,9 @@ fun AgentScreen(
             SectionHeader(title = "Recommended next step")
             PracticeRow(
                 icon = iconForRecommendation(recommendation?.category),
-                title = recommendationTitle(recommendation),
+                title = recommendationTitle(recommendation, serviceState.isRunning, hasJournals),
                 subtitle = recommendation?.action
-                    ?: "Refresh analysis to get the next best practice from your current context.",
+                    ?: recommendationSubtitle(serviceState.isRunning, hasJournals),
                 tags = recommendationTags(recommendation),
                 accent = colorForCategory(recommendation?.category),
                 onClick = onOpenHealth,
@@ -307,10 +340,10 @@ private data class AgentSourceCounts(
 
 private fun sourceCounts(
     result: ProcessJournalsResponse?,
-    lastJournalCount: Int,
+    localJournalCount: Int,
     sensorsLive: Boolean,
 ): AgentSourceCounts {
-    val journalCount = result?.analysis_details?.journal_count?.takeIf { it > 0 } ?: lastJournalCount
+    val journalCount = result?.analysis_details?.journal_count?.takeIf { it > 0 } ?: localJournalCount
     val researchCount = result?.analysis_details?.research_sources?.size ?: 0
     val eventCount = result?.calendar_summary?.event_count ?: 0
     return AgentSourceCounts(
@@ -318,8 +351,24 @@ private fun sourceCounts(
         journals = if (journalCount > 0) "$journalCount entries" else "--",
         research = if (researchCount > 0) "$researchCount papers" else "--",
         calendar = if (eventCount > 0) "$eventCount events" else "--",
-        dataWindow = if (journalCount > 0) "Based on $journalCount journals" else "No recent data",
+        dataWindow = if (journalCount > 0) "$journalCount journal${if (journalCount == 1) "" else "s"} ready" else "No journals yet",
     )
+}
+
+private fun agentHeadline(
+    riskLevel: String?,
+    isLoading: Boolean,
+    isCollecting: Boolean,
+    hasJournals: Boolean,
+): String {
+    if (isLoading) return "Building your read"
+    if (!riskLevel.isNullOrBlank()) return riskHeadline(riskLevel)
+    return when {
+        isCollecting && !hasJournals -> "Collecting initial context"
+        !isCollecting -> "Start background collection"
+        hasJournals -> "Ready for analysis"
+        else -> "Ready when context appears"
+    }
 }
 
 private fun riskHeadline(riskLevel: String): String = when (riskLevel.lowercase()) {
@@ -328,6 +377,23 @@ private fun riskHeadline(riskLevel: String): String = when (riskLevel.lowercase(
     "moderate" -> "Moderate stress"
     "severe", "high" -> "High stress"
     else -> "Ready to analyze"
+}
+
+private fun agentEmptySummary(isCollecting: Boolean, hasJournals: Boolean): String = when {
+    isCollecting && !hasJournals ->
+        "App is collecting motion, location context, and journal windows. Analysis unlocks after the first journal is available."
+    !isCollecting ->
+        "Start collection when you are ready. App needs at least one journal before it can produce a wellbeing read."
+    hasJournals ->
+        "Run analysis to combine recent journals, sensor markers, research, and calendar context into a focused plan."
+    else ->
+        "App will show a wellbeing read here once collection has produced a journal."
+}
+
+private fun runAnalysisLabel(isCollecting: Boolean, hasJournals: Boolean): String = when {
+    hasJournals -> "Run Analysis"
+    isCollecting -> "Waiting for first journal"
+    else -> "Start collection first"
 }
 
 @Composable
@@ -369,9 +435,21 @@ private fun colorForCategory(category: String?): Color = when (category?.lowerca
     else -> MaterialTheme.colorScheme.primary
 }
 
-private fun recommendationTitle(rec: Recommendation?): String {
-    if (rec == null) return "Collect a fresh read"
+private fun recommendationTitle(rec: Recommendation?, isCollecting: Boolean, hasJournals: Boolean): String {
+    if (rec == null) {
+        return when {
+            hasJournals -> "Run a wellbeing read"
+            isCollecting -> "Let the first journal build"
+            else -> "Start collection"
+        }
+    }
     return rec.category.ifBlank { "Wellbeing" }.replaceFirstChar { it.uppercase() }
+}
+
+private fun recommendationSubtitle(isCollecting: Boolean, hasJournals: Boolean): String = when {
+    hasJournals -> "Run analysis to get a personalized next step from your current context."
+    isCollecting -> "Keep collection on; your first journal appears after enough context is available."
+    else -> "Turn on collection when you are ready to begin building context."
 }
 
 @Composable
@@ -395,9 +473,9 @@ private fun GettingStartedCard(onStartService: () -> Unit) {
         )
         Spacer(Modifier.height(12.dp))
         listOf(
-            "Start the AutoLife service below to begin collecting data",
-            "Check the Journal tab — entries appear as data accumulates",
-            "Come back here and tap Run Analysis",
+            "Start collection to begin building local context",
+            "Check the Journal tab; entries appear after enough context is available",
+            "Return here once a journal exists, then run analysis",
         ).forEachIndexed { i, step ->
             Row(
                 modifier = Modifier.padding(vertical = 4.dp),
@@ -537,7 +615,7 @@ private fun LiveAutoLifeCard(modifier: Modifier, onClick: () -> Unit) {
     ToolCard(
         modifier = modifier,
         accentColor = AutoLifeSemantic.toolAutoLife,
-        title = "AutoLife",
+        title = "App",
         subtitle = "Motion & Location",
         dataLines = listOf(
             "Activity" to motionState.detectedClass,
@@ -562,7 +640,7 @@ private fun ToolDetailSheet(
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
     ) {
         val (sheetTitle, accentColor) = when (tool) {
-            ExpandedTool.AUTOLIFE -> "AutoLife — Motion & Location" to AutoLifeSemantic.toolAutoLife
+            ExpandedTool.AUTOLIFE -> "App — Motion & Location" to AutoLifeSemantic.toolAutoLife
             ExpandedTool.WELLBEING -> "Wellbeing — Behavioral State" to AutoLifeSemantic.toolKEmo
             ExpandedTool.VECTORDB -> "VectorDB — Wellness Research" to AutoLifeSemantic.toolVectorDB
             ExpandedTool.CALENDAR -> "Calendar — Events & Tasks" to AutoLifeSemantic.toolCalendar
@@ -617,7 +695,7 @@ private fun AutoLifeDetail() {
     SurfaceCard {
         SectionHeader(title = "Description")
         Text(
-            "AutoLife reads motion sensors and location data to generate journal entries. " +
+            "App reads motion sensors and location data to generate journal entries. " +
             "It classifies activity (walking, stationary, vehicle) and records GPS coordinates for context fusion.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

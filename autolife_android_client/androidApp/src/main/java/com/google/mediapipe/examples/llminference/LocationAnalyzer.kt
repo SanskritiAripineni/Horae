@@ -111,6 +111,7 @@ class LocationAnalyzer(private val context: Context) : Closeable {
         val reusedMapContext = cachedMap != null
         val cachedLlmFresh = cachedMap != null &&
             (System.currentTimeMillis() - cachedMap.updatedAtMs) < LOCATION_LLM_CACHE_TTL_MS
+        val cachedSsidMatches = cachedMap?.ssidFingerprint == ssidFingerprint
         val mapContext = when {
             cachedMap != null -> cachedMap.mapContext
             location != null -> generateGeocoderContext(location, gridKey)
@@ -126,16 +127,16 @@ class LocationAnalyzer(private val context: Context) : Closeable {
         // before falling back to the single-previous-log check or a fresh Gemini call.
         val ssidContext = when {
             sanitizedSsids.isEmpty() -> null
-            cachedLlmFresh && !cachedMap?.ssidContext.isNullOrBlank() -> cachedMap?.ssidContext
+            cachedLlmFresh && cachedSsidMatches && !cachedMap?.ssidContext.isNullOrBlank() -> cachedMap?.ssidContext
             previousGridMatches && previousSsidMatches && !previousLog?.ssidContext.isNullOrBlank() -> previousLog?.ssidContext
             else -> generateSsidContext(sanitizedSsids)
         }
         val reusedSsidContext = sanitizedSsids.isNotEmpty() &&
-            ((cachedLlmFresh && !cachedMap?.ssidContext.isNullOrBlank()) ||
+            ((cachedLlmFresh && cachedSsidMatches && !cachedMap?.ssidContext.isNullOrBlank()) ||
                 (previousGridMatches && previousSsidMatches && !previousLog?.ssidContext.isNullOrBlank()))
 
         val fusedLocationContext = when {
-            cachedLlmFresh && !cachedMap?.fusedLocationContext.isNullOrBlank() -> cachedMap?.fusedLocationContext
+            cachedLlmFresh && cachedSsidMatches && !cachedMap?.fusedLocationContext.isNullOrBlank() -> cachedMap?.fusedLocationContext
             previousGridMatches && previousSsidMatches && !previousLog?.fusedLocationContext.isNullOrBlank() -> previousLog?.fusedLocationContext
             listOf(mapContext, osmContext, ssidContext).count { !it.isNullOrBlank() } >= 2 -> fuseLocationContexts(mapContext, osmContext, ssidContext)
             !ssidContext.isNullOrBlank() -> ssidContext
@@ -173,7 +174,7 @@ class LocationAnalyzer(private val context: Context) : Closeable {
         // cycles at the same location skip Gemini entirely.
         if (gridKey != null && mapContext != null &&
             (!ssidContext.isNullOrBlank() || !fusedLocationContext.isNullOrBlank()) &&
-            (cachedMap?.ssidContext.isNullOrBlank() || cachedMap?.fusedLocationContext.isNullOrBlank())
+            (!cachedSsidMatches || cachedMap?.ssidContext.isNullOrBlank() || cachedMap?.fusedLocationContext.isNullOrBlank())
         ) {
             cacheStorage.put(
                 LocationContextCacheEntry(
@@ -185,6 +186,7 @@ class LocationAnalyzer(private val context: Context) : Closeable {
                     osmContext = osmContext ?: cachedMap?.osmContext,
                     ssidContext = ssidContext ?: cachedMap?.ssidContext,
                     fusedLocationContext = fusedLocationContext ?: cachedMap?.fusedLocationContext,
+                    ssidFingerprint = ssidFingerprint,
                 )
             )
         }

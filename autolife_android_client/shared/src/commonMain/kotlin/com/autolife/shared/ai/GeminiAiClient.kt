@@ -1,9 +1,11 @@
 package com.autolife.shared.ai
 
 import io.ktor.client.*
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.*
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -13,7 +15,13 @@ import kotlin.io.encoding.ExperimentalEncodingApi
  */
 class GeminiAiClient(private val apiKey: String) : AiClient {
 
-    private val client = HttpClient()
+    private val client = HttpClient {
+        install(HttpTimeout) {
+            requestTimeoutMillis = 30_000
+            connectTimeoutMillis = 10_000
+            socketTimeoutMillis = 30_000
+        }
+    }
     private val json = Json { ignoreUnknownKeys = true }
     private val modelName = "gemini-2.0-flash-lite"
     private val baseUrl = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -42,11 +50,7 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
             }
             put("generationConfig", defaultGenerationConfig)
         }
-        val response = client.post("$baseUrl/$modelName:generateContent") {
-            parameter("key", apiKey)
-            contentType(ContentType.Application.Json)
-            setBody(body.toString())
-        }
+        val response = postWithRetry(body)
         return extractText(response.bodyAsText())
     }
 
@@ -70,11 +74,7 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
             }
             put("generationConfig", imageGenerationConfig)
         }
-        val response = client.post("$baseUrl/$modelName:generateContent") {
-            parameter("key", apiKey)
-            contentType(ContentType.Application.Json)
-            setBody(body.toString())
-        }
+        val response = postWithRetry(body)
         return extractText(response.bodyAsText())
     }
 
@@ -96,6 +96,27 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
             ?.jsonPrimitive?.content
             ?.takeIf { it.isNotBlank() }
             ?: throw IllegalStateException("Gemini returned no text")
+    }
+
+    private suspend fun postWithRetry(body: JsonObject): HttpResponse {
+        var lastError: Throwable? = null
+        repeat(3) { attempt ->
+            try {
+                val response = client.post("$baseUrl/$modelName:generateContent") {
+                    parameter("key", apiKey)
+                    contentType(ContentType.Application.Json)
+                    setBody(body.toString())
+                }
+                if (response.status.value !in 500..599 && response.status.value != 429) {
+                    return response
+                }
+                lastError = IllegalStateException("Gemini returned HTTP ${response.status.value}")
+            } catch (t: Throwable) {
+                lastError = t
+            }
+            if (attempt < 2) delay(500L * (1L shl attempt))
+        }
+        throw IllegalStateException("Gemini request failed after retries", lastError)
     }
 
     private fun requireUsableApiKey() {

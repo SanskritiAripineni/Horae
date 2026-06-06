@@ -50,7 +50,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.autolife.composeapp.platform.currentDateKey
-import com.autolife.composeapp.platform.openNativeCalendar
 import com.autolife.composeapp.ui.DateFormat
 import com.autolife.composeapp.ui.ProposalApplier
 import com.autolife.composeapp.ui.SnackbarBus
@@ -313,19 +312,34 @@ class ScheduleViewModel : ViewModel() {
     fun applySelected() {
         val current = AnalysisRepository.selectedProposals.value
         if (current.isEmpty()) return
-        viewModelScope.launch { ProposalApplier.apply(current) }
+        viewModelScope.launch {
+            if (calendarConnected != true) {
+                SnackbarBus.emit("Connect Google Calendar before applying changes")
+                return@launch
+            }
+            ProposalApplier.apply(current)
+        }
+    }
+
+    fun applyAll(changes: List<ProposedChange>) {
+        if (changes.isEmpty()) return
+        viewModelScope.launch {
+            if (calendarConnected != true) {
+                SnackbarBus.emit("Connect Google Calendar before applying changes")
+                return@launch
+            }
+            ProposalApplier.apply(changes)
+        }
     }
 }
 
-// ── Compact header card ──────────────────────────────────────
+// ── Calendar connection card ─────────────────────────────────
 
 @Composable
-private fun ScheduleHeaderCard(
+private fun CalendarConnectionCard(
     connected: Boolean?,
     loading: Boolean,
     error: String?,
-    eventCount: Int,
-    proposalCount: Int,
     onConnect: () -> Unit,
     onRefresh: () -> Unit,
 ) {
@@ -339,23 +353,44 @@ private fun ScheduleHeaderCard(
         false -> "Not connected"
         null -> "Checking…"
     }
+    val title = when (connected) {
+        true -> "Google Calendar connected"
+        false -> "Connect Google Calendar"
+        null -> "Checking Google Calendar"
+    }
+    val description = when (connected) {
+        true -> "Calendar diagnostics moved out of the main proposal flow."
+        false -> "App needs calendar access before it can place accepted proposals on your schedule."
+        null -> "Checking whether App can apply schedule changes."
+    }
 
     SurfaceCard {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(
+                    modifier = Modifier.padding(top = 7.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Box(
                         Modifier
                             .size(8.dp)
                             .background(statusColor, CircleShape)
                     )
+                }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
                     Text(
-                        "Google Calendar · $statusText",
-                        style = MaterialTheme.typography.bodySmall,
+                        description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "Status: $statusText",
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -375,15 +410,64 @@ private fun ScheduleHeaderCard(
             if (error != null) {
                 Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
+        }
+    }
+}
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+@Composable
+private fun WellbeingPlanCard(result: ProcessJournalsResponse) {
+    val narrative = result.ui_summary?.summary?.takeIf { it.isNotBlank() }
+        ?: result.health?.behavioral_context?.takeIf { it.isNotBlank() }
+        ?: result.journal_summary?.takeIf { it.isNotBlank() }
+        ?: "App found enough context to propose schedule changes, but this run did not return a longer written interpretation."
+    val recommendations = result.recommendations.take(3)
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                SourceStatCell(Icons.AutoMirrored.Filled.EventNote, "Events", "$eventCount", Modifier.weight(1f))
-                SourceStatCell(Icons.Default.CheckCircle, "Proposals", "$proposalCount", Modifier.weight(1f))
+    SurfaceCard {
+        Text(
+            "What App believes is happening",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            narrative,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (recommendations.isNotEmpty()) {
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "How to improve it",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(6.dp))
+            recommendations.forEachIndexed { index, rec ->
+                if (index > 0) MutedDivider()
+                Column(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        StatusPill(
+                            text = rec.category.ifBlank { "Recommendation" },
+                            color = AutoLifeSemantic.categoryHealth,
+                        )
+                        rec.priority?.takeIf { it.isNotBlank() }?.let {
+                            Text(
+                                it.replaceFirstChar { ch -> ch.uppercase() },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Text(rec.action, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                    rec.mechanism?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
         }
     }
@@ -435,23 +519,23 @@ fun ScheduleScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            item {
-                ScheduleHeaderCard(
-                    connected = viewModel.calendarConnected,
-                    loading = viewModel.oauthLoading,
-                    error = viewModel.oauthError,
-                    eventCount = 0,
-                    proposalCount = 0,
-                    onConnect = { viewModel.requestAuthUrl() },
-                    onRefresh = { viewModel.checkCalendarStatus() },
-                )
+            if (viewModel.calendarConnected != true || viewModel.oauthError != null || viewModel.oauthLoading) {
+                item {
+                    CalendarConnectionCard(
+                        connected = viewModel.calendarConnected,
+                        loading = viewModel.oauthLoading,
+                        error = viewModel.oauthError,
+                        onConnect = { viewModel.requestAuthUrl() },
+                        onRefresh = { viewModel.checkCalendarStatus() },
+                    )
+                }
             }
             item {
                 SurfaceCard {
                     ActionableEmptyState(
                         icon = Icons.AutoMirrored.Filled.EventNote,
                         title = "No schedule plan yet",
-                        description = "Calendar connection gives AutoLife context. Analysis turns that context into weekly schedule suggestions.",
+                        description = "Schedule proposals appear after App has journals and wellbeing context to analyze.",
                         action = {
                             Button(onClick = onOpenAgent) { Text("Run analysis") }
                         },
@@ -471,7 +555,7 @@ fun ScheduleScreen(
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Proposals will appear here after analysis.",
+                        "Weekly proposals will appear here after a journal-backed analysis.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -519,18 +603,19 @@ fun ScheduleScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Compact header
-            item {
-                ScheduleHeaderCard(
-                    connected = viewModel.calendarConnected,
-                    loading = viewModel.oauthLoading,
-                    error = viewModel.oauthError,
-                    eventCount = eventBars.size,
-                    proposalCount = proposalBars.size,
-                    onConnect = { viewModel.requestAuthUrl() },
-                    onRefresh = { viewModel.checkCalendarStatus() },
-                )
+            if (viewModel.calendarConnected != true || viewModel.oauthError != null || viewModel.oauthLoading) {
+                item {
+                    CalendarConnectionCard(
+                        connected = viewModel.calendarConnected,
+                        loading = viewModel.oauthLoading,
+                        error = viewModel.oauthError,
+                        onConnect = { viewModel.requestAuthUrl() },
+                        onRefresh = { viewModel.checkCalendarStatus() },
+                    )
+                }
             }
+
+            item { WellbeingPlanCard(result!!) }
 
             // AI Proposals
             if (result!!.proposed_changes.isNotEmpty()) {
@@ -549,17 +634,29 @@ fun ScheduleScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            "AI proposals · ${result!!.proposed_changes.size} ready",
+                            "Schedule proposals · ${result!!.proposed_changes.size}",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        if (clearProposals.isNotEmpty()) {
-                            TextButton(onClick = {
-                                clearProposals.forEach {
-                                    if (!selectedProposals.contains(it)) AnalysisRepository.addProposal(it)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (clearProposals.isNotEmpty()) {
+                                TextButton(
+                                    onClick = { viewModel.applyAll(clearProposals) },
+                                    enabled = !isApplying && viewModel.calendarConnected == true,
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                ) {
+                                    Text("Apply all to Google", style = MaterialTheme.typography.labelMedium)
                                 }
-                            }) {
-                                Text("Select all", style = MaterialTheme.typography.labelMedium)
+                                TextButton(
+                                    onClick = {
+                                        clearProposals.forEach {
+                                            if (!selectedProposals.contains(it)) AnalysisRepository.addProposal(it)
+                                        }
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                ) {
+                                    Text("Select", style = MaterialTheme.typography.labelMedium)
+                                }
                             }
                         }
                     }
@@ -600,7 +697,7 @@ fun ScheduleScreen(
                 if (conflictProposals.isNotEmpty()) {
                     item {
                         Text(
-                            "⚠ Conflicts — review before applying",
+                            "Conflicts — review before applying",
                             style = MaterialTheme.typography.labelMedium,
                             color = AutoLifeSemantic.riskMild,
                             modifier = Modifier.padding(top = 4.dp),
@@ -627,12 +724,24 @@ fun ScheduleScreen(
                 item {
                     Button(
                         onClick = { viewModel.applySelected() },
-                        enabled = selectedProposals.isNotEmpty() && !isApplying,
+                        enabled = selectedProposals.isNotEmpty() && !isApplying && viewModel.calendarConnected == true,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
                             if (isApplying) "Applying…"
-                            else "Apply ${selectedProposals.size} change${if (selectedProposals.size == 1) "" else "s"}",
+                            else if (viewModel.calendarConnected != true) "Connect calendar to apply"
+                            else "Apply ${selectedProposals.size} to Google Calendar",
+                        )
+                    }
+                }
+            } else {
+                item {
+                    SurfaceCard {
+                        ActionableEmptyState(
+                            icon = Icons.Default.CheckCircle,
+                            title = "No schedule changes waiting",
+                            description = "The latest wellbeing analysis does not have calendar proposals to apply.",
+                            action = null,
                         )
                     }
                 }
@@ -651,7 +760,7 @@ fun ScheduleScreen(
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        if (showCalendar) "Hide calendar" else "Show calendar",
+                        if (showCalendar) "Hide calendar preview" else "Show calendar preview",
                         style = MaterialTheme.typography.labelLarge,
                     )
                     Spacer(Modifier.width(4.dp))
@@ -719,23 +828,6 @@ fun ScheduleScreen(
                         LegendDot("AI proposal", proposalColor, dashed = true)
                     }
                 }
-
-                // Bottom padding so FAB doesn't cover content
-                item { Spacer(Modifier.height(64.dp)) }
-            }
-        }
-
-        // FAB to open native calendar app (only when grid is visible)
-        if (showCalendar) {
-            FloatingActionButton(
-                onClick = { openNativeCalendar() },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp),
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            ) {
-                Icon(Icons.Default.CalendarMonth, contentDescription = "Open in Calendar")
             }
         }
 
@@ -1195,7 +1287,7 @@ private fun ProposalRow(
                 IconButton(onClick = onToggleExpand, modifier = Modifier.size(24.dp)) {
                     Icon(
                         if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        if (isExpanded) "Collapse" else "Expand",
+                        if (isExpanded) "Collapse ${change.title ?: "proposal"} details" else "Expand ${change.title ?: "proposal"} details",
                         modifier = Modifier.size(18.dp),
                     )
                 }

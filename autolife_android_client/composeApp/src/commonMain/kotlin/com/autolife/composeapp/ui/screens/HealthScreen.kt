@@ -55,7 +55,7 @@ fun HealthScreen(
                     ActionableEmptyState(
                         icon = Icons.Default.FavoriteBorder,
                         title = "No health assessment yet",
-                        description = "Run an analysis to turn your journals, sensor data, and calendar context into a personalized wellbeing read.",
+                        description = "After at least one journal exists, run analysis to turn participant context, sensor coverage, and calendar data into a wellbeing read.",
                         action = {
                             Button(onClick = onOpenAgent) {
                                 Text("Go to Agent")
@@ -86,6 +86,10 @@ fun HealthScreen(
         behavioralContext = mh?.behavioral_context,
         journalSummary = result!!.journal_summary,
     )
+    val journalCount = result!!.analysis_details?.journal_count ?: 0
+    val researchCount = researchSources.size
+    val eventCount = result!!.calendar_summary?.event_count ?: result!!.analysis_details?.calendar_summary?.event_count ?: 0
+    val hasBackendNotes = result!!.errors.isNotEmpty()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -105,7 +109,7 @@ fun HealthScreen(
                     Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Based on ${result!!.analysis_details?.journal_count?.takeIf { it > 0 } ?: result!!.proposed_changes.size} recent inputs",
+                        analysisBasisText(journalCount),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -117,6 +121,15 @@ fun HealthScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+
+        item {
+            DataReadinessCard(
+                journalCount = journalCount,
+                researchCount = researchCount,
+                eventCount = eventCount,
+                hasBackendNotes = hasBackendNotes,
+            )
         }
 
         item {
@@ -146,7 +159,7 @@ fun HealthScreen(
         }
 
         if (result!!.errors.isNotEmpty()) {
-            item { SectionHeader(title = "Errors") }
+            item { SectionHeader(title = "Pipeline notes") }
             items(result!!.errors) { err ->
                 ErrorCard(title = "Pipeline note", message = err)
             }
@@ -241,6 +254,84 @@ fun HealthScreen(
             }
         }
     }
+}
+
+@Composable
+private fun DataReadinessCard(
+    journalCount: Int,
+    researchCount: Int,
+    eventCount: Int,
+    hasBackendNotes: Boolean,
+) {
+    SurfaceCard {
+        SectionHeader(title = "Confidence & data readiness")
+        Spacer(Modifier.height(4.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            ReadinessLine(
+                label = "Journal baseline",
+                value = when {
+                    journalCount <= 0 -> "No journals in this run"
+                    journalCount < 3 -> "$journalCount journal; early read"
+                    journalCount < 7 -> "$journalCount journals; baseline warming up"
+                    else -> "$journalCount journals; stronger baseline"
+                },
+            )
+            ReadinessLine(
+                label = "Sensor coverage",
+                value = "Coverage varies by platform and granted permissions",
+            )
+            ReadinessLine(
+                label = "Calendar context",
+                value = if (eventCount > 0) "$eventCount events included" else "No calendar events included",
+            )
+            ReadinessLine(
+                label = "Research grounding",
+                value = if (researchCount > 0) "$researchCount sources returned" else "No source titles returned",
+            )
+            if (hasBackendNotes) {
+                Text(
+                    "Some backend steps reported notes below, so recommendations may be partial.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            } else if (journalCount in 1..2) {
+                Text(
+                    "Treat this as an early read until App has more journals and sensor coverage.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReadinessLine(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(0.9f),
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1.2f),
+        )
+    }
+}
+
+private fun analysisBasisText(journalCount: Int): String = when {
+    journalCount <= 0 -> "Based on limited current data"
+    journalCount == 1 -> "Based on 1 journal; early read"
+    journalCount < 7 -> "Based on $journalCount journals; baseline warming up"
+    else -> "Based on $journalCount journals"
 }
 
 private fun healthHeadline(riskLevel: String): String = when (riskLevel.lowercase()) {

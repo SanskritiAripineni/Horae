@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.autolife.composeapp.ui.components.withSerif
@@ -69,11 +70,11 @@ fun JournalScreen(
     if (showClearDialog) {
         ConfirmClearDialog(
             title = "Clear all journals?",
-            body = "This deletes ${journals.size} ${if (journals.size == 1) "journal" else "journals"} from the local database. This cannot be undone.",
+            body = "This permanently deletes ${journals.size} local ${if (journals.size == 1) "journal" else "journals"} from this device. It does not delete study data that was already sent to the App backend or Gemini. To request deletion of submitted study data, contact the research team. This action cannot be undone.",
             onConfirm = {
                 showClearDialog = false
                 viewModel.clearJournals()
-                SnackbarBus.tryEmit("Cleared ${journals.size} journal${if (journals.size == 1) "" else "s"}")
+                SnackbarBus.tryEmit("Cleared ${journals.size} local journal${if (journals.size == 1) "" else "s"}")
             },
             onDismiss = { showClearDialog = false },
         )
@@ -195,7 +196,10 @@ private fun JournalActionRow(
             enabled = clearEnabled,
             modifier = Modifier.size(42.dp),
         ) {
-            Icon(Icons.Default.DeleteOutline, contentDescription = "Clear journals")
+            Icon(
+                Icons.Default.DeleteOutline,
+                contentDescription = "Clear all local journal entries",
+            )
         }
     }
 }
@@ -206,7 +210,7 @@ private fun JournalsList(journals: List<JournalEntry>) {
         EmptyState(
             icon = Icons.AutoMirrored.Filled.Article,
             title = "No Journals Yet",
-            description = "Start the AutoLife service to begin collecting data and generating journals.",
+            description = "Start the App service to begin collecting data and generating journals.",
         )
         return
     }
@@ -248,7 +252,10 @@ private fun JournalEntryRow(entry: JournalEntry) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { expanded = !expanded }
+            .clickable(
+                onClickLabel = if (expanded) "Collapse journal entry details" else "Expand journal entry details",
+                role = Role.Button,
+            ) { expanded = !expanded }
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -290,7 +297,7 @@ private fun JournalEntryRow(entry: JournalEntry) {
                 )
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    contentDescription = if (expanded) "Collapse journal entry details" else "Expand journal entry details",
                     modifier = Modifier
                         .size(20.dp)
                         .rotate(arrowRotation),
@@ -368,7 +375,7 @@ private fun ConfirmClearDialog(
         text = { Text(body) },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text("Clear All", color = MaterialTheme.colorScheme.error)
+                Text("Clear Local Journals", color = MaterialTheme.colorScheme.error)
             }
         },
         dismissButton = {
@@ -398,4 +405,3 @@ private fun journalSubtitle(entry: JournalEntry, hasError: Boolean): String {
 private fun <T> groupedByDay(items: List<T>, timestamp: (T) -> Long): List<Pair<String, List<T>>> {
     return items.groupBy { DateFormat.monthDayYear(timestamp(it)) }.toList()
 }
-

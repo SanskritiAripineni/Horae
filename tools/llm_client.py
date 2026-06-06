@@ -10,6 +10,9 @@ import re
 import time
 from typing import Dict, Any, Optional, List, TypedDict
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +44,63 @@ class UserFeedback(TypedDict):
     dislikes: List[str]
     prefers: List[str]
     should_save: bool
+
+
+class RecommendationModel(BaseModel):
+    category: str = "General"
+    action: str = ""
+    when_: str = Field("", alias="when")
+    source: str = "General wellness"
+
+    model_config = {"populate_by_name": True}
+
+
+class ProposedChangeModel(BaseModel):
+    action: str = "add"
+    title: str = ""
+    description: str = ""
+    start_time: str
+    end_time: str
+    category: str = "Wellness"
+    reason: str = ""
+    user_timezone: Optional[str] = None
+
+    @field_validator("action")
+    @classmethod
+    def add_only(cls, value: str) -> str:
+        return "add" if value != "add" else value
+
+    @field_validator("end_time")
+    @classmethod
+    def end_after_start(cls, value: str, info):
+        start = info.data.get("start_time")
+        if start:
+            try:
+                if datetime.fromisoformat(value.replace("Z", "+00:00")) <= datetime.fromisoformat(start.replace("Z", "+00:00")):
+                    raise ValueError("end_time must be after start_time")
+            except ValueError:
+                raise
+        return value
+
+
+class UiSummaryModel(BaseModel):
+    headline: str = ""
+    confidence_label: str = ""
+    summary: str = ""
+    evidence_chips: List[Dict[str, Any]] = Field(default_factory=list)
+    concerns: List[Dict[str, Any]] = Field(default_factory=list)
+    protective_signals: List[Dict[str, Any]] = Field(default_factory=list)
+    productive_signals: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class ScheduleProposalModel(BaseModel):
+    risk_level: str = "minimal"
+    summary: str = ""
+    concerns: List[Any] = Field(default_factory=list)
+    positives: List[Any] = Field(default_factory=list)
+    ui_summary: UiSummaryModel = Field(default_factory=UiSummaryModel)
+    recommendations: List[RecommendationModel] = Field(default_factory=list)
+    proposed_changes: List[ProposedChangeModel] = Field(default_factory=list)
 
 # Retry configuration
 MAX_RETRIES = 3
@@ -113,6 +173,29 @@ class LLMClient:
         if value is None:
             return ""
         return str(value)
+
+    @staticmethod
+    def _timezone(user_timezone: str) -> ZoneInfo:
+        try:
+            return ZoneInfo(user_timezone)
+        except (ZoneInfoNotFoundError, TypeError):
+            return ZoneInfo("UTC")
+
+    @staticmethod
+    def _validated_schedule_payload(data: Any, fallback_risk: str, fallback_summary: str,
+                                    user_timezone: str) -> Dict[str, Any]:
+        if not isinstance(data, dict):
+            raise ValueError("orchestrator response was not a JSON object")
+        parsed = ScheduleProposalModel.model_validate(data)
+        payload = parsed.model_dump(by_alias=True)
+        for rec in payload.get("recommendations", []):
+            if "when_" in rec and "when" not in rec:
+                rec["when"] = rec.pop("when_")
+        for change in payload.get("proposed_changes", []):
+            change["user_timezone"] = change.get("user_timezone") or user_timezone
+        payload["risk_level"] = payload.get("risk_level") or fallback_risk
+        payload["summary"] = payload.get("summary") or fallback_summary
+        return payload
 
     def generate(self, prompt: str, max_tokens: int = 8192) -> str:
         """Generate text from a prompt with exponential-backoff retry."""
@@ -203,10 +286,11 @@ Rules:
         recommendations: List[Recommendation],
         calendar_summary: Dict[str, Any],
         mental_health: Dict[str, Any],
-        user_preferences: Optional[List[str]] = None
+        user_preferences: Optional[List[str]] = None,
+        user_timezone: str = "UTC",
     ) -> List[CalendarChange]:
         """Generate proposed calendar changes based on recommendations, schedule, tasks, and user preferences."""
-        now = datetime.now()
+        now = datetime.now(self._timezone(user_timezone))
         tomorrow = now + timedelta(days=1)
         dates = [(tomorrow + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
 
@@ -253,7 +337,7 @@ Rules:
 
         prompt = f'''Based on the user's mental health, schedule, and tasks, suggest wellness calendar events.
 
-TODAY: {now.strftime('%A, %Y-%m-%d %H:%M')} (timezone: America/Chicago)
+TODAY: {now.strftime('%A, %Y-%m-%d %H:%M')} (timezone: {user_timezone})
 
 WELLBEING STATE:
 - Risk Level: {mental_health.get('risk_level', 'unknown')}
@@ -313,6 +397,7 @@ STRICT RULES — follow every one exactly:
         behavioral_state: Optional[Dict[str, Any]] = None,
         raw_days: Optional[List[Dict[str, Any]]] = None,
         llm_analysis: Optional[Dict[str, Any]] = None,
+        user_timezone: str = "UTC",
     ) -> Dict[str, Any]:
         """Orchestrator call: compose journal narrative + behavioral sensing + calendar
         + research evidence into a complete schedule proposal.
@@ -324,7 +409,8 @@ STRICT RULES — follow every one exactly:
         Returns dict with keys: risk_level, summary, concerns, positives,
         recommendations, proposed_changes.
         """
-        now = datetime.now()
+        tz = self._timezone(user_timezone)
+        now = datetime.now(tz)
         tomorrow = now + timedelta(days=1)
         dates = [(tomorrow + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
 
@@ -541,7 +627,7 @@ STRICT RULES — follow every one exactly:
 
         prompt = f"""You are a wellness scheduling agent. Use ALL context below to produce a structured schedule proposal.
 
-TODAY: {now.strftime('%A, %Y-%m-%d %H:%M')} (timezone: America/Chicago)
+TODAY: {now.strftime('%A, %Y-%m-%d %H:%M')} (timezone: {user_timezone})
 
 JOURNAL NARRATIVE (contextual record of the user's recent activities — not a wellbeing assessment):
 {journal_text[:3000]}
@@ -613,6 +699,7 @@ Respond in this EXACT JSON format (no markdown, just JSON):
             "description": "Brief description",
             "start_time": "YYYY-MM-DDTHH:MM:SS",
             "end_time": "YYYY-MM-DDTHH:MM:SS",
+            "user_timezone": "{user_timezone}",
             "category": "Sleep/Stress/Physical/Mindfulness/Social/Task",
             "reason": "Why this helps based on the sensing or journal context"
         }}
@@ -641,13 +728,16 @@ STRICT RULES:
 
         response = self.generate(prompt, max_tokens=8192)
         data = self._parse_json_response(response, None)
-        if isinstance(data, dict):
-            return data
-
-        logger.error("generate_schedule_proposals: failed to parse orchestrator response")
+        fallback_summary = behavioral_text[:200] if behavioral_text else "Assessment unavailable."
+        validation_error = ""
+        try:
+            return self._validated_schedule_payload(data, risk_level, fallback_summary, user_timezone)
+        except (ValidationError, ValueError) as e:
+            validation_error = str(e)
+            logger.error("generate_schedule_proposals: invalid orchestrator response: %s", e)
         return {
             "risk_level": risk_level,
-            "summary": behavioral_text[:200] if behavioral_text else "Assessment unavailable.",
+            "summary": fallback_summary,
             "concerns": [],
             "positives": [],
             "ui_summary": {},
@@ -658,6 +748,7 @@ STRICT RULES:
                 "source": "General wellness advice",
             }],
             "proposed_changes": [],
+            "errors": [f"Invalid orchestrator response: {validation_error}"],
         }
 
     def parse_user_feedback(self, raw_feedback: str) -> UserFeedback:
