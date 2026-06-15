@@ -26,7 +26,6 @@ import json
 import sys
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -36,13 +35,11 @@ from layer1 import PersonalBaseline, markers_from_raw
 from layer2 import detect_deviations, find_coherent_patterns
 from layer3 import build_state_description
 from studentlife_adapter import (
-    LOCAL_TZ, build_daily_records, list_participants, load_pid_sensors,
+    DATASET_ROOT, LOCAL_TZ, build_daily_records, dataset_help,
+    list_participants, load_pid_sensors,
 )
 
-EMA_DIR = Path(
-    "/Users/rishisim/Documents/projects/Behavioral Emotional Sensing/"
-    "studentlife/dataset/EMA/response"
-)
+EMA_DIR = DATASET_ROOT / "EMA" / "response"
 
 
 # ---------- EMA loading (per local date) ----------
@@ -308,17 +305,20 @@ def report_alignment(joined: pd.DataFrame) -> None:
 
 # ---------- Entry point ----------
 
-def main(argv):
+def main(argv) -> int:
     max_pids = None
     if len(argv) > 1:
         try:
             max_pids = int(argv[1])
         except ValueError:
             pass
+    print(f"[config] STUDENTLIFE_DATASET_ROOT={DATASET_ROOT}")
     res = run_all(max_pids=max_pids, sample_prose=4)
     daily = res["daily"]
     if len(daily) == 0:
-        print("No data"); return
+        print("\nNo StudentLife daily rows were produced.")
+        print(dataset_help())
+        return 1
     print(f"\n[run_all] total daily rows: {len(daily)}")
 
     # Show sample prose
@@ -332,7 +332,8 @@ def main(argv):
     # Align with EMA
     j = align_with_ema(daily)
     report_alignment(j["joined"])
+    return 0
 
 
 if __name__ == "__main__":
-    main(sys.argv)
+    raise SystemExit(main(sys.argv))

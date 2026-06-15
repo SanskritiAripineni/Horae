@@ -27,7 +27,8 @@ import pandas as pd
 from layer1 import DayRecord, MARKER_SPECS
 
 # ---------- Paths ----------
-_DEFAULT_DATASET_ROOT = "/Users/rishisim/Documents/projects/Behavioral Emotional Sensing/studentlife/dataset"
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_DEFAULT_DATASET_ROOT = _REPO_ROOT / "data" / "studentlife" / "dataset"
 DATASET_ROOT = Path(os.environ.get("STUDENTLIFE_DATASET_ROOT", _DEFAULT_DATASET_ROOT)).expanduser()
 SENSING = DATASET_ROOT / "sensing"
 APP_USAGE = DATASET_ROOT / "app_usage"
@@ -36,6 +37,23 @@ SMS_DIR = DATASET_ROOT / "sms"
 
 # StudentLife was Mar–Jun 2013 → entirely within US Eastern Daylight Time.
 LOCAL_TZ = timezone(timedelta(hours=-4))
+
+
+def dataset_help() -> str:
+    """Human-readable setup instructions for local StudentLife evaluation."""
+    return (
+        "StudentLife dataset not found or incomplete.\n"
+        f"Current STUDENTLIFE_DATASET_ROOT: {DATASET_ROOT}\n"
+        "Expected directories under that root include:\n"
+        "  - sensing/phonelock\n"
+        "  - sensing/wifi_location\n"
+        "  - EMA/response/Stress\n"
+        "  - EMA/response/PAM\n"
+        "\n"
+        "Set the dataset root before running validation, for example:\n"
+        "  export STUDENTLIFE_DATASET_ROOT=/path/to/studentlife/dataset\n"
+        "  python3 wellbeing_pipeline/evaluate_studentlife.py\n"
+    )
 
 
 # ---------- Loading helpers ----------
