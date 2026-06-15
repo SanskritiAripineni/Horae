@@ -1,11 +1,9 @@
 """
 Smoke-test longitudinal behavior-aware scheduling simulation.
 
-Default sample:
-  - 2 simulated participants
-  - 7 days
-  - first 3 days passive baseline
-  - days 4-7 scheduler period
+Presets:
+  - sample: 2 participants, 7 days, 3 passive baseline days
+  - medium: 5 participants, 14 days, 7 passive baseline days
 
 The sample is intentionally small. Its purpose is to verify that simulated
 profiles, calendars, sensing traces, AutoLife summaries, behavioral-state
@@ -33,11 +31,44 @@ from layer3 import build_state_description  # noqa: E402
 
 
 SIM_DIR = Path(__file__).resolve().parent
-OUTPUT_DIR = SIM_DIR.parent / "simulation_outputs" / "sample"
 START_DATE = date(2026, 3, 2)
-N_DAYS = 7
-BASELINE_DAYS = 3
 SEED = 20260615
+
+
+@dataclass(frozen=True)
+class SimulationConfig:
+    name: str
+    participants: int
+    n_days: int
+    baseline_days: int
+    max_decision_days_per_participant: int
+
+
+CONFIGS = {
+    "sample": SimulationConfig(
+        name="sample",
+        participants=2,
+        n_days=7,
+        baseline_days=3,
+        max_decision_days_per_participant=2,
+    ),
+    "medium": SimulationConfig(
+        name="medium",
+        participants=5,
+        n_days=14,
+        baseline_days=7,
+        max_decision_days_per_participant=3,
+    ),
+}
+
+ACTIVE_CONFIG = CONFIGS["sample"]
+OUTPUT_DIR = SIM_DIR.parent / "simulation_outputs" / ACTIVE_CONFIG.name
+
+
+def set_active_config(preset: str) -> None:
+    global ACTIVE_CONFIG, OUTPUT_DIR
+    ACTIVE_CONFIG = CONFIGS[preset]
+    OUTPUT_DIR = SIM_DIR.parent / "simulation_outputs" / ACTIVE_CONFIG.name
 
 
 def ensure_output_dir() -> None:
@@ -66,7 +97,7 @@ def read_jsonl(path: Path) -> list[dict]:
 
 
 def daterange() -> list[date]:
-    return [START_DATE + timedelta(days=i) for i in range(N_DAYS)]
+    return [START_DATE + timedelta(days=i) for i in range(ACTIVE_CONFIG.n_days)]
 
 
 @dataclass
@@ -88,8 +119,8 @@ def path(name: str) -> Path:
     return OUTPUT_DIR / name
 
 
-def stage_profiles() -> None:
-    profiles = [
+def _profile_pool() -> list[ParticipantProfile]:
+    return [
         ParticipantProfile(
             participant_id="P001",
             archetype="late-night overloaded student",
@@ -116,9 +147,55 @@ def stage_profiles() -> None:
             adherence_tendency="high",
             stress_sensitivity="medium",
         ),
+        ParticipantProfile(
+            participant_id="P003",
+            archetype="circadian-instability student",
+            chronotype="evening",
+            sleep_regularity="unstable",
+            workload="moderate",
+            schedule_flexibility="medium",
+            mobility_pattern="mixed",
+            social_rhythm="irregular",
+            phone_use_tendency="moderate",
+            adherence_tendency="medium",
+            stress_sensitivity="medium",
+        ),
+        ParticipantProfile(
+            participant_id="P004",
+            archetype="sleep-loss fragmented-attention student",
+            chronotype="neutral",
+            sleep_regularity="moderately variable",
+            workload="heavy",
+            schedule_flexibility="low",
+            mobility_pattern="work-centered",
+            social_rhythm="regular",
+            phone_use_tendency="high",
+            adherence_tendency="low",
+            stress_sensitivity="high",
+        ),
+        ParticipantProfile(
+            participant_id="P005",
+            archetype="mixed late-work student",
+            chronotype="neutral",
+            sleep_regularity="moderately variable",
+            workload="heavy",
+            schedule_flexibility="high",
+            mobility_pattern="campus-centered",
+            social_rhythm="clustered",
+            phone_use_tendency="late-night-heavy",
+            adherence_tendency="medium",
+            stress_sensitivity="medium",
+        ),
     ]
+
+
+def stage_profiles() -> None:
+    profiles = _profile_pool()[:ACTIVE_CONFIG.participants]
     write_json(path("participants.json"), [asdict(p) for p in profiles])
-    print("Section 1 complete: generated 2 simulated participant profiles.")
+    print(
+        "Section 1 complete: generated "
+        f"{ACTIVE_CONFIG.participants} simulated participant profiles."
+    )
     print(f"Generated: {path('participants.json')}")
 
 
@@ -146,7 +223,8 @@ def _calendar_for_day(profile: dict, day: date, day_index: int) -> list[dict]:
             "category": "work",
         },
     ]
-    if profile["participant_id"] == "P001":
+    pid = profile["participant_id"]
+    if pid in {"P001", "P003", "P005"}:
         base.append({
             "start": "21:00",
             "end": "22:30",
@@ -154,24 +232,42 @@ def _calendar_for_day(profile: dict, day: date, day_index: int) -> list[dict]:
             "flexibility": "flexible",
             "category": "work",
         })
-    else:
+    if pid == "P004":
         base.extend([
             {
-                "start": "12:30",
-                "end": "13:15",
-                "title": "lunch outside",
+                "start": "13:00",
+                "end": "14:00",
+                "title": "lab prep",
                 "flexibility": "flexible",
-                "category": "restorative",
+                "category": "work",
             },
             {
-                "start": "18:00",
-                "end": "19:00",
-                "title": "gym",
+                "start": "19:30",
+                "end": "21:30",
+                "title": "problem set work",
                 "flexibility": "flexible",
-                "category": "restorative",
+                "category": "work",
             },
         ])
-        if day_index >= 4:
+    else:
+        if pid == "P002":
+            base.extend([
+                {
+                    "start": "12:30",
+                    "end": "13:15",
+                    "title": "lunch outside",
+                    "flexibility": "flexible",
+                    "category": "restorative",
+                },
+                {
+                    "start": "18:00",
+                    "end": "19:00",
+                    "title": "gym",
+                    "flexibility": "flexible",
+                    "category": "restorative",
+                },
+            ])
+        if pid == "P002" and day_index > ACTIVE_CONFIG.baseline_days:
             base = [
                 event for event in base
                 if event["title"] not in {"lunch outside", "gym"}
@@ -200,7 +296,11 @@ def stage_calendars() -> None:
                 "events": _calendar_for_day(profile, day, idx),
             })
     write_jsonl(path("daily_calendars.jsonl"), rows)
-    print("Section 2 complete: generated 7-day calendars for 2 participants.")
+    print(
+        "Section 2 complete: generated "
+        f"{ACTIVE_CONFIG.n_days}-day calendars for "
+        f"{ACTIVE_CONFIG.participants} participants."
+    )
     print(f"Generated: {path('daily_calendars.jsonl')}")
 
 
@@ -223,18 +323,22 @@ def _place_for_time(profile: dict, day_index: int, hour: int) -> str:
     if 10 <= hour < 12:
         return "classroom"
     if 12 <= hour < 14:
-        return "dining" if not (pid == "P002" and day_index >= 5) else "home"
+        return "dining" if not (pid == "P002" and day_index > ACTIVE_CONFIG.baseline_days) else "home"
     if 14 <= hour < 18:
-        if pid == "P002" and day_index >= 5:
+        if pid == "P002" and day_index > ACTIVE_CONFIG.baseline_days:
             return "home"
         return "library"
     if 18 <= hour < 20:
-        if pid == "P001":
+        if pid in {"P001", "P003", "P005"}:
             return "dining"
-        return "gym" if day_index < 5 else "home"
+        return "gym" if day_index <= ACTIVE_CONFIG.baseline_days else "home"
     if 20 <= hour < 23:
-        if pid == "P001":
-            return "library" if day_index >= 5 else "social"
+        if pid in {"P001", "P005"}:
+            return "library" if day_index > ACTIVE_CONFIG.baseline_days else "social"
+        if pid == "P003":
+            return "social" if day_index % 2 == 0 else "home"
+        if pid == "P004":
+            return "library"
         return "home"
     return "home"
 
@@ -269,7 +373,17 @@ def _gps_points(profile: dict, day: date, day_index: int, rng: random.Random) ->
 
 def _raw_day(profile: dict, day: date, day_index: int, rng: random.Random) -> dict:
     pid = profile["participant_id"]
-    after_baseline = day_index > BASELINE_DAYS + 1
+    after_baseline = day_index > ACTIVE_CONFIG.baseline_days + 1
+
+    sleep_onset = 23.1 + rng.uniform(-0.14, 0.14)
+    sleep_duration = 7.7 + rng.uniform(-0.2, 0.2)
+    late_screen = 28 + rng.uniform(-6, 6)
+    total_screen = 240 + rng.uniform(-25, 25)
+    app_switch = 1.05 + rng.uniform(-0.16, 0.16)
+    mobility_entropy = 1.78 + rng.uniform(-0.09, 0.09)
+    revisit = 0.61 + rng.uniform(-0.04, 0.04)
+    srm = 0.80 + rng.uniform(-0.04, 0.04)
+    sleep_regularity = 84 - abs(sleep_onset - 23.2) * 3 + rng.uniform(-1.5, 1.5)
 
     if pid == "P001":
         sleep_onset = 23.35 + rng.uniform(-0.15, 0.15)
@@ -277,21 +391,16 @@ def _raw_day(profile: dict, day: date, day_index: int, rng: random.Random) -> di
         late_screen = 30 + rng.uniform(-6, 6)
         total_screen = 260 + rng.uniform(-30, 30)
         app_switch = 1.2 + rng.uniform(-0.2, 0.2)
-        mobility_entropy = 1.75 + rng.uniform(-0.1, 0.1)
-        revisit = 0.64 + rng.uniform(-0.04, 0.04)
-        srm = 0.78 + rng.uniform(-0.05, 0.05)
         if after_baseline:
             sleep_onset = 25.15 + rng.uniform(-0.2, 0.2)
             sleep_duration = 6.25 + rng.uniform(-0.2, 0.2)
             late_screen = 105 + rng.uniform(-10, 10)
             total_screen = 350 + rng.uniform(-25, 25)
             app_switch = 1.8 + rng.uniform(-0.15, 0.2)
-    else:
+            sleep_regularity = 70 + rng.uniform(-3, 3)
+    elif pid == "P002":
         sleep_onset = 23.0 + rng.uniform(-0.12, 0.12)
         sleep_duration = 7.8 + rng.uniform(-0.2, 0.2)
-        late_screen = 25 + rng.uniform(-5, 5)
-        total_screen = 230 + rng.uniform(-25, 25)
-        app_switch = 1.0 + rng.uniform(-0.15, 0.15)
         mobility_entropy = 1.85 + rng.uniform(-0.08, 0.08)
         revisit = 0.58 + rng.uniform(-0.03, 0.03)
         srm = 0.82 + rng.uniform(-0.04, 0.04)
@@ -300,6 +409,33 @@ def _raw_day(profile: dict, day: date, day_index: int, rng: random.Random) -> di
             revisit = 0.90 + rng.uniform(-0.03, 0.03)
             srm = 0.55 + rng.uniform(-0.05, 0.05)
             total_screen = 300 + rng.uniform(-25, 25)
+    elif pid == "P003":
+        sleep_onset = 23.4 + rng.uniform(-0.2, 0.2)
+        sleep_duration = 7.4 + rng.uniform(-0.25, 0.25)
+        sleep_regularity = 86 + rng.uniform(-2, 2)
+        if after_baseline:
+            swing = 1.2 if day_index % 2 == 0 else -0.8
+            sleep_onset = 24.5 + swing + rng.uniform(-0.18, 0.18)
+            sleep_duration = 7.0 + rng.uniform(-0.35, 0.25)
+            sleep_regularity = 60 + rng.uniform(-4, 4)
+            srm = 0.52 + rng.uniform(-0.05, 0.05)
+    elif pid == "P004":
+        sleep_duration = 7.6 + rng.uniform(-0.18, 0.18)
+        app_switch = 1.0 + rng.uniform(-0.12, 0.12)
+        if after_baseline:
+            sleep_duration = 5.8 + rng.uniform(-0.25, 0.2)
+            app_switch = 2.05 + rng.uniform(-0.25, 0.2)
+            total_screen = 330 + rng.uniform(-30, 30)
+            late_screen = 70 + rng.uniform(-10, 10)
+    elif pid == "P005":
+        sleep_duration = 7.5 + rng.uniform(-0.2, 0.2)
+        late_screen = 35 + rng.uniform(-6, 6)
+        if after_baseline:
+            sleep_onset = 24.6 + rng.uniform(-0.18, 0.18)
+            late_screen = 95 + rng.uniform(-12, 12)
+            mobility_entropy = 1.2 + rng.uniform(-0.08, 0.08)
+            revisit = 0.78 + rng.uniform(-0.04, 0.04)
+            srm = 0.62 + rng.uniform(-0.05, 0.05)
 
     missing_screen = rng.random() < 0.05
     return {
@@ -308,7 +444,7 @@ def _raw_day(profile: dict, day: date, day_index: int, rng: random.Random) -> di
         "day_index": day_index,
         "sleep_onset_hour": sleep_onset,
         "sleep_duration_hours": sleep_duration,
-        "sleep_regularity_index": 82 - abs(sleep_onset - 23.4) * 5 + rng.uniform(-2, 2),
+        "sleep_regularity_index": sleep_regularity,
         "late_night_screen_min": None if missing_screen else late_screen,
         "total_screen_min": None if missing_screen else total_screen,
         "app_switching_rate": app_switch,
@@ -348,7 +484,7 @@ def stage_sensors() -> None:
                 gps_rows.append(point)
     write_jsonl(path("daily_behavior_raw.jsonl"), raw_days)
     write_jsonl(path("raw_gps_15min.jsonl"), gps_rows)
-    print("Section 3 complete: generated sample sensing data.")
+    print(f"Section 3 complete: generated {ACTIVE_CONFIG.name} sensing data.")
     print(f"Generated: {path('daily_behavior_raw.jsonl')}")
     print(f"Generated: {path('raw_gps_15min.jsonl')}")
 
@@ -380,7 +516,8 @@ def stage_autolife() -> None:
 
 
 def _infer_states_for_participant(raw_days: list[dict]) -> list[dict]:
-    baseline = PersonalBaseline(warmup_days=3)
+    warmup_days = max(3, min(7, ACTIVE_CONFIG.baseline_days))
+    baseline = PersonalBaseline(warmup_days=warmup_days)
     states = []
     for raw in sorted(raw_days, key=lambda row: row["date"]):
         rec = markers_from_raw(raw)
@@ -389,11 +526,13 @@ def _infer_states_for_participant(raw_days: list[dict]) -> list[dict]:
         devs = []
         patterns = []
         if baseline.is_warm():
+            recent_days = 2 if ACTIVE_CONFIG.n_days <= 7 else 3
+            baseline_days = max(4, ACTIVE_CONFIG.baseline_days)
             devs = detect_deviations(
                 baseline,
                 as_of=as_of,
-                recent_days=2,
-                baseline_days=4,
+                recent_days=recent_days,
+                baseline_days=baseline_days,
                 min_magnitude="mild",
             )
             patterns = find_coherent_patterns(devs)
@@ -402,7 +541,7 @@ def _infer_states_for_participant(raw_days: list[dict]) -> list[dict]:
             "participant_id": raw["participant_id"],
             "date": raw["date"],
             "day_index": raw["day_index"],
-            "is_scheduler_period": raw["day_index"] > BASELINE_DAYS,
+            "is_scheduler_period": raw["day_index"] > ACTIVE_CONFIG.baseline_days,
             "markers": {
                 key: raw.get(key) for key in [
                     "sleep_onset_hour",
@@ -474,12 +613,17 @@ def _load_calendars_by_key() -> dict[tuple[str, str], dict]:
 def _decision_states() -> list[dict]:
     states = read_jsonl(path("inferred_behavior_states.jsonl"))
     selected = []
+    by_pid: dict[str, int] = {}
     for state in states:
         pattern_count = len(state["patterns"])
-        if state["day_index"] >= 5 and pattern_count > 0:
-            selected.append(state)
-    # Keep the smoke test intentionally tiny.
-    return selected[:4]
+        if not state["is_scheduler_period"] or pattern_count == 0:
+            continue
+        pid = state["participant_id"]
+        if by_pid.get(pid, 0) >= ACTIVE_CONFIG.max_decision_days_per_participant:
+            continue
+        selected.append(state)
+        by_pid[pid] = by_pid.get(pid, 0) + 1
+    return selected
 
 
 def stage_scheduler_inputs() -> None:
@@ -581,6 +725,17 @@ def _schedule_recommendation(input_row: dict) -> dict:
             "burden": "low",
             "confidence": "medium",
             "safety_note": "This is a gentle scheduling suggestion, not a diagnosis.",
+        }
+    if "circadian-instability" in patterns:
+        event = _first_flexible_event(calendar, {"optional work session", "study block"})
+        return {
+            "recommendation": f"Keep {event['title']} at a consistent daytime slot and avoid moving it later.",
+            "calendar_action": "protect_sleep",
+            "target_event": event["title"],
+            "reason": "Recent sleep timing became less regular, so preserving predictable daytime anchors is a low-burden scheduling response.",
+            "burden": "low",
+            "confidence": "medium",
+            "safety_note": "The suggestion preserves fixed obligations and avoids clinical claims.",
         }
     if "fragmented-attention-with-sleep-loss" in patterns:
         event = _first_flexible_event(calendar, {"study block", "optional work session"})
@@ -721,7 +876,7 @@ def stage_export_rater_sheet() -> None:
         writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)
-    print("Section 9 complete: exported sample rater sheet.")
+    print(f"Section 9 complete: exported {ACTIVE_CONFIG.name} rater sheet.")
     print(f"Generated: {path('rater_sheet.csv')}")
 
 
@@ -739,14 +894,15 @@ def stage_summary() -> None:
 
     behavior_aware = [row for row in outputs if row["condition"] == "behavior_aware"]
     calendar_only = [row for row in outputs if row["condition"] == "calendar_only"]
-    summary = f"""# Sample Simulation Smoke Test
+    summary = f"""# {ACTIVE_CONFIG.name.title()} Simulation Run
 
 ## Configuration
 
-- Participants: 2
-- Days per participant: 7
-- Passive baseline days: {BASELINE_DAYS}
-- Scheduler period days: {N_DAYS - BASELINE_DAYS}
+- Participants: {ACTIVE_CONFIG.participants}
+- Days per participant: {ACTIVE_CONFIG.n_days}
+- Passive baseline days: {ACTIVE_CONFIG.baseline_days}
+- Scheduler period days: {ACTIVE_CONFIG.n_days - ACTIVE_CONFIG.baseline_days}
+- Max evaluated decision days per participant: {ACTIVE_CONFIG.max_decision_days_per_participant}
 
 ## Pipeline Check
 
@@ -761,7 +917,7 @@ def stage_summary() -> None:
 
 ## Initial Read
 
-This smoke test is considered promising if:
+This run is considered promising if:
 
 1. At least one coherent behavioral pattern emerges from simulated behavior.
 2. The behavior-aware scheduler produces a different, pattern-grounded
@@ -770,7 +926,7 @@ This smoke test is considered promising if:
 4. The rater sheet is understandable enough for a teammate to score.
 """
     path("simulation_summary.md").write_text(summary, encoding="utf-8")
-    print("Section 10 complete: wrote sample simulation summary.")
+    print(f"Section 10 complete: wrote {ACTIVE_CONFIG.name} simulation summary.")
     print(f"Generated: {path('simulation_summary.md')}")
     print(summary)
 
@@ -803,12 +959,19 @@ def run_stage(stage: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--preset",
+        choices=sorted(CONFIGS),
+        default="sample",
+        help="Simulation size/configuration preset.",
+    )
+    parser.add_argument(
         "--stage",
         choices=["all"] + ORDERED_STAGES,
         default="all",
         help="Simulation stage to run.",
     )
     args = parser.parse_args()
+    set_active_config(args.preset)
     ensure_output_dir()
     run_stage(args.stage)
     return 0
