@@ -1,0 +1,154 @@
+[config] STUDENTLIFE_DATASET_ROOT=/Applications/Spring 2026/RIDE Agentic Scheduler/data/studentlife/dataset
+[run_all] Running pipeline on 49 participants
+  u00: 131 days, warm:122, dev≥1 days:65, pattern days:9
+  u01: 68 days, warm:59, dev≥1 days:45, pattern days:10
+  u02: 70 days, warm:61, dev≥1 days:37, pattern days:0
+  u03: 61 days, warm:52, dev≥1 days:23, pattern days:3
+  u04: 62 days, warm:53, dev≥1 days:38, pattern days:9
+  u05: 68 days, warm:59, dev≥1 days:37, pattern days:7
+  u07: 53 days, warm:44, dev≥1 days:29, pattern days:4
+  u08: 68 days, warm:59, dev≥1 days:44, pattern days:9
+  u09: 73 days, warm:64, dev≥1 days:42, pattern days:8
+  u10: 72 days, warm:63, dev≥1 days:46, pattern days:0
+  u12: 73 days, warm:64, dev≥1 days:57, pattern days:23
+  u13: 107 days, warm:98, dev≥1 days:52, pattern days:5
+  u14: 73 days, warm:64, dev≥1 days:57, pattern days:20
+  u15: 70 days, warm:61, dev≥1 days:20, pattern days:0
+  u16: 68 days, warm:59, dev≥1 days:29, pattern days:2
+  u17: 71 days, warm:62, dev≥1 days:36, pattern days:10
+  u18: 68 days, warm:59, dev≥1 days:33, pattern days:1
+  u19: 71 days, warm:62, dev≥1 days:41, pattern days:16
+  u20: 60 days, warm:51, dev≥1 days:24, pattern days:0
+  u22: 73 days, warm:64, dev≥1 days:35, pattern days:4
+  u23: 62 days, warm:53, dev≥1 days:29, pattern days:6
+  u24: 36 days, warm:27, dev≥1 days:22, pattern days:0
+  u25: 68 days, warm:59, dev≥1 days:6, pattern days:2
+  u27: 72 days, warm:63, dev≥1 days:20, pattern days:1
+  u30: 70 days, warm:61, dev≥1 days:45, pattern days:6
+  u31: 69 days, warm:60, dev≥1 days:50, pattern days:3
+  u32: 299 days, warm:290, dev≥1 days:42, pattern days:5
+  u33: 67 days, warm:58, dev≥1 days:36, pattern days:3
+  u34: 66 days, warm:57, dev≥1 days:10, pattern days:1
+  u35: 69 days, warm:60, dev≥1 days:17, pattern days:0
+  u36: 79 days, warm:70, dev≥1 days:45, pattern days:21
+  u39: 33 days, warm:24, dev≥1 days:3, pattern days:0
+  u41: 68 days, warm:59, dev≥1 days:20, pattern days:3
+  u42: 60 days, warm:51, dev≥1 days:19, pattern days:0
+  u43: 67 days, warm:58, dev≥1 days:34, pattern days:17
+  u44: 69 days, warm:60, dev≥1 days:40, pattern days:6
+  u45: 67 days, warm:58, dev≥1 days:36, pattern days:6
+  u46: 61 days, warm:52, dev≥1 days:31, pattern days:1
+  u47: 275 days, warm:266, dev≥1 days:45, pattern days:1
+  u49: 213 days, warm:204, dev≥1 days:55, pattern days:4
+  u50: 74 days, warm:65, dev≥1 days:24, pattern days:0
+  u51: 114 days, warm:105, dev≥1 days:33, pattern days:5
+  u52: 525 days, warm:516, dev≥1 days:48, pattern days:7
+  u53: 69 days, warm:60, dev≥1 days:31, pattern days:0
+  u54: 77 days, warm:68, dev≥1 days:42, pattern days:5
+  u56: 193 days, warm:184, dev≥1 days:56, pattern days:0
+  u57: 251 days, warm:242, dev≥1 days:76, pattern days:13
+  u58: 97 days, warm:88, dev≥1 days:49, pattern days:6
+  u59: 78 days, warm:69, dev≥1 days:38, pattern days:1
+
+[run_all] total daily rows: 4808
+
+==============================================================================
+  SAMPLE LAYER 3 PROSE — face-validity check
+==============================================================================
+
+--- u00  2013-04-22 ---
+As of 2013-04-22, recent behavioral observations (overall confidence: medium):
+
+Sleep:
+  • Sleep schedule has been less consistent (SRI 65 vs typical 81); sustained across the last 2d [pronounced, coverage: medium]
+
+Coherent patterns worth noting:
+  • Sleep schedule consistency has dropped; circadian rhythm is less stable than typical. Anchoring morning wake time and fixed daily events can help.
+    (signals: sleep_regularity_index)
+
+Coverage caveats — treat claims in these areas cautiously:
+  • sleep/sleep_regularity_index: coverage low — LLM should discount claims in this area
+
+The LLM scheduler should decide which of the above are worth acting on through calendar adjustments, based on the user's preferences, upcoming commitments, and the coherence of the pattern — not on single-day magnitudes.
+
+--- u00  2013-04-23 ---
+As of 2013-04-23, recent behavioral observations (overall confidence: medium):
+
+Sleep:
+  • Sleep schedule has been less consistent (SRI 68 vs typical 81); sustained across the last 3d [moderate, coverage: medium]
+
+Coherent patterns worth noting:
+  • Sleep schedule consistency has dropped; circadian rhythm is less stable than typical. Anchoring morning wake time and fixed daily events can help.
+    (signals: sleep_regularity_index)
+
+Coverage caveats — treat claims in these areas cautiously:
+  • sleep/sleep_regularity_index: coverage low — LLM should discount claims in this area
+
+The LLM scheduler should decide which of the above are worth acting on through calendar adjustments, based on the user's preferences, upcoming commitments, and the coherence of the pattern — not on single-day magnitudes.
+
+--- u01  2013-04-24 ---
+As of 2013-04-24, recent behavioral observations (overall confidence: high):
+
+Sleep:
+  • Sleep has averaged 8.9h (3.7h longer than typical 5.2h); sustained across the last 4d [mild, coverage: high]
+
+Screen & attention:
+  • Attention pattern more fragmented than baseline (5.8 vs 1.9 switches/active-min); intermittently (1d of 4) [moderate, coverage: high]
+
+Mobility & location routine:
+  • Location routine more restricted than baseline (entropy 1.74 vs 2.15); intermittently (3d of 4) [mild, coverage: high]
+  • More time at top-3 frequent places (74% vs typical 63%); intermittently (3d of 4) [mild, coverage: high]
+
+Coherent patterns worth noting:
+  • Location routine has narrowed and time concentrated at frequent places — a behavioral-withdrawal pattern often associated with lower mood and reduced third-place engagement.
+    (signals: mobility_entropy, location_revisit_ratio)
+
+Coverage caveats — treat claims in these areas cautiously:
+  • social/comm_reciprocity: coverage none — LLM should discount claims in this area
+
+The LLM scheduler should decide which of the above are worth acting on through calendar adjustments, based on the user's preferences, upcoming commitments, and the coherence of the pattern — not on single-day magnitudes.
+
+--- u01  2013-04-25 ---
+As of 2013-04-25, recent behavioral observations (overall confidence: high):
+
+Sleep:
+  • Sleep onset has been around 02:02 (about 3.3h later than typical 22:44); drifting over the last 4d [mild, coverage: high]
+  • Sleep has averaged 8.6h (2.9h longer than typical 5.7h); intermittently (3d of 4) [mild, coverage: high]
+
+Mobility & location routine:
+  • Location routine more restricted than baseline (entropy 1.75 vs 2.16); intermittently (3d of 4) [mild, coverage: high]
+  • More time at top-3 frequent places (73% vs typical 63%); intermittently (3d of 4) [mild, coverage: high]
+
+Coherent patterns worth noting:
+  • Location routine has narrowed and time concentrated at frequent places — a behavioral-withdrawal pattern often associated with lower mood and reduced third-place engagement.
+    (signals: mobility_entropy, location_revisit_ratio)
+
+Coverage caveats — treat claims in these areas cautiously:
+  • social/comm_reciprocity: coverage none — LLM should discount claims in this area
+
+The LLM scheduler should decide which of the above are worth acting on through calendar adjustments, based on the user's preferences, upcoming commitments, and the coherence of the pattern — not on single-day magnitudes.
+
+==============================================================================
+  ALIGNMENT METRICS
+==============================================================================
+Warm-baseline days total: 4367
+Days with Stress EMA:     1132
+Days with PAM EMA:        2069
+
+— Pooled risk_index vs Stress severity —
+  Spearman r = +0.048, p = 1.08e-01, n = 1132
+  Per-participant Spearman r: median +0.000, mean +0.008, n_pids = 40, % positive: 48%
+  Pattern-fired days mean = 2.031 (n=117)  vs no-pattern mean = 1.789 (n=1015)
+  Welch t = +2.37, p = 1.92e-02, Cohen's d ≈ +0.22
+
+— Pooled risk_index vs PAM valence (higher = more positive) —
+  Spearman r = -0.007, p = 7.62e-01, n = 2069
+  Per-participant Spearman r: median -0.001, mean +0.014, n_pids = 45, % positive: 49%
+  Pattern-fired days mean = 2.533 (n=201)  vs no-pattern mean = 2.539 (n=1868)
+  Welch t = -0.12, p = 9.08e-01, Cohen's d ≈ -0.01
+
+— Pooled risk_index vs PAM arousal —
+  Spearman r = -0.018, p = 4.20e-01, n = 2069
+  Per-participant Spearman r: median -0.049, mean -0.017, n_pids = 45, % positive: 40%
+  Pattern-fired days mean = 2.521 (n=201)  vs no-pattern mean = 2.593 (n=1868)
+  Welch t = -1.38, p = 1.70e-01, Cohen's d ≈ -0.10

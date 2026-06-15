@@ -213,7 +213,7 @@ def run_all(pids: list[str] | None = None, max_pids: int | None = None,
         # prose: dump first 3 patterns-fired days
         warm_days = df[df["warm"]]
         pat_days = warm_days[warm_days["n_pat"] >= 1]
-        if len(pat_days) >= 1 and sample_prose > 0:
+        if len(pat_days) >= 1 and sample_prose > 0 and len(prose_samples) < sample_prose:
             for d_row in pat_days.head(2).itertuples():
                 # re-run to get prose for this date
                 res2 = run_pid(pid, dump_prose_dates=[d_row.date])
