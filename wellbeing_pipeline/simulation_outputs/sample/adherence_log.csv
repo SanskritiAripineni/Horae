@@ -1,0 +1,9 @@
+case_id,blind_label,condition,participant_id,date,calendar_action,burden,adherence_probability,followed
+S001,A,calendar_only,P001,2026-03-06,add_buffer,low,0.75,True
+S001,B,behavior_aware,P001,2026-03-06,reduce_evening_load,medium,0.4,False
+S002,A,calendar_only,P001,2026-03-07,add_buffer,low,0.75,True
+S002,B,behavior_aware,P001,2026-03-07,reduce_evening_load,medium,0.4,False
+S003,A,calendar_only,P001,2026-03-08,add_buffer,low,0.75,True
+S003,B,behavior_aware,P001,2026-03-08,reduce_evening_load,medium,0.4,False
+S004,A,calendar_only,P002,2026-03-06,add_buffer,low,0.95,True
+S004,B,behavior_aware,P002,2026-03-06,suggest_break,low,0.95,True

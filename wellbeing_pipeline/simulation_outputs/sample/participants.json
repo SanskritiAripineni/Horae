@@ -1,0 +1,28 @@
+[
+  {
+    "adherence_tendency": "medium",
+    "archetype": "late-night overloaded student",
+    "chronotype": "evening",
+    "mobility_pattern": "campus-centered",
+    "participant_id": "P001",
+    "phone_use_tendency": "late-night-heavy",
+    "schedule_flexibility": "medium",
+    "sleep_regularity": "moderately variable",
+    "social_rhythm": "regular",
+    "stress_sensitivity": "high",
+    "workload": "heavy"
+  },
+  {
+    "adherence_tendency": "high",
+    "archetype": "restricted-mobility deadline week student",
+    "chronotype": "neutral",
+    "mobility_pattern": "restricted-after-deadline",
+    "participant_id": "P002",
+    "phone_use_tendency": "moderate",
+    "schedule_flexibility": "high",
+    "sleep_regularity": "stable",
+    "social_rhythm": "clustered",
+    "stress_sensitivity": "medium",
+    "workload": "heavy"
+  }
+]
