@@ -4,6 +4,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import com.autolife.composeapp.ui.AutoLifeNavHost
 import com.autolife.composeapp.ui.screens.ConsentScreen
+import com.autolife.composeapp.ui.screens.NotEnrolledScreen
 import com.autolife.composeapp.ui.theme.AutoLifeTheme
 import com.autolife.shared.db.DatabaseRepository
 import com.autolife.shared.model.EnrollRequest
@@ -34,6 +35,7 @@ fun AutoLifeApp(
     modifier: Modifier = Modifier,
 ) {
     var consented by remember { mutableStateOf<Boolean?>(null) }
+    var declined by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -59,32 +61,39 @@ fun AutoLifeApp(
                 )
             }
             false -> {
-                ConsentScreen(
-                    onConsented = {
-                        val now = currentTimeMillis()
-                        scope.launch {
-                            withContext(Dispatchers.IO) {
-                                DatabaseRepository.recordConsent(consentedAt = now)
-                            }
-                            consented = true
-                            onConsentReady()
-                            try {
-                                val deviceId = getOrCreateDeviceId()
-                                AnalysisRepository.userId = deviceId
-                                val resp = AutoLifeApi.enroll(EnrollRequest(user_id = deviceId, consented_at = now))
-                                resp.auth_token?.let { token ->
-                                    withContext(Dispatchers.IO) {
-                                        DatabaseRepository.saveAuthToken(token)
-                                    }
-                                    AutoLifeApi.setAuthToken(token)
+                if (declined) {
+                    NotEnrolledScreen()
+                } else {
+                    ConsentScreen(
+                        onConsented = {
+                            val now = currentTimeMillis()
+                            scope.launch {
+                                withContext(Dispatchers.IO) {
+                                    DatabaseRepository.recordConsent(consentedAt = now)
                                 }
-                            } catch (_: Exception) {
-                                // Enrollment failure is non-fatal — consent is recorded locally
+                                consented = true
+                                onConsentReady()
+                                try {
+                                    val deviceId = getOrCreateDeviceId()
+                                    AnalysisRepository.userId = deviceId
+                                    val resp = AutoLifeApi.enroll(EnrollRequest(user_id = deviceId, consented_at = now))
+                                    resp.auth_token?.let { token ->
+                                        withContext(Dispatchers.IO) {
+                                            DatabaseRepository.saveAuthToken(token)
+                                        }
+                                        AutoLifeApi.setAuthToken(token)
+                                    }
+                                } catch (_: Exception) {
+                                    // Enrollment failure is non-fatal — consent is recorded locally
+                                }
                             }
-                        }
-                    },
-                    onDeclined = onDecline,
-                )
+                        },
+                        onDeclined = {
+                            declined = true
+                            onDecline()
+                        },
+                    )
+                }
             }
         }
     }

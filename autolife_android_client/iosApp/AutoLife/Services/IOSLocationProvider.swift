@@ -18,6 +18,11 @@ class IOSLocationProvider: NSObject, LocationProvider, CLLocationManagerDelegate
         manager.requestWhenInUseAuthorization()
     }
 
+    func hasLocationAuthorization() -> Bool {
+        let status = manager.authorizationStatus
+        return status == .authorizedWhenInUse || status == .authorizedAlways
+    }
+
     func getCurrentLocation() async -> LocationData? {
         let status = manager.authorizationStatus
         guard status == .authorizedWhenInUse || status == .authorizedAlways else {

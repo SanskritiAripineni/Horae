@@ -34,11 +34,13 @@ class IOSSensorServiceManager {
             PlatformStateProvider.shared.updateServiceState(isRunning: false, isDemoMode: isDemoMode)
             return
         }
+        guard locationProvider.hasLocationAuthorization() else {
+            locationProvider.requestPermission()
+            PlatformStateProvider.shared.updateServiceState(isRunning: false, isDemoMode: isDemoMode)
+            return
+        }
+
         isRunning = true
-
-        locationProvider.requestPermission()
-
-        // Start motion detection
         motionProvider.startDetection { [weak self] types in
             guard let self = self else { return }
             let label = types.joined(separator: ", ")

@@ -92,6 +92,7 @@ dependencies {
     // Lifecycle ↔ Compose integrations
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.4")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
+    implementation("androidx.fragment:fragment:1.3.6")
 
     // Location & Services
     implementation("com.google.android.gms:play-services-location:21.3.0")

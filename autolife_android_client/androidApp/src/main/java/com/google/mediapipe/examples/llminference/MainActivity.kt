@@ -25,7 +25,10 @@ import com.autolife.shared.repository.AnalysisRepository
 
 class MainActivity : ComponentActivity() {
 
+    private enum class PermissionRequest { Core, Optional }
+
     private var frameCallback: Choreographer.FrameCallback? = null
+    private var pendingPermissionRequest = PermissionRequest.Core
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
@@ -38,11 +41,34 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val denied = permissions.filterValues { !it }.keys
-        if (denied.isNotEmpty()) {
-            Log.w("MainActivity", "Permissions denied: $denied — some features may not work")
-            com.google.mediapipe.examples.llminference.data.DebugRepository.setServiceRunning(false)
-        } else {
-            toggleAutoLifeService(true)
+        when (pendingPermissionRequest) {
+            PermissionRequest.Core -> {
+                if (hasCoreCollectionPermissions()) {
+                    if (denied.isNotEmpty()) {
+                        Log.w("MainActivity", "Non-core permissions denied during core request: $denied")
+                    }
+                    toggleAutoLifeService(true)
+                    requestMissingOptionalRuntimePermissions()
+                } else {
+                    Log.w("MainActivity", "Core permissions denied: $denied")
+                    com.google.mediapipe.examples.llminference.data.DebugRepository.setServiceRunning(false)
+                    Toast.makeText(
+                        this,
+                        "Location and motion permissions are required before AutoLife can record in the background.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+            PermissionRequest.Optional -> {
+                if (denied.isNotEmpty()) {
+                    Log.w("MainActivity", "Optional permissions denied: $denied")
+                    Toast.makeText(
+                        this,
+                        "Collecting with limited coverage: missing ${denied.joinToString { PermissionPolicy.coverageLabel(it) }}.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
         }
     }
 
@@ -122,35 +148,40 @@ class MainActivity : ComponentActivity() {
         window.decorView.systemUiVisibility = flags
     }
 
-    private fun runtimePermissions(): Array<String> {
-        val perms = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            perms += Manifest.permission.ACTIVITY_RECOGNITION
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            perms += Manifest.permission.POST_NOTIFICATIONS
-            perms += Manifest.permission.NEARBY_WIFI_DEVICES
-        }
-        return perms.toTypedArray()
-    }
-
-    private fun missingRuntimePermissions(): Array<String> =
-        runtimePermissions().filter { permission ->
+    private fun missingRuntimePermissions(permissions: Array<String>): Array<String> =
+        permissions.filter { permission ->
             ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED
         }.toTypedArray()
 
     private fun requestMissingRuntimePermissions() {
-        val missing = missingRuntimePermissions()
+        val missing = missingRuntimePermissions(PermissionPolicy.requiredRuntimePermissions())
         if (missing.isNotEmpty()) {
+            pendingPermissionRequest = PermissionRequest.Core
             requestPermissionLauncher.launch(missing)
         } else {
             toggleAutoLifeService(true)
+            requestMissingOptionalRuntimePermissions()
+        }
+    }
+
+    private fun requestMissingOptionalRuntimePermissions() {
+        val missing = missingRuntimePermissions(PermissionPolicy.optionalRuntimePermissions())
+        if (missing.isNotEmpty()) {
+            pendingPermissionRequest = PermissionRequest.Optional
+            requestPermissionLauncher.launch(missing)
         }
     }
 
     private fun hasLocationPermission(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    private fun hasActivityRecognitionPermission(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
+
+    private fun hasCoreCollectionPermissions(): Boolean =
+        hasLocationPermission() && hasActivityRecognitionPermission()
 
     private fun toggleAutoLifeService(shouldStart: Boolean) {
         val intent = Intent(this, AutoLifeService::class.java)
@@ -160,11 +191,11 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        if (!hasLocationPermission()) {
+        if (!hasCoreCollectionPermissions()) {
             requestMissingRuntimePermissions()
             Toast.makeText(
                 this,
-                "Location permission is required before AutoLife can record in the background.",
+                "Location and motion permissions are required before AutoLife can record in the background.",
                 Toast.LENGTH_LONG,
             ).show()
             return

@@ -309,19 +309,7 @@ class ScheduleViewModel : ViewModel() {
 
     fun clearPendingUrl() { pendingAuthUrl = null }
 
-    fun applySelected() {
-        val current = AnalysisRepository.selectedProposals.value
-        if (current.isEmpty()) return
-        viewModelScope.launch {
-            if (calendarConnected != true) {
-                SnackbarBus.emit("Connect Google Calendar before applying changes")
-                return@launch
-            }
-            ProposalApplier.apply(current)
-        }
-    }
-
-    fun applyAll(changes: List<ProposedChange>) {
+    fun applyChanges(changes: List<ProposedChange>) {
         if (changes.isEmpty()) return
         viewModelScope.launch {
             if (calendarConnected != true) {
@@ -581,6 +569,7 @@ fun ScheduleScreen(
     var showCalendar by rememberSaveable { mutableStateOf(false) }
     var showAllProposals by remember { mutableStateOf(false) }
     var selectedBar by remember { mutableStateOf<CalendarEventBar?>(null) }
+    var pendingCalendarWrite by remember { mutableStateOf<List<ProposedChange>?>(null) }
     val expandedProposalKeys = remember { mutableStateListOf<String>() }
     val conflictFlags = remember(proposalBars, eventBars) {
         proposalBars.associateWith { hasConflict(it, eventBars) }
@@ -641,7 +630,7 @@ fun ScheduleScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             if (clearProposals.isNotEmpty()) {
                                 TextButton(
-                                    onClick = { viewModel.applyAll(clearProposals) },
+                                    onClick = { pendingCalendarWrite = clearProposals },
                                     enabled = !isApplying && viewModel.calendarConnected == true,
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                                 ) {
@@ -723,7 +712,7 @@ fun ScheduleScreen(
                 // Apply button
                 item {
                     Button(
-                        onClick = { viewModel.applySelected() },
+                        onClick = { pendingCalendarWrite = selectedProposals },
                         enabled = selectedProposals.isNotEmpty() && !isApplying && viewModel.calendarConnected == true,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -834,6 +823,16 @@ fun ScheduleScreen(
         // Event detail sheet
         if (selectedBar != null) {
             EventDetailSheet(bar = selectedBar!!, onDismiss = { selectedBar = null })
+        }
+        pendingCalendarWrite?.let { changes ->
+            CalendarWriteConfirmationDialog(
+                changes = changes,
+                onDismiss = { pendingCalendarWrite = null },
+                onConfirm = {
+                    pendingCalendarWrite = null
+                    viewModel.applyChanges(changes)
+                },
+            )
         }
     }
 }

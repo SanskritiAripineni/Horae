@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Manifest-time permissions -->
     <uses-permission android:name="android.permission.INTERNET"/>
@@ -21,7 +22,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Screen-time markers via UsageStatsManager. User grants via Settings → Apps → Special access → Usage access. -->
-    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
 
     <!-- Communication reciprocity (comm_reciprocity marker). READ_SMS and READ_CALL_LOG
          removed: Play Store policy-restricted (M5). Metric derived from metadata only. -->

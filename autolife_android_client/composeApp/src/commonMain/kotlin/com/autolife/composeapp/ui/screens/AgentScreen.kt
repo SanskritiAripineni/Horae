@@ -873,6 +873,7 @@ private fun LastResultDetail(result: ProcessJournalsResponse?) {
     if (result.proposed_changes.isNotEmpty()) {
         val scope = rememberCoroutineScope()
         val isApplying by ProposalApplier.isApplying.collectAsState()
+        var pendingCalendarWrite by remember { mutableStateOf<List<ProposedChange>?>(null) }
         SurfaceCard {
             SectionHeader(title = "Proposed Changes (${result.proposed_changes.size})")
             result.proposed_changes.forEach { change ->
@@ -884,7 +885,7 @@ private fun LastResultDetail(result: ProcessJournalsResponse?) {
             Spacer(Modifier.height(10.dp))
             val changes = result.proposed_changes
             Button(
-                onClick = { scope.launch { ProposalApplier.apply(changes) } },
+                onClick = { pendingCalendarWrite = changes },
                 enabled = !isApplying,
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -898,6 +899,16 @@ private fun LastResultDetail(result: ProcessJournalsResponse?) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        pendingCalendarWrite?.let { changes ->
+            CalendarWriteConfirmationDialog(
+                changes = changes,
+                onDismiss = { pendingCalendarWrite = null },
+                onConfirm = {
+                    pendingCalendarWrite = null
+                    scope.launch { ProposalApplier.apply(changes) }
+                },
             )
         }
     }

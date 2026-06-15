@@ -11,5 +11,8 @@ fun MainViewController() = ComposeUIViewController {
         onConsentReady = {
             IOSServiceBridge.onServiceToggle?.invoke(true)
         },
+        onDecline = {
+            IOSServiceBridge.onServiceToggle?.invoke(false)
+        },
     )
 }
