@@ -4,6 +4,7 @@ Smoke-test longitudinal behavior-aware scheduling simulation.
 Presets:
   - sample: 2 participants, 7 days, 3 passive baseline days
   - medium: 5 participants, 14 days, 7 passive baseline days
+  - large: 20 participants, 14 days, 7 passive baseline days
 
 The sample is intentionally small. Its purpose is to verify that simulated
 profiles, calendars, sensing traces, AutoLife summaries, behavioral-state
@@ -56,6 +57,13 @@ CONFIGS = {
     "medium": SimulationConfig(
         name="medium",
         participants=5,
+        n_days=14,
+        baseline_days=7,
+        max_decision_days_per_participant=3,
+    ),
+    "large": SimulationConfig(
+        name="large",
+        participants=20,
         n_days=14,
         baseline_days=7,
         max_decision_days_per_participant=3,
@@ -120,10 +128,10 @@ def path(name: str) -> Path:
     return OUTPUT_DIR / name
 
 
-def _profile_pool() -> list[ParticipantProfile]:
+def _profile_templates() -> list[ParticipantProfile]:
     return [
         ParticipantProfile(
-            participant_id="P001",
+            participant_id="",
             archetype="late-night overloaded student",
             chronotype="evening",
             sleep_regularity="moderately variable",
@@ -136,7 +144,7 @@ def _profile_pool() -> list[ParticipantProfile]:
             stress_sensitivity="high",
         ),
         ParticipantProfile(
-            participant_id="P002",
+            participant_id="",
             archetype="restricted-mobility deadline week student",
             chronotype="neutral",
             sleep_regularity="stable",
@@ -149,7 +157,7 @@ def _profile_pool() -> list[ParticipantProfile]:
             stress_sensitivity="medium",
         ),
         ParticipantProfile(
-            participant_id="P003",
+            participant_id="",
             archetype="circadian-instability student",
             chronotype="evening",
             sleep_regularity="unstable",
@@ -162,7 +170,7 @@ def _profile_pool() -> list[ParticipantProfile]:
             stress_sensitivity="medium",
         ),
         ParticipantProfile(
-            participant_id="P004",
+            participant_id="",
             archetype="sleep-loss fragmented-attention student",
             chronotype="neutral",
             sleep_regularity="moderately variable",
@@ -175,7 +183,7 @@ def _profile_pool() -> list[ParticipantProfile]:
             stress_sensitivity="high",
         ),
         ParticipantProfile(
-            participant_id="P005",
+            participant_id="",
             archetype="mixed late-work student",
             chronotype="neutral",
             sleep_regularity="moderately variable",
@@ -188,6 +196,45 @@ def _profile_pool() -> list[ParticipantProfile]:
             stress_sensitivity="medium",
         ),
     ]
+
+
+def _profile_pool() -> list[ParticipantProfile]:
+    templates = _profile_templates()
+    profiles = []
+    for idx in range(ACTIVE_CONFIG.participants):
+        template = templates[idx % len(templates)]
+        profile = asdict(template)
+        profile["participant_id"] = f"P{idx + 1:03d}"
+        profiles.append(ParticipantProfile(**profile))
+    return profiles
+
+
+def _archetype(profile: dict) -> str:
+    return profile["archetype"]
+
+
+def _is_late_work(profile: dict) -> bool:
+    return _archetype(profile) in {
+        "late-night overloaded student",
+        "circadian-instability student",
+        "mixed late-work student",
+    }
+
+
+def _is_restricted_mobility(profile: dict) -> bool:
+    return _archetype(profile) == "restricted-mobility deadline week student"
+
+
+def _is_circadian(profile: dict) -> bool:
+    return _archetype(profile) == "circadian-instability student"
+
+
+def _is_fragmented_attention(profile: dict) -> bool:
+    return _archetype(profile) == "sleep-loss fragmented-attention student"
+
+
+def _is_mixed_late_work(profile: dict) -> bool:
+    return _archetype(profile) == "mixed late-work student"
 
 
 def stage_profiles() -> None:
@@ -224,8 +271,7 @@ def _calendar_for_day(profile: dict, day: date, day_index: int) -> list[dict]:
             "category": "work",
         },
     ]
-    pid = profile["participant_id"]
-    if pid in {"P001", "P003", "P005"}:
+    if _is_late_work(profile):
         base.append({
             "start": "21:00",
             "end": "22:30",
@@ -233,7 +279,7 @@ def _calendar_for_day(profile: dict, day: date, day_index: int) -> list[dict]:
             "flexibility": "flexible",
             "category": "work",
         })
-    if pid == "P004":
+    if _is_fragmented_attention(profile):
         base.extend([
             {
                 "start": "13:00",
@@ -251,7 +297,7 @@ def _calendar_for_day(profile: dict, day: date, day_index: int) -> list[dict]:
             },
         ])
     else:
-        if pid == "P002":
+        if _is_restricted_mobility(profile):
             base.extend([
                 {
                     "start": "12:30",
@@ -268,7 +314,7 @@ def _calendar_for_day(profile: dict, day: date, day_index: int) -> list[dict]:
                     "category": "restorative",
                 },
             ])
-        if pid == "P002" and day_index > ACTIVE_CONFIG.baseline_days:
+        if _is_restricted_mobility(profile) and day_index > ACTIVE_CONFIG.baseline_days:
             base = [
                 event for event in base
                 if event["title"] not in {"lunch outside", "gym"}
@@ -316,7 +362,6 @@ PLACES = {
 
 
 def _place_for_time(profile: dict, day_index: int, hour: int) -> str:
-    pid = profile["participant_id"]
     if hour < 8:
         return "home"
     if 8 <= hour < 10:
@@ -324,21 +369,27 @@ def _place_for_time(profile: dict, day_index: int, hour: int) -> str:
     if 10 <= hour < 12:
         return "classroom"
     if 12 <= hour < 14:
-        return "dining" if not (pid == "P002" and day_index > ACTIVE_CONFIG.baseline_days) else "home"
+        return "dining" if not (
+            _is_restricted_mobility(profile)
+            and day_index > ACTIVE_CONFIG.baseline_days
+        ) else "home"
     if 14 <= hour < 18:
-        if pid == "P002" and day_index > ACTIVE_CONFIG.baseline_days:
+        if _is_restricted_mobility(profile) and day_index > ACTIVE_CONFIG.baseline_days:
             return "home"
         return "library"
     if 18 <= hour < 20:
-        if pid in {"P001", "P003", "P005"}:
+        if _is_late_work(profile):
             return "dining"
         return "gym" if day_index <= ACTIVE_CONFIG.baseline_days else "home"
     if 20 <= hour < 23:
-        if pid in {"P001", "P005"}:
+        if _archetype(profile) in {
+            "late-night overloaded student",
+            "mixed late-work student",
+        }:
             return "library" if day_index > ACTIVE_CONFIG.baseline_days else "social"
-        if pid == "P003":
+        if _is_circadian(profile):
             return "social" if day_index % 2 == 0 else "home"
-        if pid == "P004":
+        if _is_fragmented_attention(profile):
             return "library"
         return "home"
     return "home"
@@ -386,7 +437,7 @@ def _raw_day(profile: dict, day: date, day_index: int, rng: random.Random) -> di
     srm = 0.80 + rng.uniform(-0.04, 0.04)
     sleep_regularity = 84 - abs(sleep_onset - 23.2) * 3 + rng.uniform(-1.5, 1.5)
 
-    if pid == "P001":
+    if _archetype(profile) == "late-night overloaded student":
         sleep_onset = 23.35 + rng.uniform(-0.15, 0.15)
         sleep_duration = 7.5 + rng.uniform(-0.2, 0.2)
         late_screen = 30 + rng.uniform(-6, 6)
@@ -399,7 +450,7 @@ def _raw_day(profile: dict, day: date, day_index: int, rng: random.Random) -> di
             total_screen = 350 + rng.uniform(-25, 25)
             app_switch = 1.8 + rng.uniform(-0.15, 0.2)
             sleep_regularity = 70 + rng.uniform(-3, 3)
-    elif pid == "P002":
+    elif _is_restricted_mobility(profile):
         sleep_onset = 23.0 + rng.uniform(-0.12, 0.12)
         sleep_duration = 7.8 + rng.uniform(-0.2, 0.2)
         mobility_entropy = 1.85 + rng.uniform(-0.08, 0.08)
@@ -410,7 +461,7 @@ def _raw_day(profile: dict, day: date, day_index: int, rng: random.Random) -> di
             revisit = 0.90 + rng.uniform(-0.03, 0.03)
             srm = 0.55 + rng.uniform(-0.05, 0.05)
             total_screen = 300 + rng.uniform(-25, 25)
-    elif pid == "P003":
+    elif _is_circadian(profile):
         sleep_onset = 23.4 + rng.uniform(-0.2, 0.2)
         sleep_duration = 7.4 + rng.uniform(-0.25, 0.25)
         sleep_regularity = 86 + rng.uniform(-2, 2)
@@ -420,7 +471,7 @@ def _raw_day(profile: dict, day: date, day_index: int, rng: random.Random) -> di
             sleep_duration = 7.0 + rng.uniform(-0.35, 0.25)
             sleep_regularity = 60 + rng.uniform(-4, 4)
             srm = 0.52 + rng.uniform(-0.05, 0.05)
-    elif pid == "P004":
+    elif _is_fragmented_attention(profile):
         sleep_duration = 7.6 + rng.uniform(-0.18, 0.18)
         app_switch = 1.0 + rng.uniform(-0.12, 0.12)
         if after_baseline:
@@ -428,7 +479,7 @@ def _raw_day(profile: dict, day: date, day_index: int, rng: random.Random) -> di
             app_switch = 2.05 + rng.uniform(-0.25, 0.2)
             total_screen = 330 + rng.uniform(-30, 30)
             late_screen = 70 + rng.uniform(-10, 10)
-    elif pid == "P005":
+    elif _is_mixed_late_work(profile):
         sleep_duration = 7.5 + rng.uniform(-0.2, 0.2)
         late_screen = 35 + rng.uniform(-6, 6)
         if after_baseline:
@@ -1390,7 +1441,11 @@ def stage_layer4_summary() -> None:
 
 - Participants: {ACTIVE_CONFIG.participants}
 - Days per participant: {ACTIVE_CONFIG.n_days}
+- Participant-days: {ACTIVE_CONFIG.participants * ACTIVE_CONFIG.n_days}
 - Passive baseline days: {ACTIVE_CONFIG.baseline_days}
+- Passive baseline participant-days: {ACTIVE_CONFIG.participants * ACTIVE_CONFIG.baseline_days}
+- Scheduler-period days per participant: {ACTIVE_CONFIG.n_days - ACTIVE_CONFIG.baseline_days}
+- Scheduler-period participant-days: {ACTIVE_CONFIG.participants * (ACTIVE_CONFIG.n_days - ACTIVE_CONFIG.baseline_days)}
 - Max evaluated decision days per participant: {ACTIVE_CONFIG.max_decision_days_per_participant}
 
 ## End-to-End Path
@@ -1402,6 +1457,7 @@ user preferences, and safety prompt -> blinded rater sheet.
 
 ## Output Check
 
+- Decision cases: {len(full_system)}
 - Calendar-only baseline outputs: {len(calendar_only)}
 - Full Layer 4 behavior-aware outputs: {len(full_system)}
 - Full Layer 4 outputs with suggestions: {suggestions_count}

@@ -119,3 +119,20 @@ Medium run:
 - Token totals: `input_tokens=18851`, `output_tokens=14914`,
   `cache_read_input_tokens=17055`, `cache_creation_input_tokens=0`
 - Output directory: `wellbeing_pipeline/simulation_outputs/medium/`
+
+Large 20-participant run:
+
+- Simulated participants: 20
+- Days per participant: 14
+- Participant-days: 280
+- Passive baseline participant-days: 140
+- Scheduler-period participant-days: 140
+- Evaluated decision cases: 60
+- Calendar-only baseline outputs: 60
+- Full Layer 4 behavior-aware outputs: 60
+- Blinded A/B rater options: 120
+- Clean human-rater rows: 60
+- Token totals: `input_tokens=77165`, `output_tokens=60173`,
+  `cache_read_input_tokens=67083`, `cache_creation_input_tokens=1137`
+- Output directory: `wellbeing_pipeline/simulation_outputs/large/`
+- Framing: preliminary feasibility evidence, not real human-subject validation
