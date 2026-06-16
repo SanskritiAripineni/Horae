@@ -165,7 +165,10 @@ def call_scheduler(state: dict,
     Returns the parsed JSON response with coherent_patterns, salience_reasoning,
     suggestions, and questions_for_user.
     """
-    client = anthropic.Anthropic(api_key=config.get_api_key())
+    client = anthropic.Anthropic(
+        api_key=config.get_api_key(),
+        timeout=config.REQUEST_TIMEOUT_SECONDS,
+    )
     model_id = model or config.DEFAULT_MODEL
     user_msg = _build_user_message(state, calendar, user_prefs, feedback_history=feedback_history)
 

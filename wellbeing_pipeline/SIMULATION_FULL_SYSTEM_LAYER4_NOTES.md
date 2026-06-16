@@ -19,13 +19,28 @@ LLM scheduler reasoning -> blinded rater sheet.
 stages:
 
 - `layer4-outputs`: calls `layer4_llm.call_scheduler()` for each behavior-aware
-  decision case.
+  decision case. It checkpoints `layer4_raw_outputs.jsonl` after every
+  completed LLM call, so interrupted runs can resume without repeating finished
+  cases.
 - `export-layer4-rater-sheet`: exports a blinded CSV for teammate scoring.
 - `layer4-summary`: summarizes the full-system run and token usage.
 
 The default `--stage all` remains the cheap deterministic smoke test. This is
 intentional so synthetic data can be regenerated without accidentally spending
 LLM calls.
+
+Layer 4 requests use a 90-second timeout by default. Override it when needed:
+
+```bash
+export ANTHROPIC_REQUEST_TIMEOUT_SECONDS=120
+```
+
+For a tiny smoke test, limit the number of Layer 4 cases:
+
+```bash
+export AUTOLIFE_LAYER4_MAX_CASES=1
+python3 wellbeing_pipeline/simulation/run_simulation.py --preset sample --stage layer4-outputs
+```
 
 ## How To Run The Full-System Evaluation
 
@@ -81,6 +96,19 @@ file is:
 
 ## Current Status
 
-The full-system stages are implemented. They cannot generate Layer 4 outputs
-until `ANTHROPIC_API_KEY` is available in the environment.
+The full-system stages have been implemented and run successfully.
 
+Sample run:
+
+- Full Layer 4 behavior-aware calls: 4
+- Blinded rater rows: 8
+- Output directory: `wellbeing_pipeline/simulation_outputs/sample/`
+
+Medium run:
+
+- Full Layer 4 behavior-aware calls: 15
+- Calendar-only baseline outputs: 15
+- Blinded rater rows: 30
+- Token totals: `input_tokens=18851`, `output_tokens=14914`,
+  `cache_read_input_tokens=17055`, `cache_creation_input_tokens=0`
+- Output directory: `wellbeing_pipeline/simulation_outputs/medium/`

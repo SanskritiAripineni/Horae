@@ -17,6 +17,9 @@ QUALITY_MODEL = "claude-opus-4-7"
 MAX_TOKENS = 2048
 TEMPERATURE = 0.3
 MAX_RETRIES = 1
+REQUEST_TIMEOUT_SECONDS = float(
+    os.environ.get("ANTHROPIC_REQUEST_TIMEOUT_SECONDS", "90")
+)
 
 
 def get_api_key() -> str:

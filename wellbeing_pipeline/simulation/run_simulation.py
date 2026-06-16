@@ -969,10 +969,27 @@ def stage_layer4_outputs() -> None:
 
     calendar_inputs = read_jsonl(path("scheduler_inputs_calendar_only.jsonl"))
     behavior_inputs = read_jsonl(path("scheduler_inputs_behavior_aware.jsonl"))
+    max_cases = os.environ.get("AUTOLIFE_LAYER4_MAX_CASES")
+    if max_cases:
+        behavior_inputs = behavior_inputs[:int(max_cases)]
+        selected_case_ids = {row["case_id"] for row in behavior_inputs}
+        calendar_inputs = [
+            row for row in calendar_inputs
+            if row["case_id"] in selected_case_ids
+        ]
     model = os.environ.get("AUTOLIFE_LAYER4_MODEL")
     outputs = []
-    raw_outputs = []
+    raw_path = path("layer4_raw_outputs.jsonl")
+    raw_outputs = read_jsonl(raw_path) if raw_path.exists() else []
+    completed_case_ids = {
+        row["case_id"]
+        for row in raw_outputs
+    }
     by_case: dict[str, list[dict]] = {}
+    behavior_by_case = {
+        row["case_id"]: row
+        for row in behavior_inputs
+    }
 
     for row in calendar_inputs:
         output = {
@@ -985,24 +1002,37 @@ def stage_layer4_outputs() -> None:
         by_case.setdefault(row["case_id"], []).append(output)
 
     for idx, row in enumerate(behavior_inputs, start=1):
+        if row["case_id"] in completed_case_ids:
+            print(
+                "Layer 4 call "
+                f"{idx}/{len(behavior_inputs)} for {row['case_id']} "
+                "already complete; reusing checkpoint.",
+                flush=True,
+            )
+            continue
         print(
             "Layer 4 call "
             f"{idx}/{len(behavior_inputs)} for {row['case_id']} "
-            f"{row['participant_id']} {row['date']}"
+            f"{row['participant_id']} {row['date']}",
+            flush=True,
         )
         state = {
             "structured": row["behavioral_state"],
             "prose": row["behavioral_state_prose"],
         }
-        result = call_scheduler(
-            state=state,
-            calendar=row["calendar"],
-            user_prefs=row["user_preferences"],
-            feedback_history=[],
-            model=model,
-        )
-        output = _layer4_output_from_result(row, result)
-        by_case.setdefault(row["case_id"], []).append(output)
+        try:
+            result = call_scheduler(
+                state=state,
+                calendar=row["calendar"],
+                user_prefs=row["user_preferences"],
+                feedback_history=[],
+                model=model,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Layer 4 call failed for {row['case_id']} "
+                f"{row['participant_id']} {row['date']}: {exc}"
+            ) from exc
         raw_outputs.append({
             "case_id": row["case_id"],
             "participant_id": row["participant_id"],
@@ -1015,6 +1045,32 @@ def stage_layer4_outputs() -> None:
             },
             "response": result,
         })
+        write_jsonl(raw_path, raw_outputs)
+        print(
+            f"Saved Layer 4 checkpoint for {row['case_id']} "
+            f"({len(raw_outputs)}/{len(behavior_inputs)} behavior-aware calls).",
+            flush=True,
+        )
+
+    raw_outputs = [
+        row for row in raw_outputs
+        if row["case_id"] in behavior_by_case
+    ]
+    missing_case_ids = sorted(set(behavior_by_case) - {
+        row["case_id"]
+        for row in raw_outputs
+    })
+    if missing_case_ids:
+        raise RuntimeError(
+            "Layer 4 outputs are incomplete; missing cases: "
+            + ", ".join(missing_case_ids)
+        )
+    for row in raw_outputs:
+        output = _layer4_output_from_result(
+            behavior_by_case[row["case_id"]],
+            row["response"],
+        )
+        by_case.setdefault(row["case_id"], []).append(output)
 
     rng = random.Random(SEED + 44)
     for case_id, case_outputs in sorted(by_case.items()):
@@ -1245,7 +1301,7 @@ def stage_layer4_summary() -> None:
         for key in token_totals:
             token_totals[key] += int(meta.get(key, 0) or 0)
 
-    questions_count = sum(
+    outputs_with_questions_count = sum(
         1 for row in full_system
         if row.get("questions_for_user")
     )
@@ -1274,7 +1330,7 @@ user preferences, and safety prompt -> blinded rater sheet.
 - Calendar-only baseline outputs: {len(calendar_only)}
 - Full Layer 4 behavior-aware outputs: {len(full_system)}
 - Full Layer 4 outputs with suggestions: {suggestions_count}
-- Full Layer 4 outputs with questions/no-change: {questions_count}
+- Full Layer 4 outputs also containing questions: {outputs_with_questions_count}
 - Blinded rater rows: {len(outputs)}
 
 ## Layer 4 API Use
