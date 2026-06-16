@@ -1185,6 +1185,8 @@ def stage_export_layer4_rater_sheet() -> None:
     }
     calendars = _load_calendars_by_key()
     rows = []
+    clean_rows = []
+    key_rows = []
     for output in outputs:
         key = (output["participant_id"], output["date"])
         deterministic_patterns = ", ".join(
@@ -1220,12 +1222,85 @@ def stage_export_layer4_rater_sheet() -> None:
             "specificity_1_5": "",
             "overall_preferred_A_or_B": "",
         })
+
+    by_case: dict[str, list[dict]] = {}
+    for output in outputs:
+        by_case.setdefault(output["case_id"], []).append(output)
+
+    for case_id, case_outputs in sorted(by_case.items()):
+        case_outputs = sorted(case_outputs, key=lambda row: row["blind_label"])
+        first = case_outputs[0]
+        key = (first["participant_id"], first["date"])
+        state = states[key]
+        calendar_summary = "; ".join(
+            f"{event['start']}-{event['end']} {event['title']} ({event['flexibility']})"
+            for event in calendars[key]["events"]
+        )
+        pattern_context = "; ".join(
+            pattern.get("interpretation", pattern.get("name", ""))
+            for pattern in state["state"]["structured"].get("coherent_patterns", [])
+        )
+        if not pattern_context:
+            pattern_context = "No coherent behavior pattern detected."
+        deviation_context = "; ".join(
+            deviation["finding"]
+            for deviation in state["deviations"][:3]
+        )
+        clean_row = {
+            "case_id": case_id,
+            "participant_id": first["participant_id"],
+            "date": first["date"],
+            "calendar_context": calendar_summary,
+            "behavior_context": pattern_context,
+            "key_observations": deviation_context,
+            "rating_instruction": (
+                "Compare Option A and Option B. Pick the option that is more "
+                "useful, behavior-aware, feasible, and safe for this day."
+            ),
+            "option_A_recommendation": "",
+            "option_A_reason": "",
+            "option_B_recommendation": "",
+            "option_B_reason": "",
+            "preferred_option_A_or_B": "",
+            "A_relevance_1_5": "",
+            "B_relevance_1_5": "",
+            "A_behavioral_alignment_1_5": "",
+            "B_behavioral_alignment_1_5": "",
+            "A_feasibility_1_5": "",
+            "B_feasibility_1_5": "",
+            "A_safety_1_5": "",
+            "B_safety_1_5": "",
+            "notes": "",
+        }
+        for output in case_outputs:
+            label = output["blind_label"]
+            clean_row[f"option_{label}_recommendation"] = output["recommendation"]
+            clean_row[f"option_{label}_reason"] = output["reason"]
+            key_rows.append({
+                "case_id": case_id,
+                "option": label,
+                "condition": output["condition"],
+                "participant_id": output["participant_id"],
+                "date": output["date"],
+            })
+        clean_rows.append(clean_row)
+
     with path("rater_sheet_layer4.csv").open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)
+    with path("rater_sheet_layer4_clean.csv").open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=list(clean_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(clean_rows)
+    with path("rater_sheet_layer4_key.csv").open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=list(key_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(key_rows)
     print(f"Layer 4 section complete: exported {ACTIVE_CONFIG.name} rater sheet.")
     print(f"Generated: {path('rater_sheet_layer4.csv')}")
+    print(f"Generated: {path('rater_sheet_layer4_clean.csv')}")
+    print(f"Generated: {path('rater_sheet_layer4_key.csv')}")
 
 
 def stage_summary() -> None:

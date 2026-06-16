@@ -22,7 +22,8 @@ stages:
   decision case. It checkpoints `layer4_raw_outputs.jsonl` after every
   completed LLM call, so interrupted runs can resume without repeating finished
   cases.
-- `export-layer4-rater-sheet`: exports a blinded CSV for teammate scoring.
+- `export-layer4-rater-sheet`: exports both a detailed/debug blinded CSV and a
+  cleaner human-rating CSV with Option A and Option B side by side.
 - `layer4-summary`: summarizes the full-system run and token usage.
 
 The default `--stage all` remains the cheap deterministic smoke test. This is
@@ -78,7 +79,13 @@ These files will be written under
 - `scheduler_outputs_layer4_blinded.jsonl`
 - `layer4_raw_outputs.jsonl`
 - `rater_sheet_layer4.csv`
+- `rater_sheet_layer4_clean.csv`
+- `rater_sheet_layer4_key.csv`
 - `simulation_summary_layer4.md`
+
+Use `rater_sheet_layer4_clean.csv` for human scoring. Keep
+`rater_sheet_layer4_key.csv` hidden until after ratings are complete because it
+contains the condition mapping.
 
 ## Correct Paper Framing
 

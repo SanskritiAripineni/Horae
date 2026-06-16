@@ -1,0 +1,9 @@
+case_id,option,condition,participant_id,date
+S001,A,full_system_layer4,P001,2026-03-06
+S001,B,calendar_only_baseline,P001,2026-03-06
+S002,A,full_system_layer4,P001,2026-03-07
+S002,B,calendar_only_baseline,P001,2026-03-07
+S003,A,calendar_only_baseline,P001,2026-03-08
+S003,B,full_system_layer4,P001,2026-03-08
+S004,A,full_system_layer4,P002,2026-03-06
+S004,B,calendar_only_baseline,P002,2026-03-06
