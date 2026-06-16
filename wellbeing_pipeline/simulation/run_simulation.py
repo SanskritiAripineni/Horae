@@ -676,6 +676,15 @@ def _first_flexible_event(calendar: list[dict], preferred_titles: set[str] | Non
     return None
 
 
+def _variant(input_row: dict, n: int) -> int:
+    key = f"{input_row['case_id']}:{input_row['participant_id']}:{input_row['date']}"
+    return sum(ord(ch) for ch in key) % n
+
+
+def _recommendation_from_options(input_row: dict, options: list[dict]) -> dict:
+    return options[_variant(input_row, len(options))]
+
+
 def _schedule_recommendation(input_row: dict) -> dict:
     calendar = input_row["calendar"]
     if input_row["condition"] == "calendar_only":
@@ -690,15 +699,35 @@ def _schedule_recommendation(input_row: dict) -> dict:
                 "confidence": "medium",
                 "safety_note": "No fixed obligations were changed.",
             }
-        return {
-            "recommendation": f"Keep {event['title']} flexible and add a 15-minute buffer before it.",
-            "calendar_action": "add_buffer",
-            "target_event": event["title"],
-            "reason": "The calendar has several obligations; a small buffer is a low-burden adjustment.",
-            "burden": "low",
-            "confidence": "medium",
-            "safety_note": "No behavioral or clinical inference was made.",
-        }
+        return _recommendation_from_options(input_row, [
+            {
+                "recommendation": f"Keep {event['title']} flexible and add a 15-minute buffer before it.",
+                "calendar_action": "add_buffer",
+                "target_event": event["title"],
+                "reason": "The calendar has several obligations; a small buffer is a low-burden adjustment.",
+                "burden": "low",
+                "confidence": "medium",
+                "safety_note": "No behavioral or clinical inference was made.",
+            },
+            {
+                "recommendation": f"Preserve {event['title']} but leave its exact start time adjustable.",
+                "calendar_action": "keep",
+                "target_event": event["title"],
+                "reason": "Without behavioral context, the safest recommendation is to maintain flexibility around a non-fixed event.",
+                "burden": "low",
+                "confidence": "medium",
+                "safety_note": "No fixed obligations were changed.",
+            },
+            {
+                "recommendation": f"Add a short transition buffer after {event['title']} if the day feels crowded.",
+                "calendar_action": "add_buffer",
+                "target_event": event["title"],
+                "reason": "The calendar includes multiple commitments, so a small transition buffer may reduce schedule friction.",
+                "burden": "low",
+                "confidence": "medium",
+                "safety_note": "This suggestion is based only on calendar structure.",
+            },
+        ])
 
     patterns = {
         pattern["name"]
@@ -706,48 +735,128 @@ def _schedule_recommendation(input_row: dict) -> dict:
     }
     if "phone-mediated-sleep-delay" in patterns:
         event = _first_flexible_event(calendar, {"optional work session", "deadline work block"})
-        return {
-            "recommendation": f"Move {event['title']} out of the late evening if possible.",
-            "calendar_action": "reduce_evening_load",
-            "target_event": event["title"],
-            "reason": "Recent later sleep onset and elevated late-night phone use suggest protecting the evening wind-down period.",
-            "burden": "medium",
-            "confidence": "medium",
-            "safety_note": "The suggestion targets a flexible event and avoids changing fixed obligations.",
-        }
+        return _recommendation_from_options(input_row, [
+            {
+                "recommendation": f"Move {event['title']} out of the late evening if possible.",
+                "calendar_action": "reduce_evening_load",
+                "target_event": event["title"],
+                "reason": "Recent later sleep onset and elevated late-night phone use suggest protecting the evening wind-down period.",
+                "burden": "medium",
+                "confidence": "medium",
+                "safety_note": "The suggestion targets a flexible event and avoids changing fixed obligations.",
+            },
+            {
+                "recommendation": f"Shorten {event['title']} and set a firm evening stop time.",
+                "calendar_action": "protect_sleep",
+                "target_event": event["title"],
+                "reason": "The inferred pattern points to late-night activity pushing sleep later, so a clear stop time is a lower-disruption option than canceling the event.",
+                "burden": "medium",
+                "confidence": "medium",
+                "safety_note": "The recommendation keeps the event flexible and avoids clinical claims.",
+            },
+            {
+                "recommendation": f"Move the planning portion of {event['title']} to the afternoon and leave the evening lighter.",
+                "calendar_action": "move_to_daytime",
+                "target_event": event["title"],
+                "reason": "Late sleep onset and late-night screen use make evening workload a plausible scheduling pressure point.",
+                "burden": "medium",
+                "confidence": "medium",
+                "safety_note": "No fixed obligations are changed.",
+            },
+        ])
     if "behavioral-withdrawal" in patterns:
         event = _first_flexible_event(calendar, {"study block", "deadline work block"})
-        return {
-            "recommendation": f"Add a short outdoor or campus walk before {event['title']}.",
-            "calendar_action": "suggest_break",
-            "target_event": event["title"],
-            "reason": "Recent mobility became more restricted and concentrated around the same places, so a low-burden restorative movement block may fit.",
-            "burden": "low",
-            "confidence": "medium",
-            "safety_note": "This is a gentle scheduling suggestion, not a diagnosis.",
-        }
+        return _recommendation_from_options(input_row, [
+            {
+                "recommendation": f"Add a short outdoor or campus walk before {event['title']}.",
+                "calendar_action": "suggest_break",
+                "target_event": event["title"],
+                "reason": "Recent mobility became more restricted and concentrated around the same places, so a low-burden restorative movement block may fit.",
+                "burden": "low",
+                "confidence": "medium",
+                "safety_note": "This is a gentle scheduling suggestion, not a diagnosis.",
+            },
+            {
+                "recommendation": f"Move part of {event['title']} to a public campus location such as the library.",
+                "calendar_action": "reschedule",
+                "target_event": event["title"],
+                "reason": "Location routine narrowed recently, so a flexible event can be used to reintroduce a low-effort change of place.",
+                "burden": "low",
+                "confidence": "medium",
+                "safety_note": "The suggestion is optional and avoids interpreting mood.",
+            },
+            {
+                "recommendation": f"Pair {event['title']} with a brief meal or coffee stop away from the usual location.",
+                "calendar_action": "suggest_break",
+                "target_event": event["title"],
+                "reason": "The behavioral state suggests reduced location variety; a small adjacent routine change is lower burden than moving fixed obligations.",
+                "burden": "low",
+                "confidence": "medium",
+                "safety_note": "This is framed as a scheduling nudge, not a diagnosis.",
+            },
+        ])
     if "circadian-instability" in patterns:
         event = _first_flexible_event(calendar, {"optional work session", "study block"})
-        return {
-            "recommendation": f"Keep {event['title']} at a consistent daytime slot and avoid moving it later.",
-            "calendar_action": "protect_sleep",
-            "target_event": event["title"],
-            "reason": "Recent sleep timing became less regular, so preserving predictable daytime anchors is a low-burden scheduling response.",
-            "burden": "low",
-            "confidence": "medium",
-            "safety_note": "The suggestion preserves fixed obligations and avoids clinical claims.",
-        }
+        return _recommendation_from_options(input_row, [
+            {
+                "recommendation": f"Keep {event['title']} at a consistent daytime slot and avoid moving it later.",
+                "calendar_action": "protect_sleep",
+                "target_event": event["title"],
+                "reason": "Recent sleep timing became less regular, so preserving predictable daytime anchors is a low-burden scheduling response.",
+                "burden": "low",
+                "confidence": "medium",
+                "safety_note": "The suggestion preserves fixed obligations and avoids clinical claims.",
+            },
+            {
+                "recommendation": f"Anchor {event['title']} around the same time as earlier in the week.",
+                "calendar_action": "protect_sleep",
+                "target_event": event["title"],
+                "reason": "The inferred pattern is about timing instability, so the recommendation prioritizes regular schedule anchors.",
+                "burden": "low",
+                "confidence": "medium",
+                "safety_note": "No fixed obligations are changed.",
+            },
+            {
+                "recommendation": f"Avoid adding late-day tasks after {event['title']} and preserve a predictable evening boundary.",
+                "calendar_action": "reduce_evening_load",
+                "target_event": event["title"],
+                "reason": "Less regular sleep timing suggests that stable evening boundaries may be more appropriate than adding new flexible work.",
+                "burden": "low",
+                "confidence": "medium",
+                "safety_note": "The suggestion stays within calendar structure and avoids wellbeing diagnosis.",
+            },
+        ])
     if "fragmented-attention-with-sleep-loss" in patterns:
         event = _first_flexible_event(calendar, {"study block", "optional work session"})
-        return {
-            "recommendation": f"Move the most demanding part of {event['title']} earlier in the day.",
-            "calendar_action": "reschedule",
-            "target_event": event["title"],
-            "reason": "Shorter sleep and fragmented attention suggest protecting cognitively demanding work from late-day fatigue.",
-            "burden": "medium",
-            "confidence": "medium",
-            "safety_note": "No fixed events were changed.",
-        }
+        return _recommendation_from_options(input_row, [
+            {
+                "recommendation": f"Move the most demanding part of {event['title']} earlier in the day.",
+                "calendar_action": "reschedule",
+                "target_event": event["title"],
+                "reason": "Shorter sleep and fragmented attention suggest protecting cognitively demanding work from late-day fatigue.",
+                "burden": "medium",
+                "confidence": "medium",
+                "safety_note": "No fixed events were changed.",
+            },
+            {
+                "recommendation": f"Split {event['title']} into two shorter focus blocks with a break between them.",
+                "calendar_action": "add_buffer",
+                "target_event": event["title"],
+                "reason": "Fragmented attention plus shorter sleep suggests smaller work blocks may be more realistic than a long uninterrupted session.",
+                "burden": "medium",
+                "confidence": "medium",
+                "safety_note": "This changes only a flexible work block.",
+            },
+            {
+                "recommendation": f"Keep {event['title']} but move lower-priority tasks out of that block.",
+                "calendar_action": "reschedule",
+                "target_event": event["title"],
+                "reason": "Recent sleep loss and attention fragmentation suggest preserving the block for the highest-priority work only.",
+                "burden": "low",
+                "confidence": "medium",
+                "safety_note": "The suggestion avoids canceling commitments.",
+            },
+        ])
     event = _first_flexible_event(calendar)
     return {
         "recommendation": f"Keep {event['title']} flexible and add a small recovery buffer.",

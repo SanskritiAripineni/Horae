@@ -69,16 +69,26 @@ P005: 6
 Calendar-only scheduler:
 
 ```text
-add_buffer: 15
+add_buffer: 10
+keep: 5
 ```
 
 Behavior-aware scheduler:
 
 ```text
-reduce_evening_load: 6
-suggest_break: 3
-protect_sleep: 3
+protect_sleep: 4
+reduce_evening_load: 3
 reschedule: 3
+move_to_daytime: 2
+suggest_break: 2
+add_buffer: 1
+```
+
+Recommendation diversity:
+
+```text
+Calendar-only: 3 unique recommendations out of 15
+Behavior-aware: 12 unique recommendations out of 15
 ```
 
 This is the desired behavior for the pilot: the calendar-only condition mostly
@@ -90,25 +100,33 @@ changes the recommendation based on the inferred behavioral state.
 Phone-mediated sleep delay:
 
 ```text
+Shorten optional work session and set a firm evening stop time.
 Move optional work session out of the late evening if possible.
+Move the planning portion of optional work session to the afternoon.
 ```
 
 Behavioral withdrawal:
 
 ```text
 Add a short outdoor or campus walk before study block.
+Move part of study block to a public campus location such as the library.
+Pair study block with a brief meal or coffee stop away from the usual location.
 ```
 
 Circadian instability:
 
 ```text
 Keep study block at a consistent daytime slot and avoid moving it later.
+Anchor study block around the same time as earlier in the week.
+Avoid adding late-day tasks after study block.
 ```
 
 Fragmented attention with sleep loss:
 
 ```text
 Move the most demanding part of study block earlier in the day.
+Split study block into two shorter focus blocks.
+Move lower-priority tasks out of that block.
 ```
 
 ## Initial Interpretation
@@ -122,7 +140,9 @@ The medium pilot is promising because:
 4. Behavior-aware recommendations differed from calendar-only recommendations
    in pattern-specific ways.
 5. Recommendations targeted flexible events and included safety notes.
-6. The rater sheet is ready for teammate review.
+6. Behavior-aware recommendations now have enough within-pattern variation for
+   human review.
+7. The rater sheet is ready for teammate review.
 
 ## Caveat
 
@@ -143,6 +163,6 @@ simulation:
 5 evaluated decision days per participant
 ```
 
-Before scaling, the main improvement should be to add slightly more variation
-within each participant's repeated recommendations so raters do not see the same
-action repeated too often.
+The repeated recommendation issue from the first medium run has been addressed.
+The next decision is whether to use the medium rater sheet for teammate review
+or scale to the full WiP simulation first.
