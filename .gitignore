@@ -57,6 +57,7 @@ app/build/
 *.keystore
 
 # Data and model files
+data/chroma/
 data/raw_logs/*.log
 data/ihope_weights/*.h5
 data/ihope_weights/*.pb
