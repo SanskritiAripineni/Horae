@@ -39,18 +39,6 @@ The checked-in artifacts are intended to make the paper claims inspectable: Stud
 - `docs/`: framework documentation and the README figure.
 - `tests/`: focused regression tests for the sensing pipeline and simulation logic.
 
-## Paper Artifact Map
-
-| Paper evidence | Local artifact |
-| --- | --- |
-| StudentLife circadian-rule comparison and descriptive alignment table | `wellbeing_pipeline/results/studentlife_validation_circadian_rule_compare_1f1dfb2.md` |
-| StudentLife mixed-effects/random-intercept checks | `wellbeing_pipeline/results/studentlife_lmm_clustered_1f1dfb2_summary.md` |
-| StudentLife construct/outcome supplemental summaries | `wellbeing_pipeline/results/studentlife_construct_outcomes_tight_circadian_1f1dfb2_summary.md` |
-| Latent simulation aggregate metrics | `wellbeing_pipeline/simulation_outputs/latent/summary.json` |
-| Latent simulation detection and restraint checks | `wellbeing_pipeline/simulation_outputs/latent/detection_sensitivity.json`, `wellbeing_pipeline/simulation_outputs/latent/normal_day_restraint.json` |
-| Latent simulation blinded rater sheet and scored preferences | `wellbeing_pipeline/simulation_outputs/latent/rater_sheet_scored_with_arm.csv` |
-| Payload-size comparison | `wellbeing_pipeline/simulation_outputs/payload_size/payload_size_report.json` |
-| Behavioral sensing figures | `wellbeing_pipeline/figures/` |
 
 ## Quickstart
 
