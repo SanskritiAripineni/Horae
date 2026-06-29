@@ -6,6 +6,18 @@ Horae studies how an LLM scheduler can use compact behavioral context, rather th
 
 ![Horae framework](docs/horae_framework.png)
 
+## System Overview
+
+![Behavioral Sensing Pipeline](docs/diagrams/behavioral-sensing-pipeline.jpeg)
+
+## Behavioral Sensing Pipeline
+
+![Three-layer pipeline flow](docs/diagrams/three-layer-pipeline-flow.png)
+
+## Behavioral Markers
+
+![Wellbeing sensing biomarkers](docs/diagrams/wellbeing-sensing-biomarkers.png)
+
 ## Paper Context
 
 This repository supports a work-in-progress systems paper on agentic scheduling with passive mobile sensing. The paper evaluates two questions:
