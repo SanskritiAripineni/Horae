@@ -4,11 +4,10 @@ Code and paper artifacts for **Horae**, a behavior-aware agentic scheduling fram
 
 Horae studies how an LLM scheduler can use compact behavioral context, rather than raw phone streams or clinical labels, to make small calendar recommendations that respect user preferences and fixed obligations. The system combines mobile sensing summaries, personalized behavioral-state inference, evidence retrieval, calendar context, and memory into a scheduler-facing tool pipeline.
 
-![Horae framework](docs/horae_framework.png)
 
 ## System Overview
+![Horae framework](docs/horae_framework.png)
 
-![Behavioral Sensing Pipeline](docs/diagrams/behavioral-sensing-pipeline.jpeg)
 
 ## Behavioral Sensing Pipeline
 
@@ -17,6 +16,9 @@ Horae studies how an LLM scheduler can use compact behavioral context, rather th
 ## Behavioral Markers
 
 ![Wellbeing sensing biomarkers](docs/diagrams/wellbeing-sensing-biomarkers.png)
+
+
+
 
 ## Paper Context
 
