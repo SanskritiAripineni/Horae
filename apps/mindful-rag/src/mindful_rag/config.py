@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT_DIR: Path = Path(__file__).parent.parent.parent
 
 # Research papers directory (PDFs to ingest)
-PDF_DIR: Path = ROOT_DIR / "data" / "research_papers"
+PDF_DIR: Path = ROOT_DIR / "data" / "raw" / "research_papers"
 
 # CSV index of papers (title, category, extracted text)
 INDEX_CSV: Path = ROOT_DIR / "data" / "index" / "research_index.csv"

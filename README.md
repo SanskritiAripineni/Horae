@@ -29,13 +29,16 @@ This repository supports a work-in-progress systems paper on agentic scheduling 
 
 The checked-in artifacts are intended to make the paper claims inspectable: StudentLife validation summaries, latent simulation logs, payload-size measurements, focused tests, and framework source code are kept together with the scripts that produced them.
 
+The behavioral-science retrieval corpus used by the scheduler is also included. The paper-facing manifest is `apps/mindful-rag/data/index/research_corpus_manifest.csv`, which lists 61 papers and protocols across biological/lifestyle, cognitive/psychological, environmental/social, and meta-strategy clusters. Local PDFs are checked in for 60 manifest entries; the remaining entry is URL-only and recorded in the manifest.
+
 ## Repository Contents
 
 - `wellbeing_pipeline/`: layered behavioral sensing pipeline, StudentLife analyses, latent simulation, payload-size measurement, and stored paper artifacts.
 - `tools/`: scheduler tools for wellbeing sensing, AutoLife journal parsing, calendar context, feedback, and retrieval.
 - `agent.py`, `main.py`, `api.py`: prototype scheduler entrypoints and orchestration code.
 - `autolife_android_client/`: mobile prototype source for passive sensing and daily context generation.
-- `apps/mindful-rag/`, `vectordb/`: lightweight retrieval components used for behavioral-science guidance.
+- `apps/mindful-rag/`: paper-facing behavioral-science retrieval corpus and Mindful RAG tooling.
+- `vectordb/`: lightweight legacy/local vector DB demo with an 18-document PDF subset and CSV map.
 - `docs/`: framework documentation and the README figure.
 - `tests/`: focused regression tests for the sensing pipeline and simulation logic.
 
@@ -66,6 +69,24 @@ Payload-size summaries can be regenerated with:
 ```bash
 python wellbeing_pipeline/measure_payload_sizes.py
 ```
+
+The retrieval corpus can be inspected without rebuilding vectors:
+
+```bash
+python3 - <<'PY'
+import csv
+from collections import Counter
+
+with open("apps/mindful-rag/data/index/research_corpus_manifest.csv", newline="") as f:
+    rows = list(csv.DictReader(f))
+
+print(len(rows), "corpus entries")
+print(Counter(row["cluster"] for row in rows))
+print(Counter(row["paper_type"] for row in rows))
+PY
+```
+
+Generated Chroma/vector-store files are intentionally excluded from `main`; rebuild them from the checked-in corpus when needed.
 
 ## Claim Boundaries
 
