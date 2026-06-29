@@ -1,0 +1,265 @@
+{
+  "seed": 20260627,
+  "n_participants": 20,
+  "n_days_per_participant": 42,
+  "decision_days": [
+    29,
+    42
+  ],
+  "n_decision_cases": 280,
+  "pipeline_config": {
+    "warmup_days": 10,
+    "recent_days": 4,
+    "baseline_days": 21,
+    "min_magnitude": "mild"
+  },
+  "profile_counts": {
+    "fragmented-attention-with-sleep-loss": 3,
+    "behavioral-withdrawal": 5,
+    "phone-mediated-sleep-delay": 8,
+    "circadian-instability": 4
+  },
+  "pipeline_recovery": {
+    "case_agreement_rate": 0.307,
+    "participant_recovered_any_rate": 0.95,
+    "by_pattern": {
+      "phone-mediated-sleep-delay": {
+        "n": 112,
+        "agreement_rate": 0.295
+      },
+      "behavioral-withdrawal": {
+        "n": 70,
+        "agreement_rate": 0.4
+      },
+      "circadian-instability": {
+        "n": 56,
+        "agreement_rate": 0.25
+      },
+      "fragmented-attention-with-sleep-loss": {
+        "n": 42,
+        "agreement_rate": 0.262
+      }
+    }
+  },
+  "detection_sensitivity": {
+    "definition": "P(full pipeline emits predisposed pattern | decision day is inside a ground-truth episode)",
+    "overall": {
+      "episode_decision_days": 110,
+      "detected_days": 75,
+      "sensitivity": 0.682
+    },
+    "by_pattern": {
+      "phone-mediated-sleep-delay": {
+        "episode_decision_days": 39,
+        "detected_days": 27,
+        "sensitivity": 0.692
+      },
+      "behavioral-withdrawal": {
+        "episode_decision_days": 32,
+        "detected_days": 26,
+        "sensitivity": 0.812
+      },
+      "circadian-instability": {
+        "episode_decision_days": 23,
+        "detected_days": 13,
+        "sensitivity": 0.565
+      },
+      "fragmented-attention-with-sleep-loss": {
+        "episode_decision_days": 16,
+        "detected_days": 9,
+        "sensitivity": 0.562
+      }
+    }
+  },
+  "conditional_on_detection_quality": {
+    "definition": "quality on non-handed dimensions for cases where the full pipeline emitted the predisposed pattern",
+    "n_cases": 86,
+    "behavior_aware": {
+      "n": 86,
+      "burden_appropriate_rate": 0.407,
+      "flexible_fixed_protection_rate": 0.872,
+      "specificity_rate": 1.0,
+      "high_burden_change_rate": 0.43,
+      "mean_burden_score": 2.296
+    },
+    "calendar_only": {
+      "n": 86,
+      "burden_appropriate_rate": 0.57,
+      "flexible_fixed_protection_rate": 0.779,
+      "specificity_rate": 0.802,
+      "high_burden_change_rate": 0.233,
+      "mean_burden_score": 1.613
+    }
+  },
+  "normal_day_restraint": {
+    "definition": "restraint on normal decision days outside any ground-truth episode; lower high_burden_change_rate is better",
+    "n_cases": 170,
+    "behavior_aware": {
+      "n": 170,
+      "high_burden_change_rate": 0.071,
+      "no_change_rate": 0.418,
+      "mean_burden_score": 0.934,
+      "mean_suggestions": 0.635,
+      "burden_appropriate_rate": 0.818
+    },
+    "calendar_only": {
+      "n": 170,
+      "high_burden_change_rate": 0.124,
+      "no_change_rate": 0.294,
+      "mean_burden_score": 1.229,
+      "mean_suggestions": 0.735,
+      "burden_appropriate_rate": 0.718
+    }
+  },
+  "lever_credit_by_detection": {
+    "definition": "diagnostic only; raw latent-cause credit is de-emphasized because behavior-aware is handed inferred behavioral evidence on detected days",
+    "behavior_aware": {
+      "overall": 0.407,
+      "detected_or_marker_evidence_subset": 0.99,
+      "non_detected_subset": 0.083,
+      "n_detected_or_marker_evidence": 100,
+      "n_non_detected": 180,
+      "weighted_reconstruction": 0.407,
+      "weighted_matches_overall": true,
+      "overall_between_subsets": true
+    },
+    "calendar_only": {
+      "overall": 0.025,
+      "detected_or_marker_evidence_subset": null,
+      "non_detected_subset": 0.025,
+      "n_detected_or_marker_evidence": 0,
+      "n_non_detected": 280,
+      "weighted_reconstruction": null,
+      "weighted_matches_overall": null,
+      "overall_between_subsets": null
+    }
+  },
+  "detection_diagnostics": {
+    "detection_note": "Misses are counted only on ground-truth episode decision days. The generator now injects episodic required-marker shifts, but early episode days can still miss because Layer 2 uses a 4-day recent window against a 21-day rolling baseline; missing marker-days can also leave only a partial coherent-pattern signature.",
+    "n_episode_missed_cases": 35,
+    "reason_counts": {
+      "no_required_marker_crossed_layer2_threshold": 26,
+      "partial_required_markers_only_coherence_rule_not_satisfied": 9
+    },
+    "reason_rates": {
+      "no_required_marker_crossed_layer2_threshold": 0.743,
+      "partial_required_markers_only_coherence_rule_not_satisfied": 0.257
+    },
+    "by_pattern": {
+      "fragmented-attention-with-sleep-loss": {
+        "n": 7,
+        "reason_counts": {
+          "no_required_marker_crossed_layer2_threshold": 5,
+          "partial_required_markers_only_coherence_rule_not_satisfied": 2
+        }
+      },
+      "behavioral-withdrawal": {
+        "n": 6,
+        "reason_counts": {
+          "no_required_marker_crossed_layer2_threshold": 4,
+          "partial_required_markers_only_coherence_rule_not_satisfied": 2
+        }
+      },
+      "phone-mediated-sleep-delay": {
+        "n": 12,
+        "reason_counts": {
+          "no_required_marker_crossed_layer2_threshold": 7,
+          "partial_required_markers_only_coherence_rule_not_satisfied": 5
+        }
+      },
+      "circadian-instability": {
+        "n": 10,
+        "reason_counts": {
+          "no_required_marker_crossed_layer2_threshold": 10
+        }
+      }
+    },
+    "required_marker_absent_counts": {
+      "app_switching_rate": 5,
+      "sleep_duration_hours": 7,
+      "mobility_entropy": 5,
+      "location_revisit_ratio": 5,
+      "sleep_onset_hour": 10,
+      "late_night_screen_min": 9,
+      "sleep_regularity_index": 10
+    },
+    "required_marker_correct_but_incomplete_counts": {
+      "late_night_screen_min": 3,
+      "sleep_onset_hour": 2,
+      "app_switching_rate": 2,
+      "location_revisit_ratio": 1,
+      "mobility_entropy": 1
+    },
+    "required_marker_wrong_direction_counts": {}
+  },
+  "programmatic_consistency": {
+    "behavior_aware": {
+      "n": 280,
+      "lever_pass_rate": 0.407,
+      "flexible_event_pass_rate": 0.871,
+      "burden_pass_rate": 0.686,
+      "specificity_pass_rate": 0.704,
+      "high_burden_change_rate": 0.161,
+      "no_change_rate": 0.296,
+      "all_three_pass_rate": 0.193,
+      "mean_burden_score": 1.32
+    },
+    "calendar_only": {
+      "n": 280,
+      "lever_pass_rate": 0.025,
+      "flexible_event_pass_rate": 0.829,
+      "burden_pass_rate": 0.646,
+      "specificity_pass_rate": 0.739,
+      "high_burden_change_rate": 0.157,
+      "no_change_rate": 0.261,
+      "all_three_pass_rate": 0.018,
+      "mean_burden_score": 1.381
+    }
+  },
+  "llm_rater": {
+    "means_by_arm": {
+      "behavior_aware": {
+        "relevance_1_5": 3.839,
+        "behavioral_alignment_1_5": 3.961,
+        "feasibility_1_5": 4.382,
+        "safety_1_5": 4.986,
+        "specificity_1_5": 3.521
+      },
+      "calendar_only": {
+        "relevance_1_5": 3.168,
+        "behavioral_alignment_1_5": 2.321,
+        "feasibility_1_5": 3.986,
+        "safety_1_5": 4.929,
+        "specificity_1_5": 3.475
+      }
+    },
+    "preferred_counts": {
+      "behavior_aware": 201,
+      "calendar_only": 79
+    },
+    "behavior_aware_preference_rate": 0.718
+  },
+  "artifacts": {
+    "run_config": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/run_config.json",
+    "hidden_profiles": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/hidden_profiles.json",
+    "hidden_episodes": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/hidden_episodes.json",
+    "hidden_daily_drivers": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/hidden_daily_drivers.jsonl",
+    "marker_days": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/marker_days.csv",
+    "calendar_events": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/calendar_events.jsonl",
+    "layer_state_daily": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/layer_state_daily.jsonl",
+    "decision_logs": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/decision_logs.jsonl",
+    "programmatic_checks": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/programmatic_checks.csv",
+    "detection_sensitivity": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/detection_sensitivity.json",
+    "detection_sensitivity_table": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/detection_sensitivity.csv",
+    "conditional_on_detection_quality": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/conditional_on_detection_quality.json",
+    "conditional_on_detection_quality_table": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/conditional_on_detection_quality.csv",
+    "normal_day_restraint": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/normal_day_restraint.json",
+    "normal_day_restraint_table": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/normal_day_restraint.csv",
+    "lever_credit_by_detection": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/lever_credit_by_detection.json",
+    "detection_diagnostics": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/detection_diagnostics.json",
+    "summary": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/summary.json",
+    "rater_sheet_blinded": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/rater_sheet_blinded.csv",
+    "rater_sheet_scored_blinded": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/rater_sheet_scored_blinded.csv",
+    "rater_sheet_scored_with_arm": "/Users/rishisim/Documents/projects/Multi-Agent-LLM/wellbeing_pipeline/simulation_outputs/latent/rater_sheet_scored_with_arm.csv"
+  }
+}

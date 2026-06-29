@@ -1,0 +1,717 @@
+[
+  {
+    "episode_id": "P001-EP02",
+    "participant_id": "P001",
+    "pattern": "fragmented-attention-with-sleep-loss",
+    "start_day": 13,
+    "end_day": 18,
+    "driver": "sleep-debt attention-fragmentation episode",
+    "intensity": 1.0436545159134996,
+    "marker_shifts": {
+      "app_switching_rate": 0.5427003482750198,
+      "sleep_duration_hours": -1.0958372417091746
+    },
+    "days": [
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ],
+    "overlaps_decision_days": false
+  },
+  {
+    "episode_id": "P001-EP01",
+    "participant_id": "P001",
+    "pattern": "fragmented-attention-with-sleep-loss",
+    "start_day": 33,
+    "end_day": 38,
+    "driver": "sleep-debt attention-fragmentation episode",
+    "intensity": 1.1889629295541364,
+    "marker_shifts": {
+      "app_switching_rate": 0.618260723368151,
+      "sleep_duration_hours": -1.2484110760318432
+    },
+    "days": [
+      33,
+      34,
+      35,
+      36,
+      37,
+      38
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P002-EP02",
+    "participant_id": "P002",
+    "pattern": "behavioral-withdrawal",
+    "start_day": 14,
+    "end_day": 16,
+    "driver": "restricted-mobility routine-narrowing episode",
+    "intensity": 1.0363800612810485,
+    "marker_shifts": {
+      "mobility_entropy": -0.37309682206117745,
+      "location_revisit_ratio": 0.22800361348183068
+    },
+    "days": [
+      14,
+      15,
+      16
+    ],
+    "overlaps_decision_days": false
+  },
+  {
+    "episode_id": "P002-EP01",
+    "participant_id": "P002",
+    "pattern": "behavioral-withdrawal",
+    "start_day": 36,
+    "end_day": 42,
+    "driver": "restricted-mobility routine-narrowing episode",
+    "intensity": 1.249981202274353,
+    "marker_shifts": {
+      "mobility_entropy": -0.4499932328187671,
+      "location_revisit_ratio": 0.2749958645003577
+    },
+    "days": [
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P003-EP01",
+    "participant_id": "P003",
+    "pattern": "fragmented-attention-with-sleep-loss",
+    "start_day": 28,
+    "end_day": 34,
+    "driver": "sleep-debt attention-fragmentation episode",
+    "intensity": 1.1861289060121618,
+    "marker_shifts": {
+      "app_switching_rate": 0.6167870311263242,
+      "sleep_duration_hours": -1.24543535131277
+    },
+    "days": [
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P004-EP02",
+    "participant_id": "P004",
+    "pattern": "phone-mediated-sleep-delay",
+    "start_day": 12,
+    "end_day": 16,
+    "driver": "late-evening screen-load episode",
+    "intensity": 1.1679847117146984,
+    "marker_shifts": {
+      "sleep_onset_hour": 1.343182418471903,
+      "late_night_screen_min": 81.7589298200289
+    },
+    "days": [
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "overlaps_decision_days": false
+  },
+  {
+    "episode_id": "P004-EP01",
+    "participant_id": "P004",
+    "pattern": "phone-mediated-sleep-delay",
+    "start_day": 29,
+    "end_day": 35,
+    "driver": "late-evening screen-load episode",
+    "intensity": 1.052774652866191,
+    "marker_shifts": {
+      "sleep_onset_hour": 1.2106908507961196,
+      "late_night_screen_min": 73.69422570063337
+    },
+    "days": [
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P005-EP03",
+    "participant_id": "P005",
+    "pattern": "fragmented-attention-with-sleep-loss",
+    "start_day": 11,
+    "end_day": 14,
+    "driver": "sleep-debt attention-fragmentation episode",
+    "intensity": 1.0028709400896785,
+    "marker_shifts": {
+      "app_switching_rate": 0.5214928888466328,
+      "sleep_duration_hours": -1.0530144870941625
+    },
+    "days": [
+      11,
+      12,
+      13,
+      14
+    ],
+    "overlaps_decision_days": false
+  },
+  {
+    "episode_id": "P005-EP02",
+    "participant_id": "P005",
+    "pattern": "fragmented-attention-with-sleep-loss",
+    "start_day": 17,
+    "end_day": 19,
+    "driver": "sleep-debt attention-fragmentation episode",
+    "intensity": 1.0592621675538565,
+    "marker_shifts": {
+      "app_switching_rate": 0.5508163271280054,
+      "sleep_duration_hours": -1.1122252759315494
+    },
+    "days": [
+      17,
+      18,
+      19
+    ],
+    "overlaps_decision_days": false
+  },
+  {
+    "episode_id": "P005-EP01",
+    "participant_id": "P005",
+    "pattern": "fragmented-attention-with-sleep-loss",
+    "start_day": 31,
+    "end_day": 34,
+    "driver": "sleep-debt attention-fragmentation episode",
+    "intensity": 1.1756972103629728,
+    "marker_shifts": {
+      "app_switching_rate": 0.6113625493887459,
+      "sleep_duration_hours": -1.2344820708811215
+    },
+    "days": [
+      31,
+      32,
+      33,
+      34
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P006-EP03",
+    "participant_id": "P006",
+    "pattern": "circadian-instability",
+    "start_day": 10,
+    "end_day": 14,
+    "driver": "irregular anchor-time episode",
+    "intensity": 1.0525009951324467,
+    "marker_shifts": {
+      "sleep_regularity_index": -18.94501791238404
+    },
+    "days": [
+      10,
+      11,
+      12,
+      13,
+      14
+    ],
+    "overlaps_decision_days": false
+  },
+  {
+    "episode_id": "P006-EP02",
+    "participant_id": "P006",
+    "pattern": "circadian-instability",
+    "start_day": 21,
+    "end_day": 26,
+    "driver": "irregular anchor-time episode",
+    "intensity": 1.1189703842770502,
+    "marker_shifts": {
+      "sleep_regularity_index": -20.141466916986904
+    },
+    "days": [
+      21,
+      22,
+      23,
+      24,
+      25,
+      26
+    ],
+    "overlaps_decision_days": false
+  },
+  {
+    "episode_id": "P006-EP01",
+    "participant_id": "P006",
+    "pattern": "circadian-instability",
+    "start_day": 33,
+    "end_day": 37,
+    "driver": "irregular anchor-time episode",
+    "intensity": 1.0687691652312659,
+    "marker_shifts": {
+      "sleep_regularity_index": -19.237844974162787
+    },
+    "days": [
+      33,
+      34,
+      35,
+      36,
+      37
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P007-EP02",
+    "participant_id": "P007",
+    "pattern": "phone-mediated-sleep-delay",
+    "start_day": 17,
+    "end_day": 22,
+    "driver": "late-evening screen-load episode",
+    "intensity": 1.0377475369172267,
+    "marker_shifts": {
+      "sleep_onset_hour": 1.1934096674548105,
+      "late_night_screen_min": 72.64232758420587
+    },
+    "days": [
+      17,
+      18,
+      19,
+      20,
+      21,
+      22
+    ],
+    "overlaps_decision_days": false
+  },
+  {
+    "episode_id": "P007-EP01",
+    "participant_id": "P007",
+    "pattern": "phone-mediated-sleep-delay",
+    "start_day": 28,
+    "end_day": 31,
+    "driver": "late-evening screen-load episode",
+    "intensity": 1.1248586559776614,
+    "marker_shifts": {
+      "sleep_onset_hour": 1.2935874543743107,
+      "late_night_screen_min": 78.7401059184363
+    },
+    "days": [
+      28,
+      29,
+      30,
+      31
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P008-EP01",
+    "participant_id": "P008",
+    "pattern": "phone-mediated-sleep-delay",
+    "start_day": 31,
+    "end_day": 37,
+    "driver": "late-evening screen-load episode",
+    "intensity": 1.2369626228208184,
+    "marker_shifts": {
+      "sleep_onset_hour": 1.422507016243941,
+      "late_night_screen_min": 86.58738359745729
+    },
+    "days": [
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P009-EP03",
+    "participant_id": "P009",
+    "pattern": "circadian-instability",
+    "start_day": 6,
+    "end_day": 10,
+    "driver": "irregular anchor-time episode",
+    "intensity": 1.1292880178151412,
+    "marker_shifts": {
+      "sleep_regularity_index": -20.327184320672544
+    },
+    "days": [
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "overlaps_decision_days": false
+  },
+  {
+    "episode_id": "P009-EP02",
+    "participant_id": "P009",
+    "pattern": "circadian-instability",
+    "start_day": 16,
+    "end_day": 19,
+    "driver": "irregular anchor-time episode",
+    "intensity": 1.0139198893214438,
+    "marker_shifts": {
+      "sleep_regularity_index": -18.25055800778599
+    },
+    "days": [
+      16,
+      17,
+      18,
+      19
+    ],
+    "overlaps_decision_days": false
+  },
+  {
+    "episode_id": "P009-EP01",
+    "participant_id": "P009",
+    "pattern": "circadian-instability",
+    "start_day": 28,
+    "end_day": 32,
+    "driver": "irregular anchor-time episode",
+    "intensity": 1.120583723198969,
+    "marker_shifts": {
+      "sleep_regularity_index": -20.170507017581443
+    },
+    "days": [
+      28,
+      29,
+      30,
+      31,
+      32
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P010-EP01",
+    "participant_id": "P010",
+    "pattern": "phone-mediated-sleep-delay",
+    "start_day": 27,
+    "end_day": 32,
+    "driver": "late-evening screen-load episode",
+    "intensity": 1.136949177557318,
+    "marker_shifts": {
+      "sleep_onset_hour": 1.3074915541909156,
+      "late_night_screen_min": 79.58644242901225
+    },
+    "days": [
+      27,
+      28,
+      29,
+      30,
+      31,
+      32
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P011-EP01",
+    "participant_id": "P011",
+    "pattern": "phone-mediated-sleep-delay",
+    "start_day": 35,
+    "end_day": 38,
+    "driver": "late-evening screen-load episode",
+    "intensity": 1.13964109990025,
+    "marker_shifts": {
+      "sleep_onset_hour": 1.3105872648852874,
+      "late_night_screen_min": 79.7748769930175
+    },
+    "days": [
+      35,
+      36,
+      37,
+      38
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P012-EP01",
+    "participant_id": "P012",
+    "pattern": "behavioral-withdrawal",
+    "start_day": 35,
+    "end_day": 41,
+    "driver": "restricted-mobility routine-narrowing episode",
+    "intensity": 1.2096659657433535,
+    "marker_shifts": {
+      "mobility_entropy": -0.4354797476676072,
+      "location_revisit_ratio": 0.26612651246353775
+    },
+    "days": [
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P013-EP02",
+    "participant_id": "P013",
+    "pattern": "circadian-instability",
+    "start_day": 13,
+    "end_day": 15,
+    "driver": "irregular anchor-time episode",
+    "intensity": 1.072500726746111,
+    "marker_shifts": {
+      "sleep_regularity_index": -19.305013081429998
+    },
+    "days": [
+      13,
+      14,
+      15
+    ],
+    "overlaps_decision_days": false
+  },
+  {
+    "episode_id": "P013-EP01",
+    "participant_id": "P013",
+    "pattern": "circadian-instability",
+    "start_day": 29,
+    "end_day": 35,
+    "driver": "irregular anchor-time episode",
+    "intensity": 1.1813825122067638,
+    "marker_shifts": {
+      "sleep_regularity_index": -21.264885219721748
+    },
+    "days": [
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P014-EP02",
+    "participant_id": "P014",
+    "pattern": "phone-mediated-sleep-delay",
+    "start_day": 19,
+    "end_day": 23,
+    "driver": "late-evening screen-load episode",
+    "intensity": 1.0662175864333605,
+    "marker_shifts": {
+      "sleep_onset_hour": 1.2261502243983644,
+      "late_night_screen_min": 74.63523105033524
+    },
+    "days": [
+      19,
+      20,
+      21,
+      22,
+      23
+    ],
+    "overlaps_decision_days": false
+  },
+  {
+    "episode_id": "P014-EP01",
+    "participant_id": "P014",
+    "pattern": "phone-mediated-sleep-delay",
+    "start_day": 28,
+    "end_day": 32,
+    "driver": "late-evening screen-load episode",
+    "intensity": 1.2487428178076407,
+    "marker_shifts": {
+      "sleep_onset_hour": 1.4360542404787868,
+      "late_night_screen_min": 87.41199724653485
+    },
+    "days": [
+      28,
+      29,
+      30,
+      31,
+      32
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P015-EP01",
+    "participant_id": "P015",
+    "pattern": "phone-mediated-sleep-delay",
+    "start_day": 27,
+    "end_day": 31,
+    "driver": "late-evening screen-load episode",
+    "intensity": 1.1249493236603405,
+    "marker_shifts": {
+      "sleep_onset_hour": 1.2936917222093915,
+      "late_night_screen_min": 78.74645265622384
+    },
+    "days": [
+      27,
+      28,
+      29,
+      30,
+      31
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P016-EP01",
+    "participant_id": "P016",
+    "pattern": "phone-mediated-sleep-delay",
+    "start_day": 36,
+    "end_day": 42,
+    "driver": "late-evening screen-load episode",
+    "intensity": 1.1521260985741266,
+    "marker_shifts": {
+      "sleep_onset_hour": 1.3249450133602456,
+      "late_night_screen_min": 80.64882690018887
+    },
+    "days": [
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P017-EP01",
+    "participant_id": "P017",
+    "pattern": "behavioral-withdrawal",
+    "start_day": 28,
+    "end_day": 34,
+    "driver": "restricted-mobility routine-narrowing episode",
+    "intensity": 1.203617579076704,
+    "marker_shifts": {
+      "mobility_entropy": -0.43330232846761346,
+      "location_revisit_ratio": 0.2647958673968749
+    },
+    "days": [
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P018-EP02",
+    "participant_id": "P018",
+    "pattern": "behavioral-withdrawal",
+    "start_day": 19,
+    "end_day": 21,
+    "driver": "restricted-mobility routine-narrowing episode",
+    "intensity": 1.0182657810234077,
+    "marker_shifts": {
+      "mobility_entropy": -0.36657568116842676,
+      "location_revisit_ratio": 0.2240184718251497
+    },
+    "days": [
+      19,
+      20,
+      21
+    ],
+    "overlaps_decision_days": false
+  },
+  {
+    "episode_id": "P018-EP01",
+    "participant_id": "P018",
+    "pattern": "behavioral-withdrawal",
+    "start_day": 33,
+    "end_day": 39,
+    "driver": "restricted-mobility routine-narrowing episode",
+    "intensity": 1.2368688271835524,
+    "marker_shifts": {
+      "mobility_entropy": -0.4452727777860788,
+      "location_revisit_ratio": 0.27211114198038155
+    },
+    "days": [
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P019-EP02",
+    "participant_id": "P019",
+    "pattern": "circadian-instability",
+    "start_day": 20,
+    "end_day": 22,
+    "driver": "irregular anchor-time episode",
+    "intensity": 1.1263748715882171,
+    "marker_shifts": {
+      "sleep_regularity_index": -20.274747688587908
+    },
+    "days": [
+      20,
+      21,
+      22
+    ],
+    "overlaps_decision_days": false
+  },
+  {
+    "episode_id": "P019-EP01",
+    "participant_id": "P019",
+    "pattern": "circadian-instability",
+    "start_day": 31,
+    "end_day": 37,
+    "driver": "irregular anchor-time episode",
+    "intensity": 1.1493642109719027,
+    "marker_shifts": {
+      "sleep_regularity_index": -20.68855579749425
+    },
+    "days": [
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37
+    ],
+    "overlaps_decision_days": true
+  },
+  {
+    "episode_id": "P020-EP01",
+    "participant_id": "P020",
+    "pattern": "behavioral-withdrawal",
+    "start_day": 28,
+    "end_day": 33,
+    "driver": "restricted-mobility routine-narrowing episode",
+    "intensity": 1.0755384734376383,
+    "marker_shifts": {
+      "mobility_entropy": -0.3871938504375498,
+      "location_revisit_ratio": 0.23661846415628043
+    },
+    "days": [
+      28,
+      29,
+      30,
+      31,
+      32,
+      33
+    ],
+    "overlaps_decision_days": true
+  }
+]

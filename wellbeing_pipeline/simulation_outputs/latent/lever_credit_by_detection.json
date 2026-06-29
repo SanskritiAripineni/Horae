@@ -1,0 +1,23 @@
+{
+  "definition": "diagnostic only; raw latent-cause credit is de-emphasized because behavior-aware is handed inferred behavioral evidence on detected days",
+  "behavior_aware": {
+    "overall": 0.407,
+    "detected_or_marker_evidence_subset": 0.99,
+    "non_detected_subset": 0.083,
+    "n_detected_or_marker_evidence": 100,
+    "n_non_detected": 180,
+    "weighted_reconstruction": 0.407,
+    "weighted_matches_overall": true,
+    "overall_between_subsets": true
+  },
+  "calendar_only": {
+    "overall": 0.025,
+    "detected_or_marker_evidence_subset": null,
+    "non_detected_subset": 0.025,
+    "n_detected_or_marker_evidence": 0,
+    "n_non_detected": 280,
+    "weighted_reconstruction": null,
+    "weighted_matches_overall": null,
+    "overall_between_subsets": null
+  }
+}

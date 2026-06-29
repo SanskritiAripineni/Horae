@@ -1,0 +1,20 @@
+{
+  "definition": "restraint on normal decision days outside any ground-truth episode; lower high_burden_change_rate is better",
+  "n_cases": 170,
+  "behavior_aware": {
+    "n": 170,
+    "high_burden_change_rate": 0.071,
+    "no_change_rate": 0.418,
+    "mean_burden_score": 0.934,
+    "mean_suggestions": 0.635,
+    "burden_appropriate_rate": 0.818
+  },
+  "calendar_only": {
+    "n": 170,
+    "high_burden_change_rate": 0.124,
+    "no_change_rate": 0.294,
+    "mean_burden_score": 1.229,
+    "mean_suggestions": 0.735,
+    "burden_appropriate_rate": 0.718
+  }
+}

@@ -1,0 +1,6 @@
+pattern,episode_decision_days,detected_days,sensitivity
+overall,110,75,0.682
+phone-mediated-sleep-delay,39,27,0.692
+behavioral-withdrawal,32,26,0.812
+circadian-instability,23,13,0.565
+fragmented-attention-with-sleep-loss,16,9,0.562

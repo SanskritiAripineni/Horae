@@ -1,0 +1,573 @@
+{
+  "summary": {
+    "sample_size": 51,
+    "candidate_days_confident_pattern_fired": 250,
+    "candidate_selection": "warm participant-days with >=1 Layer-2 coherent pattern and Layer-3 overall_confidence in {'high','medium'}, sorted by participant_id then date; first N selected",
+    "all_pattern_fired_confidence_counts": {
+      "medium": 162,
+      "high": 88,
+      "low": 13
+    },
+    "dataset_root": "/Users/rishisim/Documents/projects/Behavioral Emotional Sensing/studentlife/dataset",
+    "json_serialization": {
+      "function": "json.dumps",
+      "encoding": "utf-8",
+      "ensure_ascii": false,
+      "sort_keys": true,
+      "separators": [
+        ",",
+        ":"
+      ],
+      "date_datetime": "isoformat",
+      "numpy_scalars": "converted to Python scalars"
+    },
+    "gzip_serialization": {
+      "function": "gzip.compress",
+      "compresslevel": 9,
+      "mtime": 0,
+      "input": "same UTF-8 JSON bytes"
+    },
+    "pipeline_parameters": {
+      "warmup_days": 10,
+      "recent_days": 4,
+      "baseline_days": 21,
+      "min_magnitude": "mild"
+    },
+    "state_object_measured": "Layer 3 state['structured'], which layer4_llm._build_user_message places under payload['behavioral_state'] for the scheduler call",
+    "raw_day_markers_measured": "StudentLife adapter raw_day dict from build_daily_records(), including marker values and _coverage",
+    "raw_sensor_records_measured": {
+      "streams": [
+        "phonelock",
+        "dark",
+        "wifi_location",
+        "running_app",
+        "sms",
+        "call_log",
+        "gps",
+        "activity"
+      ],
+      "windows": {
+        "phonelock": "overlaps [D-1 20:00, D+1 04:00) local",
+        "dark": "overlaps [D-1 20:00, D 11:00) local",
+        "wifi_location/running_app/sms/call_log/gps/activity": "timestamps in [D 04:00, D+1 04:00) local"
+      }
+    }
+  },
+  "headline_uncompressed_bytes": {
+    "behavioral_state": {
+      "mean": 1886.5686274509803,
+      "median": 1884.0
+    },
+    "raw_day_markers": {
+      "mean": 666.9803921568628,
+      "median": 670.0
+    },
+    "raw_sensor_records": {
+      "mean": 710760.6470588235,
+      "median": 658053.0
+    }
+  },
+  "reference_gzipped_bytes": {
+    "behavioral_state": {
+      "mean": 904.9803921568628,
+      "median": 911.0
+    },
+    "raw_day_markers": {
+      "mean": 299.1764705882353,
+      "median": 301.0
+    },
+    "raw_sensor_records": {
+      "mean": 31233.78431372549,
+      "median": 30271.0
+    }
+  },
+  "reduction_ratios": {
+    "raw_day_markers_over_behavioral_state": {
+      "ratio_of_means": 0.35354154757574185,
+      "mean": 0.3720464406768965,
+      "median": 0.3471337579617834
+    },
+    "raw_sensor_records_over_behavioral_state": {
+      "ratio_of_means": 376.74783557657327,
+      "mean": 398.17245243034375,
+      "median": 349.5851763299462
+    },
+    "raw_day_markers_gzip_over_behavioral_state_gzip": {
+      "ratio_of_means": 0.33058889803700653
+    },
+    "raw_sensor_records_gzip_over_behavioral_state_gzip": {
+      "ratio_of_means": 34.51321662261125
+    }
+  },
+  "state_summary_fields": [
+    "as_of",
+    "baseline_state",
+    "baseline_state.days_of_history",
+    "baseline_state.overall_confidence",
+    "baseline_state.warm",
+    "coherent_patterns",
+    "coherent_patterns[]",
+    "coherent_patterns[].implicated",
+    "coherent_patterns[].implicated[]",
+    "coherent_patterns[].interpretation",
+    "coherent_patterns[].name",
+    "coverage_notes",
+    "coverage_notes[]",
+    "deviations",
+    "deviations[]",
+    "deviations[].baseline_mean",
+    "deviations[].baseline_std",
+    "deviations[].coverage",
+    "deviations[].direction",
+    "deviations[].domain",
+    "deviations[].finding",
+    "deviations[].magnitude",
+    "deviations[].marker",
+    "deviations[].recent_days",
+    "deviations[].recent_mean",
+    "deviations[].trajectory",
+    "schema_note"
+  ],
+  "raw_sensor_stream_record_counts_in_sample": {
+    "total_records_by_stream": {
+      "phonelock": 252,
+      "dark": 106,
+      "wifi_location": 24586,
+      "running_app": 31365,
+      "sms": 383,
+      "call_log": 129,
+      "gps": 3683,
+      "activity": 381360
+    },
+    "nonempty_days_by_stream": {
+      "phonelock": 49,
+      "dark": 45,
+      "wifi_location": 48,
+      "running_app": 50,
+      "sms": 13,
+      "call_log": 17,
+      "gps": 50,
+      "activity": 50
+    }
+  },
+  "offline_cpu_runtime": {
+    "method": "WellbeingSensor.analyze(raw_days_up_to_selected_day, with_llm=False)",
+    "note": "CPU/offline Layer 1-3 runtime; excludes StudentLife CSV loading, raw sensor aggregation, device runtime, and LLM/API calls.",
+    "participant_id": "u00",
+    "date": "2013-04-22",
+    "repeats": 100,
+    "mean_ms": 1.7220979498233646,
+    "median_ms": 1.5995209687389433
+  },
+  "sampled_days": [
+    {
+      "participant_id": "u00",
+      "date": "2013-04-22",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "circadian-instability"
+      ]
+    },
+    {
+      "participant_id": "u00",
+      "date": "2013-04-23",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "circadian-instability"
+      ]
+    },
+    {
+      "participant_id": "u00",
+      "date": "2013-04-24",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "circadian-instability"
+      ]
+    },
+    {
+      "participant_id": "u00",
+      "date": "2013-04-29",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "phone-mediated-sleep-delay"
+      ]
+    },
+    {
+      "participant_id": "u00",
+      "date": "2013-04-30",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u00",
+      "date": "2013-05-01",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u00",
+      "date": "2013-05-02",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u00",
+      "date": "2013-05-28",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u00",
+      "date": "2013-05-29",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u01",
+      "date": "2013-04-24",
+      "overall_confidence": "high",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u01",
+      "date": "2013-04-25",
+      "overall_confidence": "high",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u01",
+      "date": "2013-04-27",
+      "overall_confidence": "high",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u01",
+      "date": "2013-04-28",
+      "overall_confidence": "high",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u01",
+      "date": "2013-04-30",
+      "overall_confidence": "high",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u01",
+      "date": "2013-05-02",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "circadian-instability"
+      ]
+    },
+    {
+      "participant_id": "u01",
+      "date": "2013-05-03",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "circadian-instability"
+      ]
+    },
+    {
+      "participant_id": "u01",
+      "date": "2013-05-04",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "circadian-instability"
+      ]
+    },
+    {
+      "participant_id": "u01",
+      "date": "2013-05-05",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "circadian-instability"
+      ]
+    },
+    {
+      "participant_id": "u01",
+      "date": "2013-05-23",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u03",
+      "date": "2013-04-23",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "fragmented-attention-with-sleep-loss"
+      ]
+    },
+    {
+      "participant_id": "u03",
+      "date": "2013-04-24",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "fragmented-attention-with-sleep-loss"
+      ]
+    },
+    {
+      "participant_id": "u03",
+      "date": "2013-04-25",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "fragmented-attention-with-sleep-loss"
+      ]
+    },
+    {
+      "participant_id": "u04",
+      "date": "2013-04-16",
+      "overall_confidence": "high",
+      "pattern_names": [
+        "fragmented-attention-with-sleep-loss"
+      ]
+    },
+    {
+      "participant_id": "u04",
+      "date": "2013-04-17",
+      "overall_confidence": "high",
+      "pattern_names": [
+        "phone-mediated-sleep-delay"
+      ]
+    },
+    {
+      "participant_id": "u04",
+      "date": "2013-04-18",
+      "overall_confidence": "high",
+      "pattern_names": [
+        "phone-mediated-sleep-delay"
+      ]
+    },
+    {
+      "participant_id": "u04",
+      "date": "2013-04-19",
+      "overall_confidence": "high",
+      "pattern_names": [
+        "phone-mediated-sleep-delay"
+      ]
+    },
+    {
+      "participant_id": "u04",
+      "date": "2013-04-21",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u04",
+      "date": "2013-04-22",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u04",
+      "date": "2013-05-20",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u04",
+      "date": "2013-05-21",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u04",
+      "date": "2013-05-22",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u05",
+      "date": "2013-04-02",
+      "overall_confidence": "high",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u05",
+      "date": "2013-04-03",
+      "overall_confidence": "high",
+      "pattern_names": [
+        "fragmented-attention-with-sleep-loss"
+      ]
+    },
+    {
+      "participant_id": "u05",
+      "date": "2013-04-09",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "circadian-instability"
+      ]
+    },
+    {
+      "participant_id": "u05",
+      "date": "2013-04-10",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "circadian-instability"
+      ]
+    },
+    {
+      "participant_id": "u05",
+      "date": "2013-04-11",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "circadian-instability"
+      ]
+    },
+    {
+      "participant_id": "u05",
+      "date": "2013-04-12",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "circadian-instability"
+      ]
+    },
+    {
+      "participant_id": "u05",
+      "date": "2013-04-13",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "circadian-instability"
+      ]
+    },
+    {
+      "participant_id": "u07",
+      "date": "2013-04-09",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u07",
+      "date": "2013-04-10",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u07",
+      "date": "2013-04-11",
+      "overall_confidence": "high",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u07",
+      "date": "2013-04-27",
+      "overall_confidence": "high",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u08",
+      "date": "2013-04-02",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u08",
+      "date": "2013-04-06",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "phone-mediated-sleep-delay"
+      ]
+    },
+    {
+      "participant_id": "u08",
+      "date": "2013-04-07",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "phone-mediated-sleep-delay"
+      ]
+    },
+    {
+      "participant_id": "u08",
+      "date": "2013-04-25",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "fragmented-attention-with-sleep-loss"
+      ]
+    },
+    {
+      "participant_id": "u08",
+      "date": "2013-05-11",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "circadian-instability"
+      ]
+    },
+    {
+      "participant_id": "u08",
+      "date": "2013-05-12",
+      "overall_confidence": "medium",
+      "pattern_names": [
+        "circadian-instability"
+      ]
+    },
+    {
+      "participant_id": "u08",
+      "date": "2013-05-14",
+      "overall_confidence": "high",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u08",
+      "date": "2013-05-26",
+      "overall_confidence": "high",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    },
+    {
+      "participant_id": "u08",
+      "date": "2013-05-27",
+      "overall_confidence": "high",
+      "pattern_names": [
+        "behavioral-withdrawal"
+      ]
+    }
+  ],
+  "per_day_size_rows_csv": "wellbeing_pipeline/simulation_outputs/payload_size/payload_size_rows.csv"
+}

@@ -61,6 +61,7 @@ data/raw_logs/*.log
 data/ihope_weights/*.h5
 data/ihope_weights/*.pb
 data/tokens/**
+*.pdf
 *.pkl
 *.npy
 
@@ -74,6 +75,9 @@ credentials.json
 **/Secrets.xcconfig
 
 # Project Specific
+An_Agentic_LLM_Scheduling_Framework_Grounded_in_Passive_Mobile_Sensing_and_Behavioral_Science/
+tmp/
+wellbeing_pipeline/simulation_outputs/**/cache/
 memory/data/
 apps/mindful-rag/.venv/
 apps/mindful-rag/data/chroma/

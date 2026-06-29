@@ -1,0 +1,3 @@
+arm,n,high_burden_change_rate,no_change_rate,mean_burden_score,mean_suggestions,burden_appropriate_rate
+behavior_aware,170,0.071,0.418,0.934,0.635,0.818
+calendar_only,170,0.124,0.294,1.229,0.735,0.718
