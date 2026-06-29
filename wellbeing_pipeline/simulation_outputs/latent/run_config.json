@@ -1,0 +1,16 @@
+{
+  "seed": 20260627,
+  "n_participants": 20,
+  "n_days": 42,
+  "decision_days": [
+    29,
+    42
+  ],
+  "pipeline_config": {
+    "warmup_days": 10,
+    "recent_days": 4,
+    "baseline_days": 21,
+    "min_magnitude": "mild"
+  },
+  "start_date": "2026-03-02"
+}

@@ -1,0 +1,30 @@
+{
+  "definition": "P(full pipeline emits predisposed pattern | decision day is inside a ground-truth episode)",
+  "overall": {
+    "episode_decision_days": 110,
+    "detected_days": 75,
+    "sensitivity": 0.682
+  },
+  "by_pattern": {
+    "phone-mediated-sleep-delay": {
+      "episode_decision_days": 39,
+      "detected_days": 27,
+      "sensitivity": 0.692
+    },
+    "behavioral-withdrawal": {
+      "episode_decision_days": 32,
+      "detected_days": 26,
+      "sensitivity": 0.812
+    },
+    "circadian-instability": {
+      "episode_decision_days": 23,
+      "detected_days": 13,
+      "sensitivity": 0.565
+    },
+    "fragmented-attention-with-sleep-loss": {
+      "episode_decision_days": 16,
+      "detected_days": 9,
+      "sensitivity": 0.562
+    }
+  }
+}

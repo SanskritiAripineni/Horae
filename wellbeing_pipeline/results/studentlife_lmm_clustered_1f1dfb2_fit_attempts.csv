@@ -1,0 +1,6 @@
+model,method,ok,converged,warnings
+intercept_only,lbfgs,True,True,Random effects covariance is singular
+any_coherent_pattern,lbfgs,True,True,Random effects covariance is singular
+confident_coherent_pattern,lbfgs,True,True,Random effects covariance is singular
+risk_index,lbfgs,True,True,Random effects covariance is singular
+behavioral_withdrawal,lbfgs,True,True,Random effects covariance is singular

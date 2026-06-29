@@ -1,0 +1,17 @@
+# mindful-rag — RAG evaluation framework
+#
+# Setup:
+#   python3 -m venv .venv
+#   source .venv/bin/activate
+#   pip install -r requirements.txt
+#
+# NOTE: scripts/ also imports _bootstrap (adds src/ to sys.path) and the
+# mindful_rag package from src/mindful_rag/. Those .py source files are
+# missing from the repo (only __pycache__ remains). Restore them before
+# running the eval scripts.
+
+chromadb>=1.5.0
+google-genai>=1.0.0
+pandas>=2.0.0
+PyMuPDF>=1.24.0
+python-dotenv>=1.0.0

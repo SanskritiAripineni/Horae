@@ -1,0 +1,402 @@
+[
+  {
+    "participant_id": "P001",
+    "chronotype": 0.3721020350897284,
+    "sleep_regularity": 0.79659105500871,
+    "workload": 0.9271142065369254,
+    "schedule_flexibility": 0.3208488555385626,
+    "mobility_pattern": 0.7644861381864457,
+    "social_rhythm": 0.7050352451683407,
+    "phone_use_tendency": 0.011387901975314689,
+    "adherence_tendency": 0.170218671939829,
+    "stress_sensitivity": 0.45332955587468143,
+    "missing_rate": 0.1778443489356737,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.3790477996924489,
+      "behavioral-withdrawal": 0.40599777320118857,
+      "circadian-instability": 0.30914113107972946,
+      "fragmented-attention-with-sleep-loss": 0.46148854653564536
+    },
+    "predisposed_pattern": "fragmented-attention-with-sleep-loss"
+  },
+  {
+    "participant_id": "P002",
+    "chronotype": 0.19451728978138572,
+    "sleep_regularity": 0.6221954146852811,
+    "workload": 0.13660625178599412,
+    "schedule_flexibility": 0.4631264282544522,
+    "mobility_pattern": 0.5227760213100828,
+    "social_rhythm": 0.36103377402740944,
+    "phone_use_tendency": 0.7662557825316485,
+    "adherence_tendency": 0.4408724265948214,
+    "stress_sensitivity": 0.831260813957673,
+    "missing_rate": 0.10757703197248566,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.45503549324707177,
+      "behavioral-withdrawal": 0.5528476210050611,
+      "circadian-instability": 0.48870223370710764,
+      "fragmented-attention-with-sleep-loss": 0.48719343882661065
+    },
+    "predisposed_pattern": "behavioral-withdrawal"
+  },
+  {
+    "participant_id": "P003",
+    "chronotype": 0.08829286736696064,
+    "sleep_regularity": 0.6442799417834765,
+    "workload": 0.6537128819942848,
+    "schedule_flexibility": 0.26056068652862496,
+    "mobility_pattern": 0.8689242930935085,
+    "social_rhythm": 0.7063623066651668,
+    "phone_use_tendency": 0.27503974329283853,
+    "adherence_tendency": 0.6257539185609793,
+    "stress_sensitivity": 0.10764566660934717,
+    "missing_rate": 0.120847848144016,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.26384526248264056,
+      "behavioral-withdrawal": 0.24959973010125297,
+      "circadian-instability": 0.24514794054201736,
+      "fragmented-attention-with-sleep-loss": 0.3469353911346597
+    },
+    "predisposed_pattern": "fragmented-attention-with-sleep-loss"
+  },
+  {
+    "participant_id": "P004",
+    "chronotype": 0.8738111601819669,
+    "sleep_regularity": 0.17865448539229903,
+    "workload": 0.47327708053523576,
+    "schedule_flexibility": 0.3053421198356676,
+    "mobility_pattern": 0.6690135840600652,
+    "social_rhythm": 0.5280180968494799,
+    "phone_use_tendency": 0.7525127714869195,
+    "adherence_tendency": 0.43985963774160514,
+    "stress_sensitivity": 0.06840140580008552,
+    "missing_rate": 0.15961252032696796,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.6421314942567422,
+      "behavioral-withdrawal": 0.33141419971602853,
+      "circadian-instability": 0.5342801527229873,
+      "fragmented-attention-with-sleep-loss": 0.5142623210027023
+    },
+    "predisposed_pattern": "phone-mediated-sleep-delay"
+  },
+  {
+    "participant_id": "P005",
+    "chronotype": 0.5301184069670896,
+    "sleep_regularity": 0.2597712768228766,
+    "workload": 0.8227855802087563,
+    "schedule_flexibility": 0.3533992056827486,
+    "mobility_pattern": 0.3390996229026448,
+    "social_rhythm": 0.4351958780073791,
+    "phone_use_tendency": 0.5706123799676864,
+    "adherence_tendency": 0.873182617207352,
+    "stress_sensitivity": 0.4750937522649931,
+    "missing_rate": 0.13659559246427577,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.5939064613173205,
+      "behavioral-withdrawal": 0.6155406824232965,
+      "circadian-instability": 0.561110729095124,
+      "fragmented-attention-with-sleep-loss": 0.6454131853260182
+    },
+    "predisposed_pattern": "fragmented-attention-with-sleep-loss"
+  },
+  {
+    "participant_id": "P006",
+    "chronotype": 0.3735987457051642,
+    "sleep_regularity": 0.4568075379972632,
+    "workload": 0.655505713039166,
+    "schedule_flexibility": 0.7750995960519385,
+    "mobility_pattern": 0.40031400354083163,
+    "social_rhythm": 0.6484854392686452,
+    "phone_use_tendency": 0.2968510099391372,
+    "adherence_tendency": 0.35422159815323734,
+    "stress_sensitivity": 0.4987894519587524,
+    "missing_rate": 0.16875305236171217,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.42294756260233834,
+      "behavioral-withdrawal": 0.5153647467072846,
+      "circadian-instability": 0.5417973848984498,
+      "fragmented-attention-with-sleep-loss": 0.49914620055523606
+    },
+    "predisposed_pattern": "circadian-instability"
+  },
+  {
+    "participant_id": "P007",
+    "chronotype": 0.37910653830964197,
+    "sleep_regularity": 0.7022657120811817,
+    "workload": 0.3369100741326312,
+    "schedule_flexibility": 0.30508901624731,
+    "mobility_pattern": 0.8249225864512697,
+    "social_rhythm": 0.3772346286226994,
+    "phone_use_tendency": 0.723528361837393,
+    "adherence_tendency": 0.6680920198122758,
+    "stress_sensitivity": 0.616776254294911,
+    "missing_rate": 0.1058938504719697,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.5141559892410578,
+      "behavioral-withdrawal": 0.4262956741999367,
+      "circadian-instability": 0.4061686750396754,
+      "fragmented-attention-with-sleep-loss": 0.4898237495324758
+    },
+    "predisposed_pattern": "phone-mediated-sleep-delay"
+  },
+  {
+    "participant_id": "P008",
+    "chronotype": 0.3857748404133011,
+    "sleep_regularity": 0.7087580375448823,
+    "workload": 0.30409408560315226,
+    "schedule_flexibility": 0.6512999478834874,
+    "mobility_pattern": 0.37207305458799594,
+    "social_rhythm": 0.8301114293981623,
+    "phone_use_tendency": 0.6679965144740349,
+    "adherence_tendency": 0.46775111252070267,
+    "stress_sensitivity": 0.5042368862211438,
+    "missing_rate": 0.1965908329771926,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.4763343115638041,
+      "behavioral-withdrawal": 0.4226525578799319,
+      "circadian-instability": 0.40960705909751643,
+      "fragmented-attention-with-sleep-loss": 0.43892348325333136
+    },
+    "predisposed_pattern": "phone-mediated-sleep-delay"
+  },
+  {
+    "participant_id": "P009",
+    "chronotype": 0.6730123224483402,
+    "sleep_regularity": 0.5488946812244074,
+    "workload": 0.0412854032088509,
+    "schedule_flexibility": 0.5442349251204347,
+    "mobility_pattern": 0.564852605712769,
+    "social_rhythm": 0.5727347696442262,
+    "phone_use_tendency": 0.5087151207691714,
+    "adherence_tendency": 0.8794031920481435,
+    "stress_sensitivity": 0.1924382662521761,
+    "missing_rate": 0.12141286547063151,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.4268114661956453,
+      "behavioral-withdrawal": 0.3180379902766034,
+      "circadian-instability": 0.4453930272388014,
+      "fragmented-attention-with-sleep-loss": 0.28982109855145566
+    },
+    "predisposed_pattern": "circadian-instability"
+  },
+  {
+    "participant_id": "P010",
+    "chronotype": 0.6442383141271695,
+    "sleep_regularity": 0.6733213446288363,
+    "workload": 0.43105110693333454,
+    "schedule_flexibility": 0.3203034994622985,
+    "mobility_pattern": 0.6406700231178585,
+    "social_rhythm": 0.7536598366897013,
+    "phone_use_tendency": 0.8825494334111255,
+    "adherence_tendency": 0.8571632304405127,
+    "stress_sensitivity": 0.8012742223421744,
+    "missing_rate": 0.13858312979889026,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.699845458009369,
+      "behavioral-withdrawal": 0.440098175045512,
+      "circadian-instability": 0.4535078924566984,
+      "fragmented-attention-with-sleep-loss": 0.6253793509674614
+    },
+    "predisposed_pattern": "phone-mediated-sleep-delay"
+  },
+  {
+    "participant_id": "P011",
+    "chronotype": 0.5530263600484432,
+    "sleep_regularity": 0.6181115321504009,
+    "workload": 0.7151860396495439,
+    "schedule_flexibility": 0.4275743426406176,
+    "mobility_pattern": 0.6319984542551392,
+    "social_rhythm": 0.590074255814512,
+    "phone_use_tendency": 0.3911726096751114,
+    "adherence_tendency": 0.9074726324070527,
+    "stress_sensitivity": 0.1213842801199343,
+    "missing_rate": 0.16072434495070909,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.4732352046592059,
+      "behavioral-withdrawal": 0.3750960243002058,
+      "circadian-instability": 0.36443331762921866,
+      "fragmented-attention-with-sleep-loss": 0.435818210752686
+    },
+    "predisposed_pattern": "phone-mediated-sleep-delay"
+  },
+  {
+    "participant_id": "P012",
+    "chronotype": 0.9240600589904664,
+    "sleep_regularity": 0.7393022002246925,
+    "workload": 0.35710489762093656,
+    "schedule_flexibility": 0.12394078823681942,
+    "mobility_pattern": 0.277060324431831,
+    "social_rhythm": 0.2823412533733426,
+    "phone_use_tendency": 0.29428711815741165,
+    "adherence_tendency": 0.29757823741847955,
+    "stress_sensitivity": 0.6360540671603364,
+    "missing_rate": 0.10370256783579085,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.5688208467937648,
+      "behavioral-withdrawal": 0.6466021088386595,
+      "circadian-instability": 0.43898326921233644,
+      "fragmented-attention-with-sleep-loss": 0.4448816977349854
+    },
+    "predisposed_pattern": "behavioral-withdrawal"
+  },
+  {
+    "participant_id": "P013",
+    "chronotype": 0.16523911722310272,
+    "sleep_regularity": 0.3568141174622172,
+    "workload": 0.4955887260102305,
+    "schedule_flexibility": 0.4782699305095208,
+    "mobility_pattern": 0.5374398473677805,
+    "social_rhythm": 0.4469350443325453,
+    "phone_use_tendency": 0.3481182010268647,
+    "adherence_tendency": 0.44163451974385876,
+    "stress_sensitivity": 0.7036305656782271,
+    "missing_rate": 0.11767006978844184,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.36520514858144953,
+      "behavioral-withdrawal": 0.5483019784893688,
+      "circadian-instability": 0.5494972970619955,
+      "fragmented-attention-with-sleep-loss": 0.5093913036417762
+    },
+    "predisposed_pattern": "circadian-instability"
+  },
+  {
+    "participant_id": "P014",
+    "chronotype": 0.44076582355364674,
+    "sleep_regularity": 0.871080298177967,
+    "workload": 0.4862467472194625,
+    "schedule_flexibility": 0.4998723829412876,
+    "mobility_pattern": 0.7885618639492433,
+    "social_rhythm": 0.45116343571690165,
+    "phone_use_tendency": 0.592520277457017,
+    "adherence_tendency": 0.677699968036094,
+    "stress_sensitivity": 0.35398510967539654,
+    "missing_rate": 0.1584579469814001,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.4862741335929333,
+      "behavioral-withdrawal": 0.3799167915647854,
+      "circadian-instability": 0.33436452849896553,
+      "fragmented-attention-with-sleep-loss": 0.4228972542368026
+    },
+    "predisposed_pattern": "phone-mediated-sleep-delay"
+  },
+  {
+    "participant_id": "P015",
+    "chronotype": 0.826376946664818,
+    "sleep_regularity": 0.3311846728148967,
+    "workload": 0.7681054047459007,
+    "schedule_flexibility": 0.0907528023829898,
+    "mobility_pattern": 0.30861042287908586,
+    "social_rhythm": 0.2336816197155235,
+    "phone_use_tendency": 0.5117790209776567,
+    "adherence_tendency": 0.7404428969631628,
+    "stress_sensitivity": 0.24193342376543786,
+    "missing_rate": 0.187904869581149,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.6322292088552297,
+      "behavioral-withdrawal": 0.6205021008787001,
+      "circadian-instability": 0.4922791321350266,
+      "fragmented-attention-with-sleep-loss": 0.5709317175667731
+    },
+    "predisposed_pattern": "phone-mediated-sleep-delay"
+  },
+  {
+    "participant_id": "P016",
+    "chronotype": 0.6117991127249675,
+    "sleep_regularity": 0.5363626641950934,
+    "workload": 0.3641966111290914,
+    "schedule_flexibility": 0.7435213307289928,
+    "mobility_pattern": 0.1259735221415293,
+    "social_rhythm": 0.8254817772123999,
+    "phone_use_tendency": 0.8229870733977784,
+    "adherence_tendency": 0.6889500511949956,
+    "stress_sensitivity": 0.8593080246775597,
+    "missing_rate": 0.15905060288709896,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.6645100074944547,
+      "behavioral-withdrawal": 0.5983044421976106,
+      "circadian-instability": 0.5918962322113726,
+      "fragmented-attention-with-sleep-loss": 0.6226382677976039
+    },
+    "predisposed_pattern": "phone-mediated-sleep-delay"
+  },
+  {
+    "participant_id": "P017",
+    "chronotype": 0.51927967535855,
+    "sleep_regularity": 0.44565067824315735,
+    "workload": 0.3572592499278602,
+    "schedule_flexibility": 0.3335932758656127,
+    "mobility_pattern": 0.44741649395794475,
+    "social_rhythm": 0.1781804470534766,
+    "phone_use_tendency": 0.3847136130327703,
+    "adherence_tendency": 0.24877884740996253,
+    "stress_sensitivity": 0.615092292223119,
+    "missing_rate": 0.17425046432676417,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.4572282166892022,
+      "behavioral-withdrawal": 0.6130479815798218,
+      "circadian-instability": 0.5423271153001297,
+      "fragmented-attention-with-sleep-loss": 0.46831171447526787
+    },
+    "predisposed_pattern": "behavioral-withdrawal"
+  },
+  {
+    "participant_id": "P018",
+    "chronotype": 0.25213008031313944,
+    "sleep_regularity": 0.30804784072203173,
+    "workload": 0.5523185220907402,
+    "schedule_flexibility": 0.8902607593349623,
+    "mobility_pattern": 0.1442466715680507,
+    "social_rhythm": 0.45908541166120753,
+    "phone_use_tendency": 0.5727430449377819,
+    "adherence_tendency": 0.7994647309814519,
+    "stress_sensitivity": 0.8456697396000302,
+    "missing_rate": 0.19895640648509771,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.49785946964870986,
+      "behavioral-withdrawal": 0.7197640348233426,
+      "circadian-instability": 0.692059853995004,
+      "fragmented-attention-with-sleep-loss": 0.6256833553584158
+    },
+    "predisposed_pattern": "behavioral-withdrawal"
+  },
+  {
+    "participant_id": "P019",
+    "chronotype": 0.43383270618544123,
+    "sleep_regularity": 0.16959282902272005,
+    "workload": 0.232418203556221,
+    "schedule_flexibility": 0.44167290418811256,
+    "mobility_pattern": 0.597196459301357,
+    "social_rhythm": 0.17480507096472053,
+    "phone_use_tendency": 0.22306622580692792,
+    "adherence_tendency": 0.7191889538329521,
+    "stress_sensitivity": 0.9632337173736125,
+    "missing_rate": 0.16434157709282352,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.40022067350481694,
+      "behavioral-withdrawal": 0.6244142694967809,
+      "circadian-instability": 0.7232623796136823,
+      "fragmented-attention-with-sleep-loss": 0.5128962625550103
+    },
+    "predisposed_pattern": "circadian-instability"
+  },
+  {
+    "participant_id": "P020",
+    "chronotype": 0.20774771822125737,
+    "sleep_regularity": 0.6320333264955535,
+    "workload": 0.38590412136566987,
+    "schedule_flexibility": 0.5065914245870998,
+    "mobility_pattern": 0.5999997941895863,
+    "social_rhythm": 0.4559266131753194,
+    "phone_use_tendency": 0.3844589362584192,
+    "adherence_tendency": 0.6855528021908168,
+    "stress_sensitivity": 0.3202295380900655,
+    "missing_rate": 0.15955009841816084,
+    "state_scores": {
+      "phone-mediated-sleep-delay": 0.3156740434036648,
+      "behavioral-withdrawal": 0.4198790302520168,
+      "circadian-instability": 0.3843126512941363,
+      "fragmented-attention-with-sleep-loss": 0.3524037798710493
+    },
+    "predisposed_pattern": "behavioral-withdrawal"
+  }
+]

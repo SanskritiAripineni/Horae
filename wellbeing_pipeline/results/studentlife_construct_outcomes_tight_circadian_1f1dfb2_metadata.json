@@ -1,0 +1,65 @@
+{
+  "target_commit": "1f1dfb27f0814f1f25f237ed238719750ff616af",
+  "dataset_root": "$STUDENTLIFE_DATASET_ROOT",
+  "config": {
+    "circadian_min_markers": 2,
+    "warmup_days": 10,
+    "recent_days": 4,
+    "baseline_days": 21,
+    "min_magnitude": "mild"
+  },
+  "alignment": {
+    "primary": "same_day: pipeline state date == EMA local response date, matching existing stress analysis",
+    "sleep_reference": "Sleep EMA hour/rate questions ask about last night; response local date D refers to the prior night ending on D.",
+    "pam_reference": "PAM is momentary affect at response time; local response date D is same-day affect.",
+    "stress_reference": "Stress is momentary at response time; local response date D is same-day stress.",
+    "secondary_sleep_alignment": "next_day rows test state date D against Sleep EMA response date D+1, i.e. the following night's sleep."
+  },
+  "outcomes": {
+    "sleep_hours": {
+      "ema_field": "Sleep.hour",
+      "coding": "1=<3 hours, 2=3.5, 3=4, ..., 19=12; code 1 is approximated as 2.5 hours.",
+      "raw_label": "sleep_hours_numeric",
+      "oriented_label": "-sleep_hours_numeric",
+      "hypothesis": "state present -> shorter sleep; larger oriented value means fewer hours.",
+      "worse_direction": "lower raw hours / higher -hours"
+    },
+    "sleep_quality": {
+      "ema_field": "Sleep.rate",
+      "coding": "1=Very good, 2=Fairly good, 3=Fairly bad, 4=Very bad.",
+      "raw_label": "sleep_quality_rate",
+      "oriented_label": "sleep_quality_rate",
+      "hypothesis": "state present -> worse sleep quality; larger value means worse quality.",
+      "worse_direction": "higher rating"
+    },
+    "stress_severity": {
+      "ema_field": "Stress.level",
+      "coding": "1=A little stressed, 2=Definitely stressed, 3=Stressed out, 4=Feeling good, 5=Feeling great; recoded to severity 1->3, 2->2, 3->1, 4/5->0.",
+      "raw_label": "stress_severity",
+      "oriented_label": "stress_severity",
+      "hypothesis": "state present -> higher stress severity; larger value means worse stress.",
+      "worse_direction": "higher severity"
+    },
+    "pam_valence": {
+      "ema_field": "PAM.picture_idx",
+      "coding": "4x4 grid; valence is column ((picture_idx-1) % 4)+1, 1=more negative, 4=more positive.",
+      "raw_label": "pam_valence",
+      "oriented_label": "-pam_valence",
+      "hypothesis": "state present -> lower/more negative valence; larger oriented value means worse affect.",
+      "worse_direction": "lower raw valence / higher -valence"
+    }
+  },
+  "sleep_response_timing": {
+    "n_responses_with_sleep_fields": 1390,
+    "median_local_response_hour": 13.943611111111112,
+    "p10_local_response_hour": 12.55775,
+    "p90_local_response_hour": 17.601138888888894,
+    "pct_before_noon": 8.129496402877697
+  },
+  "pam_response_timing": {
+    "n_responses": 9040,
+    "median_local_response_hour": 15.499027777777776,
+    "p10_local_response_hour": 1.6039166666666675,
+    "p90_local_response_hour": 21.875833333333336
+  }
+}

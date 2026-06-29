@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS user_consent (
+    id INTEGER NOT NULL PRIMARY KEY,
+    study_id TEXT NOT NULL,
+    consented_at INTEGER NOT NULL,
+    version TEXT NOT NULL
+);

@@ -1,0 +1,241 @@
+{
+  "target_commit": "1f1dfb27f0814f1f25f237ed238719750ff616af",
+  "dataset_root": "$STUDENTLIFE_DATASET_ROOT",
+  "run_pid_config": {
+    "warmup_days": 10,
+    "recent_days": 4,
+    "baseline_days": 21,
+    "min_magnitude": "mild",
+    "BOOTSTRAP_REPS": 1000,
+    "RNG_SEED": 20260615
+  },
+  "scalar_risk_binary_definition": "risk_index > median risk_index among stress-labeled warm days for that version",
+  "versions": [
+    {
+      "label": "original",
+      "circadian_min_markers": 1,
+      "warm_rows": 4367,
+      "participants": 49,
+      "stress_days": 1132,
+      "any_pattern_fire_count": 263,
+      "confident_pattern_fire_count": 98,
+      "risk_index_stress_day_median": 1.0,
+      "ablation_table": [
+        {
+          "label": "any single deviation",
+          "n_yes": 733,
+          "n_no": 399,
+          "mean_yes": 1.8115609909266117,
+          "mean_no": 1.8192942674145685,
+          "p": 0.9121131443102596,
+          "cohen_d": -0.006894423920063551
+        },
+        {
+          "label": "scalar risk index > stress-day median (1)",
+          "n_yes": 467,
+          "n_no": 665,
+          "mean_yes": 1.8995241494170831,
+          "mean_no": 1.7544283327366033,
+          "p": 0.03000574400249592,
+          "cohen_d": 0.13064855927391797
+        },
+        {
+          "label": "any coherent pattern",
+          "n_yes": 117,
+          "n_no": 1015,
+          "mean_yes": 2.030911680911681,
+          "mean_no": 1.7893162092423176,
+          "p": 0.019239169328813092,
+          "cohen_d": 0.2235190004695498
+        },
+        {
+          "label": "confident coherent pattern (coverage >= 0.45)",
+          "n_yes": 51,
+          "n_no": 1081,
+          "mean_yes": 2.1526143790849677,
+          "mean_no": 1.7983249636579886,
+          "p": 0.015239794109930874,
+          "cohen_d": 0.3363612852970896
+        }
+      ],
+      "state_stress_table": [
+        {
+          "state": "phone-mediated-sleep-delay",
+          "fire_count": 36,
+          "n_stress_days": 24,
+          "n_stress_no": 1108,
+          "mean_stress_yes": 1.8645833333333333,
+          "mean_stress_no": 1.8131973096097647,
+          "p": 0.8021752199723817,
+          "cohen_d": 0.04882471306462797
+        },
+        {
+          "state": "behavioral-withdrawal",
+          "fire_count": 91,
+          "n_stress_days": 27,
+          "n_stress_no": 1105,
+          "mean_stress_yes": 2.4320987654320985,
+          "mean_stress_no": 1.7991909071320835,
+          "p": 0.0018292393090801452,
+          "cohen_d": 0.6134666197223934
+        },
+        {
+          "state": "circadian-instability",
+          "fire_count": 127,
+          "n_stress_days": 57,
+          "n_stress_no": 1075,
+          "mean_stress_yes": 1.9210526315789473,
+          "mean_stress_no": 1.80862569213732,
+          "p": 0.4429340824737289,
+          "cohen_d": 0.10272385321892351
+        },
+        {
+          "state": "fragmented-attention-with-sleep-loss",
+          "fire_count": 17,
+          "n_stress_days": 13,
+          "n_stress_no": 1119,
+          "mean_stress_yes": 1.9769230769230768,
+          "mean_stress_no": 1.8123973360568533,
+          "p": 0.6171891413874818,
+          "cohen_d": 0.14510308621937393
+        }
+      ],
+      "circadian_fire_count": 127,
+      "participant_counts": {
+        "confident_pattern_stress_days": {
+          "stress_day_count": 51,
+          "distinct_participants": 20
+        },
+        "withdrawal_stress_days": {
+          "stress_day_count": 27,
+          "distinct_participants": 16
+        },
+        "any_pattern_stress_days": {
+          "stress_day_count": 117,
+          "distinct_participants": 30
+        }
+      },
+      "per_participant_spearman": {
+        "median_r": 0.0,
+        "mean_r": 0.008355989923628144,
+        "percent_positive": 47.5,
+        "n_participants": 40,
+        "participant_n_min": 10,
+        "participant_n_max": 63
+      }
+    },
+    {
+      "label": "tightened",
+      "circadian_min_markers": 2,
+      "warm_rows": 4367,
+      "participants": 49,
+      "stress_days": 1132,
+      "any_pattern_fire_count": 157,
+      "confident_pattern_fire_count": 44,
+      "risk_index_stress_day_median": 1.0,
+      "ablation_table": [
+        {
+          "label": "any single deviation",
+          "n_yes": 733,
+          "n_no": 399,
+          "mean_yes": 1.8115609909266117,
+          "mean_no": 1.8192942674145685,
+          "p": 0.9121131443102596,
+          "cohen_d": -0.006894423920063551
+        },
+        {
+          "label": "scalar risk index > stress-day median (1)",
+          "n_yes": 459,
+          "n_no": 673,
+          "mean_yes": 1.901040910191237,
+          "mean_no": 1.7551186348734638,
+          "p": 0.02944052367803665,
+          "cohen_d": 0.1314244950372572
+        },
+        {
+          "label": "any coherent pattern",
+          "n_yes": 69,
+          "n_no": 1063,
+          "mean_yes": 2.1079710144927533,
+          "mean_no": 1.7952235362630469,
+          "p": 0.017252514308758102,
+          "cohen_d": 0.2907599530620213
+        },
+        {
+          "label": "confident coherent pattern (coverage >= 0.45)",
+          "n_yes": 24,
+          "n_no": 1108,
+          "mean_yes": 2.2618055555555556,
+          "mean_no": 1.8045932181536875,
+          "p": 0.02766699753246695,
+          "cohen_d": 0.4420446625214085
+        }
+      ],
+      "state_stress_table": [
+        {
+          "state": "phone-mediated-sleep-delay",
+          "fire_count": 36,
+          "n_stress_days": 24,
+          "n_stress_no": 1108,
+          "mean_stress_yes": 1.8645833333333333,
+          "mean_stress_no": 1.8131973096097647,
+          "p": 0.8021752199723817,
+          "cohen_d": 0.04882471306462797
+        },
+        {
+          "state": "behavioral-withdrawal",
+          "fire_count": 91,
+          "n_stress_days": 27,
+          "n_stress_no": 1105,
+          "mean_stress_yes": 2.4320987654320985,
+          "mean_stress_no": 1.7991909071320835,
+          "p": 0.0018292393090801452,
+          "cohen_d": 0.6134666197223934
+        },
+        {
+          "state": "circadian-instability",
+          "fire_count": 17,
+          "n_stress_days": 8,
+          "n_stress_no": 1124,
+          "mean_stress_yes": 2.1666666666666665,
+          "mean_stress_no": 1.8117787239450942,
+          "p": 0.3864258156985993,
+          "cohen_d": 0.32242896303256696
+        },
+        {
+          "state": "fragmented-attention-with-sleep-loss",
+          "fire_count": 17,
+          "n_stress_days": 13,
+          "n_stress_no": 1119,
+          "mean_stress_yes": 1.9769230769230768,
+          "mean_stress_no": 1.8123973360568533,
+          "p": 0.6171891413874818,
+          "cohen_d": 0.14510308621937393
+        }
+      ],
+      "circadian_fire_count": 17,
+      "participant_counts": {
+        "confident_pattern_stress_days": {
+          "stress_day_count": 24,
+          "distinct_participants": 14
+        },
+        "withdrawal_stress_days": {
+          "stress_day_count": 27,
+          "distinct_participants": 16
+        },
+        "any_pattern_stress_days": {
+          "stress_day_count": 69,
+          "distinct_participants": 27
+        }
+      },
+      "per_participant_spearman": {
+        "median_r": 0.0,
+        "mean_r": 0.003566618990981453,
+        "percent_positive": 47.5,
+        "n_participants": 40,
+        "participant_n_min": 10,
+        "participant_n_max": 63
+      }
+    }
+  ]
+}

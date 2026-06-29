@@ -1,0 +1,436 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA000001 /* AutoLifeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000001 /* AutoLifeApp.swift */; };
+		AA000009 /* IOSLocationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000009 /* IOSLocationProvider.swift */; };
+		AA000010 /* IOSMotionSensorProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000010 /* IOSMotionSensorProvider.swift */; };
+		AA000011 /* IOSWifiNetworkProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000011 /* IOSWifiNetworkProvider.swift */; };
+		AA000012 /* IOSMapImageFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000012 /* IOSMapImageFetcher.swift */; };
+		AA000018 /* IOSSensorServiceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000018 /* IOSSensorServiceManager.swift */; };
+		AA000019 /* IOSDataExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000021 /* IOSDataExporter.swift */; };
+		AA000013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB000013 /* Assets.xcassets */; };
+		AA000014 /* ComposeApp.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AB000020 /* ComposeApp.framework */; };
+		AA000015 /* ComposeApp.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = AB000020 /* ComposeApp.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		AC000001 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				AA000015 /* ComposeApp.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		AB000001 /* AutoLifeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoLifeApp.swift; sourceTree = "<group>"; };
+		AB000009 /* IOSLocationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSLocationProvider.swift; sourceTree = "<group>"; };
+		AB000010 /* IOSMotionSensorProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSMotionSensorProvider.swift; sourceTree = "<group>"; };
+		AB000011 /* IOSWifiNetworkProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSWifiNetworkProvider.swift; sourceTree = "<group>"; };
+		AB000012 /* IOSMapImageFetcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSMapImageFetcher.swift; sourceTree = "<group>"; };
+		AB000018 /* IOSSensorServiceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSSensorServiceManager.swift; sourceTree = "<group>"; };
+		AB000021 /* IOSDataExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSDataExporter.swift; sourceTree = "<group>"; };
+		AB000013 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AB000014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AB000022 /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
+		AB000023 /* AutoLife.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AutoLife.entitlements; sourceTree = "<group>"; };
+		AB000019 /* AutoLife.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AutoLife.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AB000020 /* ComposeApp.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ComposeApp.framework; path = ../composeApp/build/xcode-frameworks/ComposeApp.framework; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AD000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000014 /* ComposeApp.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AE000001 = {
+			isa = PBXGroup;
+			children = (
+				AE000002 /* AutoLife */,
+				AE000005 /* Products */,
+				AE000006 /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		AE000002 /* AutoLife */ = {
+			isa = PBXGroup;
+			children = (
+				AB000001 /* AutoLifeApp.swift */,
+				AE000004 /* Services */,
+				AB000013 /* Assets.xcassets */,
+				AB000014 /* Info.plist */,
+				AB000022 /* Secrets.xcconfig */,
+				AB000023 /* AutoLife.entitlements */,
+			);
+			path = AutoLife;
+			sourceTree = "<group>";
+		};
+		AE000004 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				AB000009 /* IOSLocationProvider.swift */,
+				AB000010 /* IOSMotionSensorProvider.swift */,
+				AB000011 /* IOSWifiNetworkProvider.swift */,
+				AB000012 /* IOSMapImageFetcher.swift */,
+				AB000018 /* IOSSensorServiceManager.swift */,
+				AB000021 /* IOSDataExporter.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		AE000005 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AB000019 /* AutoLife.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		AE000006 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				AB000020 /* ComposeApp.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AF000001 /* AutoLife */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B1000001 /* Build configuration list for PBXNativeTarget "AutoLife" */;
+			buildPhases = (
+				AF000002 /* Build Shared KMP Framework */,
+				AF000003 /* Sources */,
+				AD000001 /* Frameworks */,
+				AF000004 /* Resources */,
+				AC000001 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AutoLife;
+			productName = AutoLife;
+			productReference = AB000019 /* AutoLife.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B0000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1540;
+				LastUpgradeCheck = 1540;
+				TargetAttributes = {
+					AF000001 = {
+						CreatedOnToolsVersion = 15.4;
+					};
+				};
+			};
+			buildConfigurationList = B1000002 /* Build configuration list for PBXProject "AutoLife" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AE000001;
+			productRefGroup = AE000005 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AF000001 /* AutoLife */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AF000004 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000013 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		AF000002 /* Build Shared KMP Framework */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build ComposeApp KMP Framework";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -eu\n\ncd \"$SRCROOT/..\"\n\nCONFIGURATION_NAME=${CONFIGURATION%%-*}\nCONFIGURATION_NAME_LOWER=$(echo \"$CONFIGURATION_NAME\" | tr '[:upper:]' '[:lower:]')\nCURRENT_KMP_ARCH=${CURRENT_ARCH:-${NATIVE_ARCH_ACTUAL:-$(uname -m)}}\nif [ \"$CURRENT_KMP_ARCH\" = \"undefined_arch\" ]; then\n    CURRENT_KMP_ARCH=$(uname -m)\nfi\n\nif [ \"$PLATFORM_NAME\" = \"iphoneos\" ]; then\n    KMP_TARGET=\"IosArm64\"\n    FRAMEWORK_SOURCE_DIR=\"$SRCROOT/../composeApp/build/bin/iosArm64/${CONFIGURATION_NAME_LOWER}Framework\"\nelif [ \"$CURRENT_KMP_ARCH\" = \"x86_64\" ]; then\n    KMP_TARGET=\"IosX64\"\n    FRAMEWORK_SOURCE_DIR=\"$SRCROOT/../composeApp/build/bin/iosX64/${CONFIGURATION_NAME_LOWER}Framework\"\nelse\n    KMP_TARGET=\"IosSimulatorArm64\"\n    FRAMEWORK_SOURCE_DIR=\"$SRCROOT/../composeApp/build/bin/iosSimulatorArm64/${CONFIGURATION_NAME_LOWER}Framework\"\nfi\n\n./gradlew \":composeApp:link${CONFIGURATION_NAME}Framework${KMP_TARGET}\"\n\nFRAMEWORK_DEST_DIR=\"$SRCROOT/../composeApp/build/xcode-frameworks\"\nrm -rf \"$FRAMEWORK_DEST_DIR/ComposeApp.framework\"\nmkdir -p \"$FRAMEWORK_DEST_DIR\"\ncp -R \"$FRAMEWORK_SOURCE_DIR/ComposeApp.framework\" \"$FRAMEWORK_DEST_DIR/ComposeApp.framework\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AF000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000001 /* AutoLifeApp.swift in Sources */,
+				AA000009 /* IOSLocationProvider.swift in Sources */,
+				AA000010 /* IOSMotionSensorProvider.swift in Sources */,
+				AA000011 /* IOSWifiNetworkProvider.swift in Sources */,
+				AA000012 /* IOSMapImageFetcher.swift in Sources */,
+				AA000018 /* IOSSensorServiceManager.swift in Sources */,
+				AA000019 /* IOSDataExporter.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		B2000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		B2000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		B2000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = AB000022 /* Secrets.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = AutoLife/AutoLife.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = F4RHN5SWJA;
+				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../composeApp/build/xcode-frameworks";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AutoLife/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					ComposeApp,
+					"-lsqlite3",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.autolife.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B2000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = AB000022 /* Secrets.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = AutoLife/AutoLife.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = F4RHN5SWJA;
+				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../composeApp/build/xcode-frameworks";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AutoLife/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					ComposeApp,
+					"-lsqlite3",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.autolife.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B1000001 /* Build configuration list for PBXNativeTarget "AutoLife" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B2000003 /* Debug */,
+				B2000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B1000002 /* Build configuration list for PBXProject "AutoLife" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B2000001 /* Debug */,
+				B2000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B0000001 /* Project object */;
+}

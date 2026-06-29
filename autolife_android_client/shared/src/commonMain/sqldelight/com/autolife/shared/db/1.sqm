@@ -1,0 +1,4 @@
+CREATE TABLE auth_tokens (
+    id INTEGER NOT NULL PRIMARY KEY,
+    token TEXT NOT NULL
+);

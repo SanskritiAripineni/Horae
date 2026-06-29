@@ -1,0 +1,836 @@
+"""
+LLM Scheduler Agent - The "Conductor"
+Orchestrates journal analysis, wellbeing assessment, and calendar optimization.
+"""
+
+import logging
+import threading
+from typing import Any, Dict, List, Optional
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+# Import config FIRST to load .env
+from config import config
+
+from tools.autolife_reader import AutoLifeReader
+from tools.vectordb_client import VectorDBClient
+from tools.calendar_api import CalendarAPI, CalendarEvent
+from tools.llm_client import LLMClient
+from tools.wellbeing_sensor import WellbeingSensor
+from tools.wellbeing_feedback import WellbeingFeedback
+from memory import MemoryModule
+
+logger = logging.getLogger(__name__)
+
+
+def _infer_risk_from_prose(prose: str) -> str:
+    """Heuristic risk label from Layer 3 behavioral prose for VectorDB query."""
+    if not prose:
+        return "minimal"
+    lower = prose.lower()
+    if any(w in lower for w in ["severe", "critical", "crisis", "significant deterioration"]):
+        return "moderate"
+    if any(w in lower for w in ["notable", "above average", "elevated", "concerning", "irregular", "deviation"]):
+        return "mild"
+    return "minimal"
+
+
+def _valid_timezone(user_timezone: str) -> str:
+    try:
+        ZoneInfo(user_timezone)
+        return user_timezone
+    except (ZoneInfoNotFoundError, TypeError):
+        return "UTC"
+
+
+def _parse_datetime_in_timezone(value: str, user_timezone: str) -> datetime:
+    dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo(user_timezone))
+    return dt.astimezone(ZoneInfo(user_timezone))
+
+
+def _infer_risk_from_behavioral_state(
+    behavioral_state: Optional[Dict[str, Any]],
+    baseline_warm: bool = True,
+    fallback_prose: str = "",
+) -> str:
+    """Derive a preliminary risk from structured sensing before the LLM finalizes it."""
+    if not behavioral_state:
+        return _infer_risk_from_prose(fallback_prose)
+
+    baseline = behavioral_state.get("baseline_state") or {}
+    confidence = str(baseline.get("overall_confidence", "")).lower()
+    deviations = behavioral_state.get("deviations") or []
+    patterns = behavioral_state.get("coherent_patterns") or []
+
+    if not baseline_warm or "low-cold" in confidence:
+        return "minimal"
+
+    magnitude_score = {"mild": 1, "moderate": 2, "pronounced": 3}
+    coverage_score = {"high": 1.0, "medium": 0.75, "low": 0.4, "none": 0.0}
+    score = 0.0
+    moderate_or_worse = 0
+    for deviation in deviations:
+        mag = str(deviation.get("magnitude", "")).lower()
+        cov = str(deviation.get("coverage", "medium")).lower()
+        weighted = magnitude_score.get(mag, 0) * coverage_score.get(cov, 0.75)
+        score += weighted
+        if mag in {"moderate", "pronounced"} and coverage_score.get(cov, 0.75) >= 0.75:
+            moderate_or_worse += 1
+
+    score += min(len(patterns), 3) * 1.25
+
+    if score >= 6 or moderate_or_worse >= 3:
+        return "severe"
+    if score >= 3.5 or moderate_or_worse >= 2 or len(patterns) >= 2:
+        return "moderate"
+    if score >= 1:
+        return "mild"
+    return "minimal"
+
+
+def _compact_text(value: Any, max_len: int = 96) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 3].rstrip() + "..."
+
+
+def _json_safe(value: Any) -> Any:
+    """Coerce datetimes/timedeltas from tools into JSON-safe primitives."""
+    if isinstance(value, timedelta):
+        return value.total_seconds()
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, tuple):
+        return [_json_safe(v) for v in value]
+    return value
+
+
+def _risk_headline(risk_level: str) -> str:
+    return {
+        "minimal": "Stable wellbeing",
+        "low": "Stable wellbeing",
+        "mild": "Mild stress",
+        "moderate": "Moderate stress",
+        "severe": "High stress",
+        "high": "High stress",
+    }.get((risk_level or "").lower(), "Wellbeing assessment")
+
+
+def _default_confidence_label(results: Dict[str, Any]) -> str:
+    sensing = results.get("behavioral_sensing")
+    if not sensing:
+        return "Context confidence"
+    if isinstance(sensing, dict) and sensing.get("baseline_note"):
+        return "Low confidence"
+    return "Medium confidence"
+
+
+def _icon_for_signal(label: str, kind: str) -> str:
+    lower = label.lower()
+    if any(word in lower for word in ["sleep", "night", "screen", "wind"]):
+        return "moon"
+    if any(word in lower for word in ["walk", "activity", "movement", "exercise", "run"]):
+        return "activity"
+    if any(word in lower for word in ["journal", "research", "paper", "evidence"]):
+        return "book"
+    if any(word in lower for word in ["calendar", "schedule", "event"]):
+        return "calendar"
+    if kind == "concern":
+        return "warning"
+    if kind in {"protective", "productive"}:
+        return "heart"
+    return "dot"
+
+
+def _normalize_signal_items(
+    raw_items: Any,
+    fallback_severity: str = "",
+    limit: int = 5,
+) -> List[Dict[str, str]]:
+    if not isinstance(raw_items, list):
+        return []
+
+    normalized: List[Dict[str, str]] = []
+    for item in raw_items:
+        if isinstance(item, dict):
+            label = _compact_text(
+                item.get("label")
+                or item.get("title")
+                or item.get("name")
+                or item.get("text")
+                or item.get("detail")
+                or item.get("description")
+            )
+            if not label:
+                continue
+            detail = _compact_text(
+                item.get("detail") or item.get("description") or item.get("rationale"),
+                160,
+            )
+            severity = _compact_text(item.get("severity") or item.get("priority") or fallback_severity, 32)
+        else:
+            label = _compact_text(item)
+            if not label:
+                continue
+            detail = ""
+            severity = fallback_severity
+
+        signal = {"label": label}
+        if detail and detail != label:
+            signal["detail"] = detail
+        if severity:
+            signal["severity"] = severity
+        normalized.append(signal)
+        if len(normalized) >= limit:
+            break
+    return normalized
+
+
+def _normalize_evidence_chips(
+    raw_chips: Any,
+    concerns: List[Dict[str, str]],
+    protective: List[Dict[str, str]],
+    productive: List[Dict[str, str]],
+    limit: int = 5,
+) -> List[Dict[str, str]]:
+    chips: List[Dict[str, str]] = []
+    if isinstance(raw_chips, list):
+        for item in raw_chips:
+            if isinstance(item, dict):
+                label = _compact_text(item.get("label") or item.get("title") or item.get("text"), 44)
+                kind = _compact_text(item.get("kind") or item.get("type") or "neutral", 24).lower()
+                icon = _compact_text(item.get("icon"), 24)
+            else:
+                label = _compact_text(item, 44)
+                kind = "neutral"
+                icon = ""
+            if not label:
+                continue
+            chips.append({
+                "label": label,
+                "kind": kind if kind in {"concern", "protective", "productive", "neutral"} else "neutral",
+                "icon": icon or _icon_for_signal(label, kind),
+            })
+            if len(chips) >= limit:
+                return chips
+
+    for kind, signals in (
+        ("concern", concerns),
+        ("protective", protective),
+        ("productive", productive),
+    ):
+        for signal in signals:
+            label = _compact_text(signal.get("label"), 44)
+            if not label or any(c["label"].lower() == label.lower() for c in chips):
+                continue
+            chips.append({
+                "label": label,
+                "kind": kind,
+                "icon": _icon_for_signal(label, kind),
+            })
+            if len(chips) >= limit:
+                return chips
+    return chips
+
+
+def _build_ui_summary(
+    proposals: Dict[str, Any],
+    results: Dict[str, Any],
+    risk_level: str,
+) -> Dict[str, Any]:
+    raw_ui = proposals.get("ui_summary")
+    ui = raw_ui if isinstance(raw_ui, dict) else {}
+
+    concerns = _normalize_signal_items(ui.get("concerns"), fallback_severity="medium")
+    if not concerns:
+        concerns = _normalize_signal_items(proposals.get("concerns"), fallback_severity="medium")
+
+    protective = _normalize_signal_items(ui.get("protective_signals"), fallback_severity="positive")
+    if not protective:
+        protective = _normalize_signal_items(proposals.get("positives"), fallback_severity="positive")
+
+    productive = _normalize_signal_items(ui.get("productive_signals"), fallback_severity="positive")
+
+    return {
+        "headline": _compact_text(ui.get("headline"), 48) or _risk_headline(risk_level),
+        "confidence_label": _compact_text(ui.get("confidence_label"), 40) or _default_confidence_label(results),
+        "summary": (
+            _compact_text(ui.get("summary"), 180)
+            or _compact_text(proposals.get("summary"), 180)
+            or _compact_text(results.get("journal_summary"), 180)
+        ),
+        "evidence_chips": _normalize_evidence_chips(
+            ui.get("evidence_chips"),
+            concerns=concerns,
+            protective=protective,
+            productive=productive,
+        ),
+        "concerns": concerns,
+        "protective_signals": protective,
+        "productive_signals": productive,
+    }
+
+
+def _build_analysis_details(
+    results: Dict[str, Any],
+    research_suggestions: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    calendar_summary = results.get("calendar_summary") or {}
+    behavioral_sensing = results.get("behavioral_sensing")
+    return {
+        "journal_count": results.get("journal_count", 0),
+        "duration_seconds": results.get("duration_seconds", 0),
+        "behavioral_sensing": behavioral_sensing,
+        "research_sources": research_suggestions,
+        "calendar_summary": calendar_summary,
+        "tool_status": {
+            "behavioral_sensing": "ready" if behavioral_sensing else "unavailable",
+            "research": "ready" if research_suggestions else "empty",
+            "calendar": "ready" if calendar_summary else "unavailable",
+        },
+    }
+
+
+def _proposal_dedupe_key(change: Dict[str, Any]) -> str:
+    title = str(change.get("title") or change.get("change") or "").lower()
+    start = str(change.get("start_time") or "")[:16]
+    return " ".join(title.split())[:48] + "|" + start
+
+
+class LLMSchedulerAgent:
+    """
+    Main agent that orchestrates the mental health analysis and calendar optimization.
+    """
+    
+    def __init__(self, suggest_only: bool = True, user_id: str = "default"):
+        self.suggest_only = suggest_only
+        self.user_id = user_id
+
+        self.autolife_reader = AutoLifeReader()
+        self.vectordb = VectorDBClient()
+        self.calendar_api = CalendarAPI(suggest_only=suggest_only, user_id=self.user_id)
+        self.llm_client = LLMClient()
+        self.wellbeing_sensor = WellbeingSensor()
+        self.memory = MemoryModule()
+        self._calendar_lock = threading.Lock()
+
+        logger.info("LLMSchedulerAgent initialized")
+
+    def run_from_journals(
+        self,
+        journals: List[Dict[str, Any]],
+        user_id: Optional[str] = None,
+        raw_days: Optional[List[Dict[str, Any]]] = None,
+        user_timezone: str = "UTC",
+    ) -> Dict[str, Any]:
+        """Run the analysis pipeline with pre-loaded journal entries.
+
+        Parameters
+        ----------
+        journals:
+            AutoLife journal entries — treated as narrative context only, not a
+            wellbeing signal.
+        user_id:
+            Override the instance-level user_id for this run.
+        raw_days:
+            Real phone-sensor marker dicts (one per day) for the WellbeingSensor
+            pipeline (Layer 1–4).  This is the sole wellbeing signal source.
+            When absent, the orchestrator works from journal narrative + calendar
+            + VectorDB only and notes the absence of behavioral data.
+        """
+        start_time = datetime.now()
+        effective_user_id = user_id or self.user_id
+        effective_timezone = _valid_timezone(user_timezone)
+
+        results = {
+            'status': 'running',
+            'user_id': effective_user_id,
+            'user_timezone': effective_timezone,
+            'journal_summary': None,
+            'wellbeing': None,
+            'ui_summary': None,
+            'recommendations': [],
+            'calendar_summary': None,
+            'proposed_changes': [],
+            'behavioral_sensing': None,
+            'analysis_details': None,
+            'errors': []
+        }
+        research_suggestions: List[Dict[str, Any]] = []
+
+        try:
+            if not journals:
+                results['errors'].append("No journal entries provided")
+                results['status'] = 'completed_with_warnings'
+                results['ui_summary'] = _build_ui_summary({}, results, "unknown")
+                results['duration_seconds'] = (datetime.now() - start_time).total_seconds()
+                results['analysis_details'] = _build_analysis_details(results, research_suggestions)
+                return _json_safe(results)
+
+            # 1. Journal narrative — context only, not assessment
+            journal_narrative = self.autolife_reader.get_context_for_prompt(journals)
+            results['journal_count'] = len(journals)
+
+            # 2. Calendar - use the injected default calendar client when possible,
+            # otherwise create a per-user client for the request.
+            logger.info("Getting calendar information...")
+            if effective_user_id == self.user_id:
+                request_calendar = self.calendar_api
+                request_calendar.suggest_only = True
+                request_calendar.user_timezone = effective_timezone
+            else:
+                request_calendar = CalendarAPI(
+                    suggest_only=True,
+                    user_id=effective_user_id,
+                    user_timezone=effective_timezone,
+                )
+            calendar_summary = _json_safe(request_calendar.get_schedule_summary(days=7))
+            results['calendar_summary'] = calendar_summary
+            calendar_events = calendar_summary.get('events', []) if calendar_summary else []
+
+            # 3. Behavioral sensing — the sole wellbeing signal
+            behavioral_prose: Optional[str] = None
+            risk_level: str = "minimal"
+            feedback_history: List[Dict[str, Any]] = []
+            llm_analysis: Dict[str, Any] = {}
+            memory_preferences = self.memory.get_prompt_preferences(effective_user_id)
+            wellbeing_context = self.memory.get_wellbeing_context(effective_user_id)
+            sensor_user_prefs = (
+                {"preferences": memory_preferences}
+                if memory_preferences else None
+            )
+
+            if raw_days:
+                logger.info("Running WellbeingSensor pipeline (Layer 1-4)...")
+                feedback = WellbeingFeedback()
+                feedback_history = feedback.get_history(effective_user_id, n=10)
+
+                sensing_result = self.wellbeing_sensor.analyze(
+                    raw_days,
+                    calendar=calendar_events,
+                    user_prefs=sensor_user_prefs,
+                    feedback_history=feedback_history,
+                    with_llm=True,
+                )
+                behavioral_prose = sensing_result.get("prose", "") or None
+                baseline_warm = sensing_result.get("baseline_warm", True)
+                llm_analysis = sensing_result.get("llm_analysis") or {}
+                behavioral_state = sensing_result.get("behavioral_state")
+
+                results['behavioral_sensing'] = {
+                    "prose": behavioral_prose,
+                    "llm_analysis": llm_analysis,
+                    "behavioral_state": behavioral_state,
+                }
+                if not baseline_warm:
+                    results['behavioral_sensing']['baseline_note'] = (
+                        "Baseline still building — behavioral patterns will be more reliable after ~10 days of data."
+                    )
+
+                risk_level = _infer_risk_from_behavioral_state(
+                    behavioral_state,
+                    baseline_warm=baseline_warm,
+                    fallback_prose=behavioral_prose or "",
+                )
+            else:
+                logger.info("No raw_days provided — proceeding without behavioral sensing.")
+
+            # 4. VectorDB
+            logger.info("Querying VectorDB for interventions...")
+            vectordb_summary = behavioral_prose or journal_narrative
+            if self.vectordb.initialize():
+                research_suggestions = self.vectordb.get_intervention_suggestions(
+                    risk_level=risk_level,
+                    journal_summary=vectordb_summary,
+                    behavioral_state=sensing_result.get("behavioral_state") if raw_days else None,
+                    llm_analysis=llm_analysis if raw_days else None,
+                )
+            else:
+                research_suggestions = []
+                results['errors'].append("VectorDB not available")
+
+            # 5. Orchestrator: one structured-prompt call over all tool outputs
+            logger.info("Running orchestrator (schedule proposals)...")
+            proposals = _json_safe(self.llm_client.generate_schedule_proposals(
+                journal_narrative=journal_narrative,
+                behavioral_prose=behavioral_prose,
+                risk_level=risk_level,
+                calendar_summary=calendar_summary,
+                research_context=research_suggestions,
+                user_preferences=memory_preferences,
+                feedback_history=feedback_history,
+                wellbeing_history=wellbeing_context,
+                behavioral_state=sensing_result.get("behavioral_state") if raw_days else None,
+                raw_days=raw_days,
+                llm_analysis=llm_analysis if raw_days else None,
+                user_timezone=effective_timezone,
+            ))
+            if isinstance(proposals, dict):
+                for err in proposals.get("errors", []):
+                    results['errors'].append(str(err))
+
+            final_risk = proposals.get('risk_level', risk_level)
+            results['journal_summary'] = proposals.get('summary', behavioral_prose or journal_narrative)
+            results['wellbeing'] = {
+                'risk_level': final_risk,
+                'key_concerns': proposals.get('concerns', []),
+                'positive_indicators': proposals.get('positives', []),
+                'behavioral_context': behavioral_prose or "",
+            }
+            self.memory.record_wellbeing_assessment(effective_user_id, final_risk)
+            results['ui_summary'] = _build_ui_summary(proposals, results, final_risk)
+            results['recommendations'] = proposals.get('recommendations', [])
+            proposed_changes = proposals.get('proposed_changes', [])
+
+            # Server-side conflict filtering: remove proposals that overlap existing events
+            existing_events = calendar_summary.get('events', []) if calendar_summary else []
+
+            def _has_server_conflict(proposal: dict) -> bool:
+                try:
+                    p_start = _parse_datetime_in_timezone(proposal['start_time'], effective_timezone)
+                    p_end = _parse_datetime_in_timezone(proposal['end_time'], effective_timezone)
+                except (ValueError, KeyError, TypeError):
+                    return True
+                for ev in existing_events:
+                    try:
+                        e_start = _parse_datetime_in_timezone(ev['start'], effective_timezone)
+                        e_end = _parse_datetime_in_timezone(ev['end'], effective_timezone)
+                    except (ValueError, KeyError, TypeError):
+                        continue
+                    if p_start < e_end - timedelta(minutes=1) and e_start < p_end - timedelta(minutes=1):
+                        return True
+                return False
+
+            safe_changes = [p for p in proposed_changes if p.get("action", "add") == "add"]
+            for change in safe_changes:
+                change["user_timezone"] = change.get("user_timezone") or effective_timezone
+            unsafe_count = len(proposed_changes) - len(safe_changes)
+            if unsafe_count:
+                logger.warning("Dropped %d non-add proposal(s) from LLM output (prompt injection guard)", unsafe_count)
+            filtered_changes = [p for p in safe_changes if not _has_server_conflict(p)]
+            conflict_count = len(safe_changes) - len(filtered_changes)
+            if conflict_count:
+                logger.info(f"Filtered {conflict_count} conflicting proposal(s) server-side")
+
+            # ----------------------------------------------------------------
+            # Promote Layer 4 suggestions with start_time → proposed_changes
+            # ----------------------------------------------------------------
+            # Build stable keys from title + scheduled slot so Layer 4 and
+            # Gemini do not double-book the same recommendation.
+            existing_proposal_keys = {_proposal_dedupe_key(c) for c in filtered_changes}
+
+            def _find_free_date(time_str: str, duration_min: int = 30) -> str:
+                """Return YYYY-MM-DD for the nearest conflict-free day for a HH:MM slot."""
+                today = datetime.now(ZoneInfo(effective_timezone)).date()
+                for offset in range(1, 8):
+                    candidate = today + timedelta(days=offset)
+                    candidate_str = candidate.strftime('%Y-%m-%d')
+                    start_iso = f"{candidate_str}T{time_str}:00"
+                    end_dt = _parse_datetime_in_timezone(start_iso, effective_timezone) + timedelta(minutes=duration_min)
+                    end_iso = end_dt.strftime('%Y-%m-%dT%H:%M:%S')
+                    probe = {'start_time': start_iso, 'end_time': end_iso}
+                    if not _has_server_conflict(probe):
+                        return candidate_str
+                return (today + timedelta(days=1)).strftime('%Y-%m-%d')
+
+            layer4_additions: List[Dict[str, Any]] = []
+            sensing = results.get('behavioral_sensing') or {}
+            llm_analysis = sensing.get('llm_analysis') or {}
+            for suggestion in llm_analysis.get('suggestions', []):
+                start_t = suggestion.get('start_time')
+                end_t = suggestion.get('end_time')
+                if not start_t:
+                    continue  # not time-specific — skip calendar conversion
+
+                # Build full ISO datetimes using the next conflict-free day within 7 days.
+                # Find the free date once from start_t so that start and end always
+                # land on the same calendar day (avoids midnight-spanning events).
+                def _to_iso(time_str: str, anchor_date: str | None = None) -> str:
+                    if 'T' in time_str or len(time_str) > 8:
+                        return time_str
+                    date = anchor_date or _find_free_date(time_str)
+                    return f"{date}T{time_str}:00"
+
+                try:
+                    start_iso = _to_iso(start_t)
+                    # Reuse the date from start so end never lands on a different day.
+                    start_date = start_iso.split('T')[0]
+                    end_iso = _to_iso(end_t, anchor_date=start_date) if end_t else None
+
+                    # Default end_time: 30 minutes after start if not provided
+                    if not end_iso:
+                        start_dt = _parse_datetime_in_timezone(start_iso, effective_timezone)
+                        end_iso = (start_dt + timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
+                    else:
+                        start_dt = _parse_datetime_in_timezone(start_iso, effective_timezone)
+                        end_dt = _parse_datetime_in_timezone(end_iso, effective_timezone)
+                        if end_dt <= start_dt:
+                            end_iso = (end_dt + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S')
+                except (ValueError, TypeError):
+                    logger.warning("Layer 4 suggestion has unparseable times: %s", suggestion)
+                    continue
+
+                change_text = suggestion.get('change', '')
+                # Skip Layer 4 additions already emitted by the final Gemini pass.
+                probe_key = _proposal_dedupe_key({"title": change_text, "start_time": start_iso})
+                if probe_key in existing_proposal_keys:
+                    continue
+
+                entry: Dict[str, Any] = {
+                    'action': 'add',
+                    'title': change_text,
+                    'description': suggestion.get('rationale', ''),
+                    'start_time': start_iso,
+                    'end_time': end_iso,
+                    'category': 'Wellness',
+                    'reason': suggestion.get('rationale', ''),
+                    'source': 'behavioral_sensing',
+                    'user_timezone': effective_timezone,
+                }
+                if not _has_server_conflict(entry):
+                    layer4_additions.append(entry)
+                    existing_proposal_keys.add(_proposal_dedupe_key(entry))
+                else:
+                    logger.info("Layer 4 suggestion conflicts with existing event, skipping: %s", change_text)
+
+            if layer4_additions:
+                logger.info("Adding %d Layer 4 suggestion(s) to proposed_changes", len(layer4_additions))
+
+            results['proposed_changes'] = filtered_changes + layer4_additions
+            results['mental_health'] = results['wellbeing']  # Backward-compatible alias for deployed clients.
+
+            results['status'] = 'completed'
+
+        except Exception as e:
+            logger.error(f"Pipeline failed: {e}")
+            results['errors'].append(str(e))
+            results['status'] = 'failed'
+
+        results['duration_seconds'] = (datetime.now() - start_time).total_seconds()
+        if not isinstance(results.get('ui_summary'), dict):
+            results['ui_summary'] = _build_ui_summary({}, results, "unknown")
+        results['analysis_details'] = _build_analysis_details(results, research_suggestions)
+        return _json_safe(results)
+
+    def run(self, mode: str = "daily") -> Dict[str, Any]:
+        """Run the full agent workflow, reading journals from the filesystem."""
+        logger.info(f"Running agent in {mode} mode")
+        start_time = datetime.now()
+
+        logger.info("Reading journals...")
+        journals = self.autolife_reader.read_journals(limit=10)
+
+        results = self.run_from_journals(journals)
+        results['mode'] = mode
+        results['timestamp'] = start_time.isoformat()
+        return results
+
+    def apply_calendar_changes(
+        self,
+        changes: List[Dict[str, Any]],
+        user_comments: str = "",
+        proposed_changes: Optional[List[Dict[str, Any]]] = None,
+        behavioral_state_summary: str = "",
+        user_id: str = "default",
+        user_timezone: str = "UTC",
+    ) -> Dict[str, Any]:
+        """
+        Apply proposed calendar changes.
+
+        Parameters
+        ----------
+        changes:
+            List of proposed changes to apply (subset or all of proposed_changes).
+        user_comments:
+            Optional user comments to consider.
+        proposed_changes:
+            Full list of proposed changes from the pipeline run (used to detect
+            which suggestions were *not* applied so they can be recorded as
+            rejected in the feedback store).
+        behavioral_state_summary:
+            Short string describing the current behavioral state — stored
+            alongside each feedback record for future personalisation.
+        """
+        logger.info("Applying calendar changes...")
+        effective_timezone = _valid_timezone(user_timezone)
+
+        # Save user comments to memory if provided
+        if user_comments:
+            parsed_feedback = self.llm_client.parse_user_feedback(user_comments)
+            self.memory.record_feedback(
+                user_id=user_id,
+                raw_feedback=user_comments,
+                parsed_feedback=parsed_feedback,
+            )
+            logger.info("Saved structured user feedback to memory")
+
+        results = {
+            'applied': [],
+            'failed': [],
+            'skipped': []
+        }
+
+        feedback = WellbeingFeedback()
+
+        # Reuse the injected default calendar client when possible; create a
+        # per-user client for non-default accounts.
+        with self._calendar_lock:
+            previous_suggest_only: Optional[bool] = None
+            if user_id == self.user_id:
+                request_calendar = self.calendar_api
+                previous_suggest_only = request_calendar.suggest_only
+                request_calendar.suggest_only = False
+                request_calendar.user_timezone = effective_timezone
+            else:
+                request_calendar = CalendarAPI(
+                    suggest_only=False,
+                    user_id=user_id,
+                    user_timezone=effective_timezone,
+                )
+            try:
+                applied_titles: set = set()
+
+                for change in changes:
+                    action = change.get('action', 'add')
+                    change_title = change.get('title', 'Wellness Activity')
+
+                    try:
+                        if action == 'add':
+                            change_tz = change.get("user_timezone")
+                            if change_tz and change_tz != effective_timezone:
+                                results['failed'].append({
+                                    **change,
+                                    "error": "Proposal timezone does not match request timezone",
+                                })
+                                continue
+                            start_time = _parse_datetime_in_timezone(change.get('start_time'), effective_timezone)
+                            end_time = _parse_datetime_in_timezone(change.get('end_time'), effective_timezone)
+
+                            event = CalendarEvent(
+                                id=None,
+                                summary=change_title,
+                                description=change.get('description', ''),
+                                start_time=start_time,
+                                end_time=end_time
+                            )
+
+                            event_id = request_calendar.create_event(event)
+                            if event_id:
+                                results['applied'].append({
+                                    **change,
+                                    'action': 'created',
+                                    'title': event.summary,
+                                    'event_id': event_id
+                                })
+                                applied_titles.add(change_title.strip().lower())
+                                feedback.record(
+                                    user_id,
+                                    suggestion=change_title,
+                                    action='accept',
+                                    behavioral_state_summary=behavioral_state_summary,
+                                )
+                                self.memory.record_suggestion_feedback(
+                                    user_id=user_id,
+                                    suggestion=change_title,
+                                    action='accept',
+                                    behavioral_state_summary=behavioral_state_summary,
+                                )
+                            else:
+                                results['failed'].append(change)
+
+                        elif action == 'update':
+                            event_id = change.get('event_id')
+                            updates = change.get('updates', {})
+
+                            if request_calendar.update_event(event_id, updates):
+                                results['applied'].append({
+                                    'action': 'updated',
+                                    'event_id': event_id,
+                                    'updates': updates
+                                })
+                                applied_titles.add(change_title.strip().lower())
+                                feedback.record(
+                                    user_id,
+                                    suggestion=change_title,
+                                    action='accept',
+                                    behavioral_state_summary=behavioral_state_summary,
+                                )
+                                self.memory.record_suggestion_feedback(
+                                    user_id=user_id,
+                                    suggestion=change_title,
+                                    action='accept',
+                                    behavioral_state_summary=behavioral_state_summary,
+                                )
+                            else:
+                                results['failed'].append(change)
+
+                        elif action == 'delete':
+                            event_id = change.get('event_id')
+
+                            if request_calendar.delete_event(event_id):
+                                results['applied'].append({
+                                    'action': 'deleted',
+                                    'event_id': event_id
+                                })
+                                applied_titles.add(change_title.strip().lower())
+                                feedback.record(
+                                    user_id,
+                                    suggestion=change_title,
+                                    action='accept',
+                                    behavioral_state_summary=behavioral_state_summary,
+                                )
+                                self.memory.record_suggestion_feedback(
+                                    user_id=user_id,
+                                    suggestion=change_title,
+                                    action='accept',
+                                    behavioral_state_summary=behavioral_state_summary,
+                                )
+                            else:
+                                results['failed'].append(change)
+                        else:
+                            results['skipped'].append(change)
+
+                    except Exception as e:
+                        logger.error(f"Failed to apply change: {e}")
+                        change['error'] = str(e)
+                        results['failed'].append(change)
+
+            finally:
+                if previous_suggest_only is not None:
+                    request_calendar.suggest_only = previous_suggest_only
+
+        # Best-effort: record proposals that were NOT in the applied set as
+        # rejected (only if the caller passed the full proposed_changes list).
+        if proposed_changes:
+            for proposal in proposed_changes:
+                title = proposal.get('title', '').strip().lower()
+                if title and title not in applied_titles:
+                    feedback.record(
+                        user_id,
+                        suggestion=proposal.get('title', ''),
+                        action='reject',
+                        behavioral_state_summary=behavioral_state_summary,
+                    )
+                    self.memory.record_suggestion_feedback(
+                        user_id=user_id,
+                        suggestion=proposal.get('title', ''),
+                        action='reject',
+                        behavioral_state_summary=behavioral_state_summary,
+                    )
+
+        return results
+
+
+# Backwards compatibility
+Agent = LLMSchedulerAgent

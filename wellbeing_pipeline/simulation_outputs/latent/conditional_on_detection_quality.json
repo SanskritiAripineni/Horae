@@ -1,0 +1,20 @@
+{
+  "definition": "quality on non-handed dimensions for cases where the full pipeline emitted the predisposed pattern",
+  "n_cases": 86,
+  "behavior_aware": {
+    "n": 86,
+    "burden_appropriate_rate": 0.407,
+    "flexible_fixed_protection_rate": 0.872,
+    "specificity_rate": 1.0,
+    "high_burden_change_rate": 0.43,
+    "mean_burden_score": 2.296
+  },
+  "calendar_only": {
+    "n": 86,
+    "burden_appropriate_rate": 0.57,
+    "flexible_fixed_protection_rate": 0.779,
+    "specificity_rate": 0.802,
+    "high_burden_change_rate": 0.233,
+    "mean_burden_score": 1.613
+  }
+}

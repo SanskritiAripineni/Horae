@@ -1,0 +1,9 @@
+outcome,alignment,participant_days_with_ema,participants_with_ema
+sleep_hours,same_day,1079,47
+sleep_hours,next_day,1048,47
+sleep_quality,same_day,1089,47
+sleep_quality,next_day,1058,47
+stress_severity,same_day,1132,46
+stress_severity,next_day,1107,46
+pam_valence,same_day,2069,47
+pam_valence,next_day,2041,47

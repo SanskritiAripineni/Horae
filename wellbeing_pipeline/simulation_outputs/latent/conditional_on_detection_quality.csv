@@ -1,0 +1,3 @@
+arm,n,burden_appropriate_rate,flexible_fixed_protection_rate,specificity_rate,high_burden_change_rate,mean_burden_score
+behavior_aware,86,0.407,0.872,1.0,0.43,2.296
+calendar_only,86,0.57,0.779,0.802,0.233,1.613

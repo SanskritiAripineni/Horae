@@ -1,0 +1,58 @@
+{
+  "detection_note": "Misses are counted only on ground-truth episode decision days. The generator now injects episodic required-marker shifts, but early episode days can still miss because Layer 2 uses a 4-day recent window against a 21-day rolling baseline; missing marker-days can also leave only a partial coherent-pattern signature.",
+  "n_episode_missed_cases": 35,
+  "reason_counts": {
+    "no_required_marker_crossed_layer2_threshold": 26,
+    "partial_required_markers_only_coherence_rule_not_satisfied": 9
+  },
+  "reason_rates": {
+    "no_required_marker_crossed_layer2_threshold": 0.743,
+    "partial_required_markers_only_coherence_rule_not_satisfied": 0.257
+  },
+  "by_pattern": {
+    "fragmented-attention-with-sleep-loss": {
+      "n": 7,
+      "reason_counts": {
+        "no_required_marker_crossed_layer2_threshold": 5,
+        "partial_required_markers_only_coherence_rule_not_satisfied": 2
+      }
+    },
+    "behavioral-withdrawal": {
+      "n": 6,
+      "reason_counts": {
+        "no_required_marker_crossed_layer2_threshold": 4,
+        "partial_required_markers_only_coherence_rule_not_satisfied": 2
+      }
+    },
+    "phone-mediated-sleep-delay": {
+      "n": 12,
+      "reason_counts": {
+        "no_required_marker_crossed_layer2_threshold": 7,
+        "partial_required_markers_only_coherence_rule_not_satisfied": 5
+      }
+    },
+    "circadian-instability": {
+      "n": 10,
+      "reason_counts": {
+        "no_required_marker_crossed_layer2_threshold": 10
+      }
+    }
+  },
+  "required_marker_absent_counts": {
+    "app_switching_rate": 5,
+    "sleep_duration_hours": 7,
+    "mobility_entropy": 5,
+    "location_revisit_ratio": 5,
+    "sleep_onset_hour": 10,
+    "late_night_screen_min": 9,
+    "sleep_regularity_index": 10
+  },
+  "required_marker_correct_but_incomplete_counts": {
+    "late_night_screen_min": 3,
+    "sleep_onset_hour": 2,
+    "app_switching_rate": 2,
+    "location_revisit_ratio": 1,
+    "mobility_entropy": 1
+  },
+  "required_marker_wrong_direction_counts": {}
+}

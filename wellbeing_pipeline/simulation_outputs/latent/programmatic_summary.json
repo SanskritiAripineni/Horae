@@ -1,0 +1,24 @@
+{
+  "behavior_aware": {
+    "n": 280,
+    "lever_pass_rate": 0.407,
+    "flexible_event_pass_rate": 0.871,
+    "burden_pass_rate": 0.686,
+    "specificity_pass_rate": 0.704,
+    "high_burden_change_rate": 0.161,
+    "no_change_rate": 0.296,
+    "all_three_pass_rate": 0.193,
+    "mean_burden_score": 1.32
+  },
+  "calendar_only": {
+    "n": 280,
+    "lever_pass_rate": 0.025,
+    "flexible_event_pass_rate": 0.829,
+    "burden_pass_rate": 0.646,
+    "specificity_pass_rate": 0.739,
+    "high_burden_change_rate": 0.157,
+    "no_change_rate": 0.261,
+    "all_three_pass_rate": 0.018,
+    "mean_burden_score": 1.381
+  }
+}

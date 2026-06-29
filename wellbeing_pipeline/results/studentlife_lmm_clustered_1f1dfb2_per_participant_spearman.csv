@@ -1,0 +1,5 @@
+predictor,spearman_median_r,spearman_pct_positive,spearman_n_participants
+any_coherent_pattern,0.06771262317433213,60.0,30
+confident_coherent_pattern,0.09714730092486817,70.0,20
+risk_index,0.007934176069868355,50.0,44
+behavioral_withdrawal,0.238023112389956,75.0,16

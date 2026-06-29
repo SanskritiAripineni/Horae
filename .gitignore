@@ -1,0 +1,48 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*Secrets.xcconfig
+!*Secrets.xcconfig.template
+
+# Paper drafts and binary local sources
+*.pdf
+*.docx
+
+# Raw/local data
+data/raw/
+datasets/
+studentlife/
+raw_logs/
+
+# Generated caches and local vector stores
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+tmp/
+cache/
+*/cache/
+chroma_db/
+*.sqlite
+*.sqlite3
+*.db
+wellbeing_pipeline/simulation_outputs/**/cache/
+
+# Build and editor artifacts
+.DS_Store
+.idea/
+.vscode/
+.gradle/
+.kotlin/
+build/
+*/build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcuserdata/
+
